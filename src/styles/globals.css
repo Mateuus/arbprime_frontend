@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Barra de rolagem padrão */
+::-webkit-scrollbar {
+  width: 8px; /* Largura da barra */
+  height: 8px; /* Altura para rolagem horizontal */
+}
+
+/* Trilha da barra de rolagem */
+::-webkit-scrollbar-track {
+  background: #1f2937; /* Cor da trilha */
+  border-radius: 4px;
+}
+
+/* Polegar da barra de rolagem */
+::-webkit-scrollbar-thumb {
+  background-color: #3b82f6; /* Cor do polegar */
+  border-radius: 4px;
+  border: 2px solid #1f2937; /* Espaçamento interno */
+}
+
+/* Hover no polegar da barra */
+::-webkit-scrollbar-thumb:hover {
+  background-color: #2563eb; /* Cor ao passar o mouse */
+}
+
+/* Barra de rolagem para navegadores que suportam */
+* {
+  scrollbar-width: thin; /* Largura fina */
+  scrollbar-color: #3b82f6 #1f2937; /* Cor do polegar e trilha */
+}
+
+.tooltip {
+  position: absolute;
+  bottom: 100%; /* Coloca acima do botão */
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px; /* Espaço entre botão e tooltip */
+  background-color: #1f2937; /* Cor do fundo */
+  color: white; /* Cor do texto */
+  font-size: 0.75rem; /* Tamanho do texto */
+  padding: 4px 8px; /* Espaçamento interno */
+  border-radius: 4px; /* Bordas arredondadas */
+  white-space: nowrap; /* Evita quebra de linha */
+  display: none; /* Oculta por padrão */
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.group:hover .tooltip {
+  display: block;
+  opacity: 1; /* Exibe ao passar o mouse */
+}
+
+.flash-green {
+  animation: flash-green 1s ease-out;
+}
+
+.flash-red {
+  animation: flash-red 1s ease-out;
+}
+
+.highlight-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  border-radius: 5px 0 0 5px;
+  animation: fade-out 2s ease-out forwards;
+}
+
+.highlight-green {
+  background-color: #22c55e; /* Verde */
+}
+
+.highlight-red {
+  background-color: #ef4444; /* Vermelho */
+}
+
+/* Borda pulsante verde para lucro aumentado */
+.pulse-border-green {
+  animation: pulse-border-green 2s ease-in-out forwards;
+}
+
+/* Borda pulsante vermelha para lucro diminuído */
+.pulse-border-red {
+  animation: pulse-border-red 2s ease-in-out forwards;
+}
+
+@media (min-width: 1024px) {
+  .arbitrage-table-container {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+}
+
+@keyframes flash-green {
+  0% { background-color: #22c55e; }
+  100% { background-color: transparent; }
+}
+
+@keyframes flash-red {
+  0% { background-color: #ef4444; }
+  100% { background-color: transparent; }
+}
+
+@keyframes fade-out {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Animação para borda pulsante verde */
+@keyframes pulse-border-green {
+  0% { box-shadow: 0 0 10px 2px rgba(34, 197, 94, 0.8); }
+  50% { box-shadow: 0 0 20px 4px rgba(34, 197, 94, 0.6); }
+  100% { box-shadow: 0 0 10px 2px rgba(34, 197, 94, 0); }
+}
+
+/* Animação para borda pulsante vermelha */
+@keyframes pulse-border-red {
+  0% { box-shadow: 0 0 10px 2px rgba(239, 68, 68, 0.8); }
+  50% { box-shadow: 0 0 20px 4px rgba(239, 68, 68, 0.6); }
+  100% { box-shadow: 0 0 10px 2px rgba(239, 68, 68, 0); }
+}
