@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Arbitrage } from '@/interfaces';
 
+const ApiWsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://localhost:8080";
+
 const useWebSocket = () => {
   const [data, setData] = useState<Arbitrage[]>([]);
   const [autoUpdate, setAutoUpdate] = useState(false);
   const [ws, setWs] = useState<WebSocket | null>(null);
 
   useEffect(() => {
-    const socket = new WebSocket('ws://172.22.83.251:8080');
+    const socket = new WebSocket(ApiWsUrl);
     setWs(socket);
 
     socket.onopen = () => {

@@ -10,7 +10,7 @@ interface WebSocketResponse<T = unknown> {
 }
   
 export class WebSocketClient {
-    private static readonly DEFAULT_URL = 'ws://172.22.83.251:8080'; // URL padrão do WebSocket
+    private static readonly DEFAULT_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://localhost:8080"; // URL padrão do WebSocket
     private socket: WebSocket | null = null;
     private reconnectInterval: NodeJS.Timeout | null = null;
   
