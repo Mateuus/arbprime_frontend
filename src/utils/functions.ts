@@ -50,7 +50,7 @@ export function openMarketsSideBySide(data: {
   const spotExchange = data.spots?.[0]?.exchange || '';
   const futureExchange = data.futures?.[0]?.exchange || '';
 
-  const calculatorLink = `http://172.22.83.251:4000/arbitragem/calculator?symbol=${symbol}&spot=${spotExchange}&future=${futureExchange}`;
+  const calculatorLink = `/arbcrypto/calculator?symbol=${symbol}&spot=${spotExchange}&future=${futureExchange}`;
 
   if (!spotLink && !futureLink) {
       console.error("Nenhum link válido encontrado.");

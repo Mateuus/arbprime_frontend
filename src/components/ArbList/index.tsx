@@ -3,6 +3,7 @@ import { Arbitrage } from '@/interfaces';
 import { openMarketsSideBySide } from '@/utils/functions';
 import Tooltip from '@/components/Tooltip';
 import { Binoculars, Trash } from 'lucide-react';
+import Image from 'next/image';
 
 interface ArbListProps {
   data: Arbitrage[];
@@ -44,14 +45,15 @@ const ArbList: React.FC<ArbListProps> = ({ data, previousData = [] }) => {
 
     setProfitChanges(newProfitChanges);
     setRowHighlights(newRowHighlights);
-  }, [data, previousData, profitChanges, rowHighlights]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, previousData]);
 
-  const showTooltip = (text: string, e: React.MouseEvent<HTMLButtonElement>) => {
+  const showTooltip = (text: string, e: React.MouseEvent<HTMLElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setTooltipText(text);
     setTooltipPosition({
-      top: rect.top - 10,
-      left: rect.left + rect.width / 2,
+      top: rect.top + window.scrollY - 10, // Adiciona o deslocamento vertical (scrollY)
+      left: rect.left + rect.width / 2 + window.scrollX, // Adiciona o deslocamento horizontal (scrollX)
     });
     setTooltipVisible(true);
   };
@@ -78,16 +80,37 @@ const ArbList: React.FC<ArbListProps> = ({ data, previousData = [] }) => {
           <tbody>
             {data.map((item, index) => (
               <tr key={index} className={`border-b border-gray-700 hover:bg-gray-700 ${rowHighlights[index]}`}>
-                <td className="py-2 text-center">{item.symbol}</td>
+                <td className="py-2 text-center flex items-center justify-center space-x-2">
+                  {item.symbolId ? (
+                    <Image
+                      src={`https://www.mexc.com/api/platform/file/download/${item.symbolId}`}
+                      alt={item.symbol}
+                      width={24} // Tamanho base
+                      height={24} // Tamanho base
+                      className="rounded-full width-6 h-6 height-6"
+                    />
+                  ) : (
+                    <span className="text-gray-500">Imagem não disponível</span>
+                  )}
+                  <span>{item.symbol}</span>
+                </td>
       
                 {/* Exchange A */}
-                <td className="py-2 text-center">
+                <td 
+                    className="py-2 text-center"
+                    onMouseEnter={(e) => showTooltip(`Comprar em Spot: ${item.spots[0]?.exchange || 'N/A'}`, e)}
+                    onMouseLeave={hideTooltip}
+                >
                     <p className="text-red-500 font-medium">{item.spots[0]?.bid.toFixed(6) || 'N/A'}</p>
                     <p className="text-xs text-gray-400">{item.spots[0]?.exchange || 'N/A'} (Spot)</p>
                 </td>
 
                 {/* Exchange B */}
-                <td className="py-2 text-center">
+                <td 
+                    className="py-2 text-center"
+                    onMouseEnter={(e) => showTooltip(`Abrir Short: ${item.futures[0]?.exchange || 'N/A'}`, e)}
+                    onMouseLeave={hideTooltip}
+                >
                     <p className="text-green-500 font-medium">{item.futures[0]?.ask.toFixed(6) || 'N/A'}</p>
                     <p className="text-xs text-gray-400">{item.futures[0]?.exchange || 'N/A'} (Future)</p>
                 </td>
@@ -98,12 +121,20 @@ const ArbList: React.FC<ArbListProps> = ({ data, previousData = [] }) => {
                 </td>
 
                 {/* Profit */}
-                <td className="py-2 text-center">
+                <td 
+                    className="py-2 text-center"
+                    onMouseEnter={(e) => showTooltip(`Spread: ${item.spread.toFixed(6) || 'N/A'}`, e)}
+                    onMouseLeave={hideTooltip}
+                >
                     <p className="text-blue-500 font-medium">{item.profit.toFixed(2)}%</p>
                 </td>
 
                 {/* P.Net */}
-                <td className="py-2 text-center">
+                <td 
+                    className="py-2 text-center"
+                    onMouseEnter={(e) => showTooltip(`Taxa Total: ${item.totalFees.toFixed(3) || 'N/A'}%`, e)}
+                    onMouseLeave={hideTooltip}
+                >
                     <p
                     className={`font-medium ${
                         item.profitNet >= 0 ? 'text-green-500' : 'text-red-500'
@@ -120,7 +151,7 @@ const ArbList: React.FC<ArbListProps> = ({ data, previousData = [] }) => {
                     {/* Botão Monitorar */}
                     <div>
                       <button
-                        onMouseEnter={(e) => showTooltip('Monitorar', e)}
+                        onMouseEnter={(e) => showTooltip(`Monitorar`, e)}
                         onMouseLeave={hideTooltip}
                         className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition"
                         onClick={() => openMarketsSideBySide(item)}

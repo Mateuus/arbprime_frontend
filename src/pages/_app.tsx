@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import NProgress from 'nprogress';
 import '@/styles/globals.css';
+import { UserProvider } from "@/context/UserContext";
 import NavBar from "@/components/NavBar";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -28,23 +29,25 @@ export default function ArbCrypto({ Component, pageProps }: AppProps) {
   }, [router]);
 
   // Rotas sem layout
-  const noLayoutRoutes = ['/arbitragem/calculator'];
+  const noLayoutRoutes = ['/arbcrypto/calculator'];
 
   if (noLayoutRoutes.includes(router.pathname)) {
     return <Component {...pageProps} />;
   }
   return (
-    <div className={`flex flex-col min-h-screen bg-zinc-900 ${inter.className}`}>
-      <Head>
-        <meta name="description" content="ArbCrypto!" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" /> 
-        <title>ArbCrypto</title>
-      </Head>
-      <NavBar />
-      <main className="flex-grow pt-16">
-        <Component {...pageProps} />
-      </main>
-    </div>
+    <UserProvider>
+      <div className={`flex flex-col min-h-screen bg-zinc-900 ${inter.className}`}>
+        <Head>
+          <meta name="description" content="ArbPrime!" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <link rel="icon" href="/favicon.ico" /> 
+          <title>ArbPrime</title>
+        </Head>
+        <NavBar />
+        <main className="flex-grow pt-16">
+          <Component {...pageProps} />
+        </main>
+      </div>
+    </UserProvider>
   );
 }

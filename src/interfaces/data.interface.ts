@@ -18,6 +18,7 @@ export interface ExchangePair {
 
 export interface Arbitrage {
     symbol: string;
+    symbolId: string;
     spots: ExchangePair[];
     futures: ExchangePair[];
     spread: number;

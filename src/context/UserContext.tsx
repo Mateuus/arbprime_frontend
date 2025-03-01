@@ -1,0 +1,63 @@
+import { apiGateway, setupAxiosInterceptors } from "@/gateways";
+import React, { createContext, useContext, useEffect, useState } from "react";
+
+// Definindo a interface User conforme especificado
+export interface User {
+    id: string;
+    username: string;
+    email: string;
+    role: string;
+    profile: string;
+}
+
+interface UserContextType {
+    user:  User | null;
+    setUser: (user: User | null) => void;
+    isAuthenticated: boolean;
+    setIsAuthenticated: (auth: boolean) => void;
+}
+
+const UserContext = createContext<UserContextType | undefined>(undefined);
+
+export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Intercepta as respostas da API para verificar se o token expirou
+    setupAxiosInterceptors(setUser, setIsAuthenticated);
+    
+    // Verificação inicial de autenticação
+    const checkAuthStatus = async () => {
+        try {
+          const response = await apiGateway.getUserInfo();
+          if (response.data.result === 1) {
+            setUser(response.data.data.user);
+            setIsAuthenticated(true);
+          } else {
+            setIsAuthenticated(false);
+          }
+        } catch {
+          setIsAuthenticated(false);
+        }
+      };
+      checkAuthStatus();
+      // Adiciona verificação periódica
+      const interval = setInterval(checkAuthStatus, 5 * 60 * 1000); // A cada 5 minutos
+      return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <UserContext.Provider value={{ user, setUser, isAuthenticated, setIsAuthenticated }}>
+      {children}
+    </UserContext.Provider>
+  );
+};
+
+export const useUserContext = () => {
+  const context = useContext(UserContext);
+  if (!context) {
+    throw new Error("useUserContext must be used within a UserProvider");
+  }
+  return context;
+};

@@ -1,6 +1,6 @@
 import { Arbitrage } from '@/interfaces';
 
-const ApiWsUrl = "ws://172.22.83.251:8080";
+const ApiWsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://localhost:8080";
 let ws: WebSocket;
 let arbitrageCallback: (data: Arbitrage[]) => void;
 

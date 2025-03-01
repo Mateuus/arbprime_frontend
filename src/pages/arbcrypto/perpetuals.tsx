@@ -5,7 +5,7 @@ import ArbList from '@/components/ArbList';
 import { Arbitrage } from '@/interfaces';
 import { Pause, Play, RefreshCcw, Star, StarOff } from 'lucide-react';
 
-const ArbitragemPage: React.FC = () => {
+const ArbCryptoPerpetuals: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
   const { data, setAutoUpdate, autoUpdate, fetchArbitrageData } = useWebSocket();
   const [previousData, setPreviousData] = useState<Arbitrage[]>([]);
@@ -94,4 +94,4 @@ const ArbitragemPage: React.FC = () => {
   );
 };
 
-export default ArbitragemPage;
+export default ArbCryptoPerpetuals;
