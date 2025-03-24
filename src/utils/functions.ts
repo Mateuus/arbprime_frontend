@@ -1,3 +1,5 @@
+import { Surebet } from '@/interfaces';
+
 export function getMarketLink(data: { spots?: { exchange?: string; symbol?: string }[]; futures?: { exchange?: string; symbol?: string }[] }): string | null {
     const exchange = data.spots?.[0]?.exchange || data.futures?.[0]?.exchange;
     const symbol = data.spots?.[0]?.symbol || data.futures?.[0]?.symbol;
@@ -38,7 +40,6 @@ export function getMarketLink(data: { spots?: { exchange?: string; symbol?: stri
     }
 }
   
-
 export function openMarketsSideBySide(data: { 
   spots?: { exchange?: string; symbol?: string }[], 
   futures?: { exchange?: string; symbol?: string }[] 
@@ -151,4 +152,6 @@ export const formatToDollar = (value: number): string => {
   }).format(value);
 };
 
-
+export function getBestSurebet(surebets: Surebet[]): Surebet {
+  return [...surebets].sort((a, b) => b.profitMargin - a.profitMargin)[0];
+}
