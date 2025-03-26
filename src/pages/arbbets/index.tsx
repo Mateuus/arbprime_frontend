@@ -463,7 +463,7 @@ const mockEvents: SurebetData[] = [
 
 const ArbitragemEsportivaPage = () => {
   const [showSidebar, setShowSidebar] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | number>(0);
   const selectedEvent = mockEvents.find((e) => e.id === selectedId) || null;
 
 
@@ -492,7 +492,7 @@ const ArbitragemEsportivaPage = () => {
         />
 
         <main className="flex-1 overflow-hidden">
-          <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-1">
+          <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr]">
             {/* Lista com o melhor surebet de cada evento */}
             <div className="overflow-y-auto">
               <SportsArbList
@@ -504,7 +504,7 @@ const ArbitragemEsportivaPage = () => {
 
             {/* Detalhes do evento selecionado */}
             <div className="flex flex-col h-full gap-1">
-              <div className="bg-white text-white shadow-md min-h-[160px]">
+              <div className="bg-white text-white shadow-md" style={{ height: '160px' }}>
                 {selectedEvent && <ArbCalc data={selectedEvent} />}
               </div>
               <div className="bg-white text-white shadow-md min-h-[500px]">

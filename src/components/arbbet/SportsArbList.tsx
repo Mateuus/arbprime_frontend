@@ -5,8 +5,8 @@ import { getBestSurebet } from '@/utils/functions';
 
 interface Props {
     data: SurebetData[];
-    selectedId: string | null;
-    onSelect: (id: string) => void;
+    selectedId: string | number;
+    onSelect: (id: string | number) => void;
   }
   
   export default function SportsArbList({ data, selectedId, onSelect }: Props) {

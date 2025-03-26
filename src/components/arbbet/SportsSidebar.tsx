@@ -21,16 +21,6 @@ const SportsSidebar: React.FC<Props> = ({ show, filters, setFilters }) => {
       {/* Arbs Type */}
       <div>
         <div className="text-[10px] uppercase text-gray-400 mb-1">Arbs type:</div>
-        <label className="flex items-center gap-2 mb-1">
-          <input
-            type="radio"
-            name="arbType"
-            value="live"
-            checked={filters.arbType === 'live'}
-            onChange={() => setFilters({ arbType: 'live' })}
-          />
-          <span>Live</span>
-        </label>
         <label className="flex items-center gap-2">
           <input
             type="radio"
@@ -40,6 +30,16 @@ const SportsSidebar: React.FC<Props> = ({ show, filters, setFilters }) => {
             onChange={() => setFilters({ arbType: 'prematch' })}
           />
           <span>Prematch</span>
+        </label>
+        <label className="flex items-center gap-2 mb-1">
+          <input
+            type="radio"
+            name="arbType"
+            value="live"
+            checked={filters.arbType === 'live'}
+            onChange={() => setFilters({ arbType: 'live' })}
+          />
+          <span>Live</span>
         </label>
       </div>
 

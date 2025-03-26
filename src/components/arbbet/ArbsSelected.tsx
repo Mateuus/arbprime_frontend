@@ -42,21 +42,6 @@ export default function ArbsSelected({ data }: Props) {
               selected={false}
               onSelect={() => {}}
             />
-            <ArbCard
-              data={{ ...data, surebets: [surebet] }}
-              selected={false}
-              onSelect={() => {}}
-            />
-            <ArbCard
-              data={{ ...data, surebets: [surebet] }}
-              selected={false}
-              onSelect={() => {}}
-            />
-            <ArbCard
-              data={{ ...data, surebets: [surebet] }}
-              selected={false}
-              onSelect={() => {}}
-            />
           </React.Fragment>
         ))}
         {!data && (
