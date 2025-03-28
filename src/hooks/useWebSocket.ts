@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Arbitrage } from '@/interfaces';
+import { Arbitrage, SurebetData } from '@/interfaces';
 
 const ApiWsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://localhost:8080";
 
-const useWebSocket = () => {
+const useWebSocket = (id: number = 0) => {
   const [data, setData] = useState<Arbitrage[]>([]);
+  const [dataBet, setDataBet] = useState<SurebetData[]>([]);
   const [autoUpdate, setAutoUpdate] = useState(false);
   const [ws, setWs] = useState<WebSocket | null>(null);
 
@@ -14,13 +15,21 @@ const useWebSocket = () => {
 
     socket.onopen = () => {
       console.log('WebSocket conectado.');
-      socket.send(JSON.stringify({ method: 'arbitrage_pairs', autoUpdate: false }));
+      if(id === 0) {
+        socket.send(JSON.stringify({ method: 'arbitrage_pairs', autoUpdate: false }));
+      } else {
+        socket.send(JSON.stringify({ method: 'arbitrage_betting', autoUpdate: false }));
+      }
     };
 
     socket.onmessage = (event) => {
       const response = JSON.parse(event.data);
       if (response.success && response.data) {
-        setData(response.data || []);
+        if(response.method === 'arbitrage_pairs' || response.method === 'monitor_pairs') {
+          setData(response.data || []);
+        } else if(response.method === 'arbitrage_betting') {
+          setDataBet(response.data || []);
+        }
       } else {
         console.error('Erro ao receber dados:', response.message);
       }
@@ -37,18 +46,26 @@ const useWebSocket = () => {
     return () => {
       socket.close();
     };
-  }, []);
+  }, [id]);
 
   useEffect(() => {
     if (autoUpdate && ws) {
       const sendMessage = () => {
         if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ method: 'arbitrage_pairs', autoUpdate: true }));
+          if(id === 0) {
+           ws.send(JSON.stringify({ method: 'arbitrage_pairs', autoUpdate: true }));
+          } else if (id === 1) {
+            ws.send(JSON.stringify({ method: 'arbitrage_betting', autoUpdate: true }));
+          }
         } else {
           ws.addEventListener(
             'open',
             () => {
-              ws.send(JSON.stringify({ method: 'arbitrage_pairs', autoUpdate: true }));
+              if(id === 0) {
+                ws.send(JSON.stringify({ method: 'arbitrage_pairs', autoUpdate: true }));
+               } else if (id === 1) {
+                 ws.send(JSON.stringify({ method: 'arbitrage_betting', autoUpdate: true }));
+               }
             },
             { once: true }
           );
@@ -63,7 +80,7 @@ const useWebSocket = () => {
         ws.send(JSON.stringify({ method: 'stop' }));
       }
     };
-  }, [autoUpdate, ws]);
+  }, [id, autoUpdate, ws]);
 
   // Função para buscar os dados manualmente
   const fetchArbitrageData = () => {
@@ -75,7 +92,7 @@ const useWebSocket = () => {
     }
   };
 
-  return { data, setData, setAutoUpdate, autoUpdate, fetchArbitrageData };
+  return { data, dataBet, setData, setAutoUpdate, autoUpdate, fetchArbitrageData };
 };
 
 export default useWebSocket;

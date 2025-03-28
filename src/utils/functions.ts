@@ -155,3 +155,38 @@ export const formatToDollar = (value: number): string => {
 export function getBestSurebet(surebets: Surebet[]): Surebet {
   return [...surebets].sort((a, b) => b.profitMargin - a.profitMargin)[0];
 }
+
+export function capitalizeFirstLetter(text: string): string {
+  if (!text) return '';
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+export function getMarketName(marketKey: string): string | undefined {
+  const [id, subIdStr] = marketKey.split(':');
+  const subId = parseInt(subIdStr, 10);
+
+  const marketList = [
+    { id: "match-winner", subId: 1, name: "Resultado Final" },
+    { id: "match-winner-lay", subId: 2, name: "Resultado Final Lay" },
+    { id: "match-winner", subId: 3, name: "Resultado Final - 1H" },
+    { id: "match-winner", subId: 4, name: "Resultado Final - 2H" },
+    { id: "total-goals", subId: 5, name: "Total de Gols" },
+    { id: "total-goals", subId: 6, name: "Total de Gols - 1H" },
+    { id: "total-goals", subId: 7, name: "Total de Gols - 2H" },
+    { id: "both-teams-score", subId: 8, name: "Ambas equipes Marcam" },
+    { id: "total-cards", subId: 9, name: "Total de Cartões" },
+    { id: "total-corners", subId: 10, name: "Escanteios" },
+    { id: "double-chance", subId: 11, name: "Chance Dupla" },
+    { id: "double-chance", subId: 12, name: "Chance Dupla - 1H" },
+    { id: "double-chance", subId: 13, name: "Chance Dupla - 2H" },
+    { id: "asian-handicap", subId: 14, name: "Handicap" },
+    { id: "draw-no-bet", subId: 15, name: "Empate Anula" },
+    { id: "european-handicap", subId: 16, name: "Handicap Europeu" },
+    { id: "asian-handicap", subId: 17, name: "Handicap Asiático" },
+    { id: "goal-line-handicap", subId: 18, name: "Handicap Gols Linhas" },
+    { id: "qualify", subId: 19, name: "Classificar-se" },
+  ];
+
+  const found = marketList.find((m) => m.id === id && m.subId === subId);
+  return found?.name;
+}

@@ -1,6 +1,9 @@
 'use client';
-import { SurebetData } from '@/interfaces/arbitragem.interface';
+import { SurebetData, SurebetOdd } from '@/interfaces/arbitragem.interface';
 import { Clock, Edit, Trash2 } from 'lucide-react';
+import { format, differenceInHours, differenceInMinutes, isBefore } from 'date-fns';
+import { capitalizeFirstLetter, getMarketName } from '@/utils/functions';
+import { RenderPriceWithHistory } from './components/renderPriceWithHistory';
 
 interface Props {
   data: SurebetData;
@@ -36,7 +39,7 @@ export default function ArbCard({ data, selected, onSelect }: Props) {
 
         {/* Sport */}
         <div className="ml-[70px] flex items-center gap-1">
-          {data.sport}
+          {capitalizeFirstLetter(data.sport)}
           {selected && (
             <span className="text-[11px] text-gray-200">[selecionado]</span>
           )}
@@ -57,21 +60,21 @@ export default function ArbCard({ data, selected, onSelect }: Props) {
 
       {/* Body - Lista de apostas da surebet */}
         <div className="bg-[#f9f9f9] text-black text-xs">
-            {surebet.surebet.map((odd, idx) => (
+            {surebet.surebet.map((odd: SurebetOdd, idx) => (
                 <div
                 key={idx}
                 className="flex justify-between items-start px-2 py-1 border-b border-gray-200"
                 >
                 <div className="flex flex-col w-[20%]">
                     <span className="font-bold text-[13px]">{odd.bookmaker}</span>
-                    <span className="text-gray-600">{odd.option}</span>
                 </div>
                 <div className="flex-1 text-left">
                     <span className="block">{data.home} x {data.away}</span>
                     <span className="text-gray-500">{data.league}</span>
                 </div>
-                <div className="text-right w-[60px]">
-                    <span className="text-green-600 font-semibold">{odd.price.toFixed(2)}</span>
+                <div className="flex flex-col text-right">
+                    <span className="text-green-600 font-semibold"><RenderPriceWithHistory odd={odd} /></span>
+                    <span className="text-gray-600">{getMarketName(odd.market)}: {odd.option}</span>
                 </div>
                 </div>
             ))}
@@ -80,9 +83,24 @@ export default function ArbCard({ data, selected, onSelect }: Props) {
   );
 }
 
-function formatTime(date: string) {
-  const d = new Date(date);
-  const hours = d.getHours().toString().padStart(2, '0');
-  const minutes = d.getMinutes().toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
+function formatTime(dateString: string) {
+  const now = new Date();
+  const eventDate = new Date(dateString);
+
+  if (isBefore(eventDate, now)) {
+    return 'Finalizado';
+  }
+
+  const diffHours = differenceInHours(eventDate, now);
+  const diffMinutes = differenceInMinutes(eventDate, now);
+
+  if (diffHours >= 24) {
+    return format(eventDate, 'dd/MM HH:mm');
+  }
+
+  if (diffHours >= 1) {
+    return `${diffHours} h`;
+  }
+
+  return `${diffMinutes} min`;
 }

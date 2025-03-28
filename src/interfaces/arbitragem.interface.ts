@@ -18,6 +18,8 @@ export interface SurebetOdd {
     price: number;
     bookmaker: string;
     eventId: string;
+    market: string;
+    link: string;
     historyPrice: { timestamp: number; price: number }[];
     otherOdds: { eventId: string; bookmaker: string; price: number }[];
 }
@@ -37,6 +39,7 @@ export interface SurebetData {
     away: string;
     date: string;
     surebets: Surebet[];
+    bestProfit?: number;
     update_at: string;
     create_at: string;
 }

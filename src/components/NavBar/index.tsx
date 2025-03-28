@@ -24,8 +24,8 @@ const NavBar: React.FC = () => {
     },
     { name: 'ARB BETS', id: 'nav-arbbets', icon: <Dices size={20} />, requiresAuth: true,
       subItems: [
-        { name: 'ARB LIVE', path: '/arbbets/live', id: 'nav-arbbets-live', icon: <Radio color='red' size={20} />, requiresAuth: false },
-        { name: 'ARB PREMATCH', path: '/arbbets/prematch', id: 'nav-arbbets-prematch', icon: <CalendarClock size={20} />, requiresAuth: false }
+        { name: 'ARB LIVE', path: '/arbbets', id: 'nav-arbbets-live', icon: <Radio color='red' size={20} />, requiresAuth: false },
+        { name: 'ARB PREMATCH', path: '/arbbets', id: 'nav-arbbets-prematch', icon: <CalendarClock size={20} />, requiresAuth: false }
       ]
     },
     //{ name: 'PLANOS', path: '/plans', id: 'nav-plans', icon: <History size={20} />, requiresAuth: true },

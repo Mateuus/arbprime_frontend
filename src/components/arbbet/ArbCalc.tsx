@@ -23,7 +23,7 @@ export default function ArbCard({ data, selected, onSelect }: ArbCardProps) {
       >
         {/* Lucro */}
         <div className="bg-[#9adb52] text-black px-2 h-full flex items-center font-bold absolute left-0 top-0 bottom-0">
-          {(bestSurebet.profitMargin * 100).toFixed(2)}%
+          {(bestSurebet.profitMargin * 1).toFixed(2)}%
         </div>
 
         {/* Esporte */}
