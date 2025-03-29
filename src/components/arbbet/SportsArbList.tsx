@@ -24,9 +24,9 @@ interface Props {
           ? new Date(b.date).getTime()
           : new Date(b.surebets[0]?.create_at || b.create_at).getTime(); // 👈 Age
     
-      return sortBy === 'Percent'
-        ? bValue - aValue // maior lucro primeiro
-        : aValue - bValue; // mais novo (menor data) primeiro
+          if (sortBy === 'Percent') return bValue - aValue;
+          if (sortBy === 'Age') return bValue - aValue; // 👈 mais novo primeiro
+          return aValue - bValue; // Time: mais próximo primeiro
     });
 
     return (

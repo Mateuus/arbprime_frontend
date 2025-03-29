@@ -44,7 +44,7 @@ const SportsSidebar: React.FC<Props> = ({ show, filters, setFilters }) => {
         </label>
       </div>
 
-      {/* Zoom */}
+      {/* Zoom 
       <div>
         <div className="text-[10px] uppercase text-gray-400 mb-1">Zoom:</div>
         <select
@@ -56,7 +56,7 @@ const SportsSidebar: React.FC<Props> = ({ show, filters, setFilters }) => {
           <option>80%</option>
           <option>60%</option>
         </select>
-      </div>
+      </div>*/}
 
       {/* Sort */}
       <div>
@@ -84,6 +84,7 @@ const SportsSidebar: React.FC<Props> = ({ show, filters, setFilters }) => {
             />
             Auto update
           </label>
+           {/*
           <label className="flex items-center gap-2">
             <input type="checkbox" />
             Sound alerts
@@ -96,6 +97,7 @@ const SportsSidebar: React.FC<Props> = ({ show, filters, setFilters }) => {
             <input type="checkbox" />
             Group arbs
           </label>
+          */}
         </div>
       </div>
 
