@@ -1,4 +1,4 @@
-// ✅ ArbCalc.tsx com stake fixo, atualização correta e recalculando corretamente após edição
+// ✅ ArbCalc.tsx com stake fixo, update responsivo e botão de check ao lado externo do input
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -38,7 +38,7 @@ export default function ArbCalc({
     setStakes(newStakes);
     setStakeInputs(newStakes.map(s => s.toFixed(2).replace('.', ',')));
     setEditedStake(new Array(newStakes.length).fill(false));
-  }, [data, selectedSurebetIndex]);
+  }, [data, selectedSurebetIndex, surebet]);
 
   function handleOddChange(index: number, newOdd: SurebetOdd) {
     const updated = [...selectedOdds];
@@ -93,9 +93,7 @@ export default function ArbCalc({
       {/* Header */}
       <div className="flex items-center justify-between px-2 py-1 bg-[#1f2937] text-white">
         <div className="flex items-center gap-2">
-          <div className={`px-2 font-bold ${newProfit >= 0 ? 'bg-[#9adb52] text-black' : 'bg-red-500 text-white'}`}>
-            {newProfit.toFixed(2)}%
-          </div>
+          <div className={`px-2 font-bold ${newProfit >= 0 ? 'bg-[#9adb52] text-black' : 'bg-red-500 text-white'}`}>{newProfit.toFixed(2)}%</div>
           <div className="font-semibold">{data.sport}</div>
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-300">
@@ -109,40 +107,40 @@ export default function ArbCalc({
       </div>
 
       {/* Odds */}
-      <div className="flex-1 bg-[#3b4252] text-white p-2 space-y-2">
+      <div className="flex-1 bg-[#3b4252] text-white p-2 space-y-3">
         {selectedOdds.map((odd, index) => {
           const otherOptions = getOtherOptions(odd);
           const fullList = [odd, ...otherOptions.filter(o => o.bookmaker !== odd.bookmaker)];
 
           return (
-            <div key={index} className="flex justify-between items-center gap-2 text-xs bg-[#2d3648] px-2 py-2 rounded">
-              <div className="font-bold min-w-[120px]">{odd.option}</div>
-              <select
-                value={odd.bookmaker + '_' + odd.price}
-                onChange={(e) => {
-                  const [bookmaker, price] = e.target.value.split('_');
-                  const newOdd = fullList.find(o => o.bookmaker === bookmaker && o.price === Number(price));
-                  if (newOdd) handleOddChange(index, newOdd);
-                }}
-                className="bg-white text-black text-xs px-2 py-1 rounded"
-              >
-                {fullList.map((o, i) => (
-                  <option key={i} value={o.bookmaker + '_' + o.price}>
-                    {o.bookmaker}: {o.price.toFixed(2)} ({i})
-                  </option>
-                ))}
-              </select>
-              <div className="text-right flex items-center gap-1">
-                <div>
-                  <div className="text-sm font-semibold">Stake:</div>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="text-black text-xs rounded px-1 w-20"
-                    value={stakeInputs[index] || ''}
-                    onChange={(e) => handleStakeTyping(index, e.target.value)}
-                  />
-                </div>
+            <div key={index} className="bg-[#2d3648] p-2 rounded space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="font-bold min-w-[120px]">{odd.option}</div>
+                <select
+                  value={odd.bookmaker + '_' + odd.price}
+                  onChange={(e) => {
+                    const [bookmaker, price] = e.target.value.split('_');
+                    const newOdd = fullList.find(o => o.bookmaker === bookmaker && o.price === Number(price));
+                    if (newOdd) handleOddChange(index, newOdd);
+                  }}
+                  className="bg-white text-black text-xs px-2 py-1 rounded w-full sm:w-auto"
+                >
+                  {fullList.map((o, i) => (
+                    <option key={i} value={o.bookmaker + '_' + o.price}>
+                      {o.bookmaker}: {o.price.toFixed(2)} ({i})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold">Stake:</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="text-black text-xs rounded px-1 w-full max-w-[120px]"
+                  value={stakeInputs[index] || ''}
+                  onChange={(e) => handleStakeTyping(index, e.target.value)}
+                />
                 {editedStake[index] && (
                   <button
                     onClick={() => applyStakeChange(index)}
