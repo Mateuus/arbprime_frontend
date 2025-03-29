@@ -1,7 +1,7 @@
 module.exports = {
     apps: [
       {
-        name: "arbcrypto_frontend",             // Nome da aplicação para identificação no PM2
+        name: "arbprime_frontend",             // Nome da aplicação para identificação no PM2
         script: "npm",                          // Usa o npm para iniciar o Next.js
         args: "start",                          // Comando que o PM2 executará, equivalente a 'npm start'
         env: {
