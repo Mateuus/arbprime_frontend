@@ -60,14 +60,20 @@ export default function ArbCard({ data, selected, onSelect }: Props) {
       </div>
 
       {/* Body - Lista de apostas da surebet */}
-        <div className="bg-[#f9f9f9] text-black text-xs">
+      <div className="bg-[#f9f9f9] dark:bg-gray-800 text-black dark:text-white text-xs">
             {surebet.surebet.map((odd: SurebetOdd, idx) => (
-                <div
+              <div
                 key={idx}
-                className="flex justify-between items-start px-2 py-1 border-b border-gray-200"
-                >
+                className={`
+                  flex justify-between items-start px-2 py-1 border-b
+                  ${idx % 2 === 0 ? 'bg-white dark:bg-[#2a2a2a]' : 'bg-gray-100 dark:bg-[#1f1f1f]'}
+                  border-gray-200 dark:border-gray-600
+                `}
+              >
                 <div className="flex flex-col w-[20%]">
-                    <span className="font-bold text-[13px]">{odd.bookmaker}</span>
+                  <span className="font-bold text-[13px] truncate whitespace-nowrap overflow-hidden" title={odd.bookmaker}>
+                    {odd.bookmaker}
+                  </span>
                 </div>
                 <div className="flex-1 text-left">
                     <Link
@@ -78,11 +84,11 @@ export default function ArbCard({ data, selected, onSelect }: Props) {
                     >
                       {data.home} x {data.away}
                     </Link>
-                    <span className="text-gray-500">{data.league}</span>
+                    <span className="text-gray-600 dark:text-gray-300">{data.league}</span>
                 </div>
                 <div className="flex flex-col text-right">
                     <span className="text-green-600 font-semibold"><RenderPriceWithHistory odd={odd} /></span>
-                    <span className="text-gray-600">{getMarketName(odd.market)}: {odd.option}</span>
+                    <span className="text-gray-600 dark:text-gray-300">{getMarketName(odd.market)}: {odd.option}</span>
                 </div>
                 </div>
             ))}

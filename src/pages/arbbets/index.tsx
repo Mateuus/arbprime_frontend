@@ -7,10 +7,15 @@ import ArbsSelected from '@/components/arbbet/ArbsSelected';
 import HeaderTop from '@/components/arbbet/HeaderTop';
 import useWebSocket from '@/hooks/useWebSocket';
 
+
 const ArbitragemEsportivaPage = () => {
   const { dataBet, setAutoUpdate, autoUpdate } = useWebSocket(1);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
   const [selectedId, setSelectedId] = useState<string | number>(0);
+  const [showMobileDetails, setShowMobileDetails] = useState(false);
+  const [selectedSurebetIndex, setSelectedSurebetIndex] = useState(0);
+
   const selectedEvent = dataBet.find((e) => e.id === selectedId) || null;
 
   const [filters, setFiltersState] = useState({
@@ -29,46 +34,82 @@ const ArbitragemEsportivaPage = () => {
     }, [dataBet, autoUpdate, filters.autoUpdate, setAutoUpdate]);
 
   return (
-    <div className="flex flex-col bg-gray-800 min-h-screen py-3">
-      <HeaderTop
-        onToggleSidebar={() => setShowSidebar((prev) => !prev)}
-        showSidebar={showSidebar}
-      />
-
-      <div className="flex flex-1">
-        <SportsSidebar
-          show={showSidebar}
-          filters={filters}
-          setFilters={setFilters}
+    <div className={`${darkMode ? 'dark' : ''}`}>
+      <div className="flex flex-col bg-gray-800 dark:bg-gray-900 min-h-screen py-3">
+        <HeaderTop
+          onToggleSidebar={() => setShowSidebar((prev) => !prev)}
+          showSidebar={showSidebar}
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
 
-        <main className="flex-1 overflow-hidden">
-          <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr]">
-            {/* Lista com o melhor surebet de cada evento */}
-            <div className="overflow-y-auto">
-            <SportsArbList
-              data={dataBet}
-              selectedId={selectedId}
-              onSelect={(eventId) => setSelectedId(eventId)}
-              sortBy={filters.sortBy}
-            />
+        <div className="flex flex-1">
+          <SportsSidebar
+            show={showSidebar}
+            filters={filters}
+            setFilters={setFilters}
+          />
+
+          <main className="flex-1 overflow-hidden">
+            {/* Mobile-only ArbCalc */}
+            <div className="lg:hidden">
+              {selectedEvent && (
+                <div className="bg-white dark:bg-gray-800 text-white min-h-[150px] h-full flex flex-col">
+                  <ArbCalc
+                    data={selectedEvent}
+                    showToggleButton
+                    showMobileDetails={showMobileDetails}
+                    setShowMobileDetails={setShowMobileDetails}
+                  />
+                </div>
+              )}
             </div>
 
-            {/* Detalhes do evento selecionado */}
-            <div className="flex flex-col h-full gap-1">
-              <div className="bg-white text-white shadow-md" style={{ height: '160px' }}>
-                {selectedEvent && <ArbCalc data={selectedEvent} />}
+            <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-2">
+              {/* Lista de eventos - escondido no mobile quando detalhes estão visíveis */}
+              <div className={`overflow-y-auto ${showMobileDetails ? 'hidden' : 'block'}`}>
+                <SportsArbList
+                  data={dataBet}
+                  selectedId={selectedId}
+                  onSelect={(eventId) => setSelectedId(eventId)}
+                  sortBy={filters.sortBy}
+                />
               </div>
-              <div className="bg-white text-white shadow-md min-h-[500px]">
-                <div className="flex-1 overflow-y-auto">
-                  <>
-                  <ArbsSelected data={selectedEvent} />
-                  </>
+
+              {/* Desktop ArbCalc e ArbsSelected */}
+              <div className="hidden lg:flex flex-col h-full gap-1">
+                <div className="bg-white dark:bg-gray-800 text-white shadow-md min-h-[160px] flex flex-col justify-between">
+                  {selectedEvent && (
+                    <ArbCalc
+                      data={selectedEvent}
+                      showToggleButton={false}
+                      selectedSurebetIndex={selectedSurebetIndex}
+                    />
+                  )}
+                </div>
+                <div className="bg-white dark:bg-gray-800 text-white shadow-md min-h-[500px]">
+                  <div className="flex-1 overflow-y-auto">
+                  <ArbsSelected
+                      data={selectedEvent}
+                      onSurebetSelect={setSelectedSurebetIndex}
+                      selectedSurebetIndex={selectedSurebetIndex}
+                   />
+                  </div>
                 </div>
               </div>
+
+
+              {/* Mobile-only ArbsSelected */}
+              <div className={`lg:hidden ${showMobileDetails ? 'block' : 'hidden'}`}>
+                  <ArbsSelected
+                      data={selectedEvent}
+                      onSurebetSelect={setSelectedSurebetIndex}
+                      selectedSurebetIndex={selectedSurebetIndex}
+                   />
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
     </div>
   );

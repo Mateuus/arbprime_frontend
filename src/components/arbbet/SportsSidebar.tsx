@@ -15,7 +15,7 @@ const SportsSidebar: React.FC<Props> = ({ show, filters, setFilters }) => {
       className={`
         bg-gray-800 text-xs text-white py-4 flex flex-col gap-4 border-r border-[#2c2f36]
         min-h-screen transition-all duration-300 ease-in-out
-        ${show ? 'w-[160px] opacity-100 translate-x-0' : 'w-0 opacity-0 -translate-x-full'}
+        ${show ? 'w-[160px] px-2 opacity-100 translate-x-0' : 'w-0 opacity-0 -translate-x-full'}
         overflow-hidden
       `}
     >
@@ -111,7 +111,7 @@ const SportsSidebar: React.FC<Props> = ({ show, filters, setFilters }) => {
         </select>
       </div>
 
-      {/* Odds type */}
+      {/* Odds type 
       <div>
         <div className="text-[10px] uppercase text-gray-400 mb-1">Odds type:</div>
         <select className="w-full p-1 rounded bg-[#111318] text-white text-xs">
@@ -119,7 +119,7 @@ const SportsSidebar: React.FC<Props> = ({ show, filters, setFilters }) => {
           <option>Fracional</option>
           <option>Americano</option>
         </select>
-      </div>
+      </div> */}
 
       {/* Filters */}
       <div>
@@ -133,7 +133,7 @@ const SportsSidebar: React.FC<Props> = ({ show, filters, setFilters }) => {
         </button>
       </div>
 
-      {/* Hidden */}
+      {/* Hidden
       <div>
         <div className="text-[10px] uppercase text-gray-400 mb-1">Hidden:</div>
         <div className="flex flex-col gap-[2px] text-blue-400 text-[11px] underline">
@@ -143,6 +143,7 @@ const SportsSidebar: React.FC<Props> = ({ show, filters, setFilters }) => {
           <span className="cursor-pointer hover:text-blue-300">0 bookmaker</span>
         </div>
       </div>
+       */}
     </aside>
   );
 };
