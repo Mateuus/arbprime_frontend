@@ -14,9 +14,10 @@ const ArbitragemEsportivaPage = () => {
   const selectedEvent = dataBet.find((e) => e.id === selectedId) || null;
 
   const [filters, setFiltersState] = useState({
-    arbType: 'live',
+    arbType: 'prematch',
     autoUpdate: autoUpdate,
     zoom: '100%',
+    sortBy: 'Percent',
   });
 
   const setFilters = (updates: Partial<typeof filters>) => {
@@ -45,11 +46,12 @@ const ArbitragemEsportivaPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr]">
             {/* Lista com o melhor surebet de cada evento */}
             <div className="overflow-y-auto">
-              <SportsArbList
-                data={dataBet}
-                selectedId={selectedId}
-                onSelect={(eventId) => setSelectedId(eventId)}
-              />
+            <SportsArbList
+              data={dataBet}
+              selectedId={selectedId}
+              onSelect={(eventId) => setSelectedId(eventId)}
+              sortBy={filters.sortBy}
+            />
             </div>
 
             {/* Detalhes do evento selecionado */}

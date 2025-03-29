@@ -1,9 +1,11 @@
 'use client';
 import { SurebetData, SurebetOdd } from '@/interfaces/arbitragem.interface';
-import { Clock, Edit, Trash2 } from 'lucide-react';
-import { format, differenceInHours, differenceInMinutes, isBefore } from 'date-fns';
+import { Calendar, Clock, Edit, Trash2 } from 'lucide-react';
+import { format, isBefore, differenceInHours, differenceInMinutes, parseISO, isValid } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import { capitalizeFirstLetter, getMarketName } from '@/utils/functions';
 import { RenderPriceWithHistory } from './components/renderPriceWithHistory';
+import Link from 'next/link';
 
 interface Props {
   data: SurebetData;
@@ -40,15 +42,14 @@ export default function ArbCard({ data, selected, onSelect }: Props) {
         {/* Sport */}
         <div className="ml-[70px] flex items-center gap-1">
           {capitalizeFirstLetter(data.sport)}
-          {selected && (
-            <span className="text-[11px] text-gray-200">[selecionado]</span>
-          )}
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-2 text-xs text-gray-800">
+          <Calendar size={14} />
+          {formatTime2(data.date)}
           <Clock size={14} />
-          {formatTime(data.date)}
+          {formatAge(surebet.create_at)}
           <button type="button">
             <Trash2 size={14} className="hover:text-red-500" />
           </button>
@@ -69,7 +70,14 @@ export default function ArbCard({ data, selected, onSelect }: Props) {
                     <span className="font-bold text-[13px]">{odd.bookmaker}</span>
                 </div>
                 <div className="flex-1 text-left">
-                    <span className="block">{data.home} x {data.away}</span>
+                    <Link
+                      href={`${odd.link}`}
+                      className="block text-blue-500 hover:underline"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {data.home} x {data.away}
+                    </Link>
                     <span className="text-gray-500">{data.league}</span>
                 </div>
                 <div className="flex flex-col text-right">
@@ -83,19 +91,49 @@ export default function ArbCard({ data, selected, onSelect }: Props) {
   );
 }
 
-function formatTime(dateString: string) {
-  const now = new Date();
-  const eventDate = new Date(dateString);
+export function formatTime2(dateString: string) {
+  const utcDate = new Date(dateString);
+  const gmtDate = utcDate.setHours(utcDate.getHours() + 3);
 
-  if (isBefore(eventDate, now)) {
-    return 'Finalizado';
+  return format(gmtDate, 'dd/MM HH:mm');
+}
+
+export function formatTime(dateString: string) {
+  const timeZone = 'America/Sao_Paulo'; // GMT-3
+  const eventDate = toZonedTime(dateString, timeZone);
+  const utcDate = new Date();
+  const gmtDate = utcDate.setHours(utcDate.getHours() - 3); // GMT-3 //TEMP FIX
+
+  if (isBefore(eventDate, utcDate)) {
+    return `${eventDate.toISOString()} - ${gmtDate}`;
   }
 
-  const diffHours = differenceInHours(eventDate, now);
-  const diffMinutes = differenceInMinutes(eventDate, now);
+  const diffHours = differenceInHours(eventDate, utcDate);
+  const diffMinutes = differenceInMinutes(eventDate, utcDate);
 
   if (diffHours >= 24) {
     return format(eventDate, 'dd/MM HH:mm');
+  }
+
+  if (diffHours >= 1) {
+    return `${diffHours} h`;
+  }
+
+  return `${diffMinutes} min`;
+}
+
+export function formatAge(dateString: string): string {
+  if (!dateString) return '-';
+  
+  const date = parseISO(dateString);
+  if (!isValid(date)) return '-';
+
+  const now = new Date();
+  const diffMinutes = differenceInMinutes(now, date);
+  const diffHours = differenceInHours(now, date);
+
+  if (diffHours >= 24) {
+    return format(date, 'dd/MM HH:mm'); // Ex: 25/03 14:00
   }
 
   if (diffHours >= 1) {

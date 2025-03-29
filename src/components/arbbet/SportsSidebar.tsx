@@ -4,6 +4,7 @@ interface Props {
     arbType: string;
     autoUpdate: boolean;
     zoom: string;
+    sortBy: string;
   };
   setFilters: (filters: Partial<Props["filters"]>) => void;
 }
@@ -60,9 +61,14 @@ const SportsSidebar: React.FC<Props> = ({ show, filters, setFilters }) => {
       {/* Sort */}
       <div>
         <div className="text-[10px] uppercase text-gray-400 mb-1">Sorted by:</div>
-        <select className="w-full p-1 rounded bg-[#111318] text-white text-xs">
+        <select
+          className="w-full p-1 rounded bg-[#111318] text-white text-xs"
+          value={filters.sortBy}
+          onChange={(e) => setFilters({ sortBy: e.target.value })}
+        >
           <option>Percent</option>
           <option>Time</option>
+          <option>Age</option>
         </select>
       </div>
 
