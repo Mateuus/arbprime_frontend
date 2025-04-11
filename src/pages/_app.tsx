@@ -7,11 +7,13 @@ import NProgress from 'nprogress';
 import '@/styles/globals.css';
 import { UserProvider } from "@/context/UserContext";
 import NavBar from "@/components/NavBar";
+import { useWebSocketClient } from '@/hooks/useWebSocketClient';
 
 const inter = Inter({ subsets: ["latin"] });
 
 export default function ArbCrypto({ Component, pageProps }: AppProps) {
   const router = useRouter();
+  useWebSocketClient(); 
 
   useEffect(() => {
     const handleStart = () => NProgress.start();
