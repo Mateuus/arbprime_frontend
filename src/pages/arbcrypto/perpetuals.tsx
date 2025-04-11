@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import useWebSocket from '@/hooks/useWebSocket';
+import { useEffect, useState } from 'react';
+import { wsManager } from '@/services/wsManager';
 import ArbCard from '@/components/ArbCard';
 import ArbList from '@/components/ArbList';
 import { Arbitrage } from '@/interfaces';
@@ -7,9 +7,36 @@ import { Pause, Play, RefreshCcw, Star, StarOff } from 'lucide-react';
 
 const ArbCryptoPerpetuals: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
-  const { data, setAutoUpdate, autoUpdate, fetchArbitrageData } = useWebSocket();
-  const [previousData, setPreviousData] = useState<Arbitrage[]>([]);
+  const [data, setData] = useState<Arbitrage[]>([]);
+  const [autoUpdate, setAutoUpdate] = useState(true);
   const [highlightChange, setHighlightChange] = useState(true);
+  const [previousData, setPreviousData] = useState<Arbitrage[]>([]);
+
+  // Atualização automática/manual via wsManager
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handler = (msg: any) => {
+      if (msg.method === 'arbitrage_pairs') {
+        setData(msg.data || []);
+      }
+    };
+
+    wsManager.subscribe(handler);
+
+    if (autoUpdate) {
+      wsManager.send({
+        method: 'arbitrage_pairs',
+        options: { autoUpdate: true },
+      });
+    }
+
+    return () => wsManager.unsubscribe(handler);
+  }, [autoUpdate]);
+
+  // Manual fetch para botão
+  const fetchArbitrageData = () => {
+    wsManager.send({ method: 'arbitrage_pairs' });
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -19,14 +46,14 @@ const ArbCryptoPerpetuals: React.FC = () => {
     if (highlightChange) {
       setPreviousData([...data]);
     }
-    handleResize(); // Define o estado inicial
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [data, highlightChange]);
 
   return (
     <div className="container mx-auto px-4 py-8">
-     <header className="text-center mb-6">
+      <header className="text-center mb-6">
         <h1 className="text-3xl font-bold text-white mb-4">Arbitragem ao Vivo</h1>
         <div className="flex justify-center gap-6 items-center">
           {/* Botão de Atualização Automática */}
@@ -39,7 +66,6 @@ const ArbCryptoPerpetuals: React.FC = () => {
             >
               {autoUpdate ? <Pause size={24} color="white" /> : <Play size={24} color="white" />}
             </button>
-            {/* Tooltip */}
             <span className="absolute bottom-full mb-2 hidden group-hover:block bg-gray-700 text-white text-xs px-2 py-1 rounded-md">
               {autoUpdate ? 'Desativar Atualização' : 'Ativar Atualização'}
             </span>
@@ -55,7 +81,6 @@ const ArbCryptoPerpetuals: React.FC = () => {
             >
               {highlightChange ? <Star size={24} color="white" /> : <StarOff size={24} color="white" />}
             </button>
-            {/* Tooltip */}
             <span className="absolute bottom-full mb-2 hidden group-hover:block bg-gray-700 text-white text-xs px-2 py-1 rounded-md">
               {highlightChange ? 'Desativar Destaques' : 'Ativar Destaques'}
             </span>
@@ -65,12 +90,11 @@ const ArbCryptoPerpetuals: React.FC = () => {
           {!autoUpdate && (
             <div className="relative group">
               <button
-                onClick={() => fetchArbitrageData()}
+                onClick={fetchArbitrageData}
                 className="p-3 rounded-full transition bg-blue-500 hover:bg-blue-600"
               >
                 <RefreshCcw size={24} color="white" />
               </button>
-              {/* Tooltip */}
               <span className="absolute bottom-full mb-2 hidden group-hover:block bg-gray-700 text-white text-xs px-2 py-1 rounded-md">
                 Atualizar Manualmente
               </span>
@@ -89,7 +113,7 @@ const ArbCryptoPerpetuals: React.FC = () => {
         ) : (
           <ArbList data={data} previousData={previousData} />
         )}
-    </div>
+      </div>
     </div>
   );
 };

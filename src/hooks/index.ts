@@ -1,2 +1,3 @@
 export * from './useWebSocket';
-export * from './websocket';
+export * from './useWebSocketClient';
+export * from './useAuth';

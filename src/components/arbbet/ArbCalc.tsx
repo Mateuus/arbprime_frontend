@@ -57,6 +57,7 @@ export default function ArbCalc({
     setOddInputs(odds);
     setStakes(initialStakes);
     setStakeInputs(initialStakes.map(s => s.toFixed(2).replace('.', ',')));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSurebetIndex]);
 
   const surebet = latestData.current.surebets[selectedSurebetIndex];
