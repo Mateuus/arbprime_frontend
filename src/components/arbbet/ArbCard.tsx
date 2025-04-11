@@ -87,7 +87,12 @@ export default function ArbCard({ data, selected, onSelect }: Props) {
                     <span className="text-gray-600 dark:text-gray-300">{data.league}</span>
                 </div>
                 <div className="flex flex-col text-right">
-                    <span className="text-green-600 font-semibold"><RenderPriceWithHistory odd={odd} /></span>
+                <span className="text-green-600 font-semibold flex flex-col">
+                  <RenderPriceWithHistory odd={odd} />
+                  {odd.size !== undefined && (
+                    <span className="text-gray-500 font-semibold text-xs">R${odd.size}</span>
+                  )}
+                </span>
                     <span className="text-gray-600 dark:text-gray-300">{getMarketName(odd.market)}: {odd.option}</span>
                 </div>
                 </div>

@@ -16,12 +16,13 @@ export interface Arbitragem {
 export interface SurebetOdd {
     option: string;
     price: number;
+    size?: number;
     bookmaker: string;
     eventId: string;
     market: string;
     link?: string;
     historyPrice: { timestamp: number; price: number }[];
-    otherOdds: { eventId: string; bookmaker: string; price: number }[];
+    otherOdds: { eventId: string; bookmaker: string; price: number, size?: number }[];
 }
 
 export interface Surebet {

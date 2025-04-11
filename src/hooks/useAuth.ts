@@ -1,5 +1,6 @@
 import { useUserContext } from "@/context/UserContext";
 import { apiGateway } from '@/gateways';
+import { wsManager } from "@/services/wsManager";
 
 
 export const useAuth = () => {
@@ -17,6 +18,11 @@ export const useAuth = () => {
         // Ao receber a data de expiração do backend
         setUser(response.data.data); // Atualiza o estado do usuário
         setIsAuthenticated(true);
+
+        const newToken = response.data.data.token;
+        if (newToken) {
+          wsManager.reconnect(newToken); // reconecta com token novo
+        }
       }
 
       return response; // Retorna a resposta da API para que possa ser manipulada fora da função

@@ -48,7 +48,7 @@ export const setupAxiosInterceptors = (
           // Trate o erro 401, removendo o usuário e autenticidade
           setUser(null); // Reseta o usuário
           setIsAuthenticated(false); // Define como não autenticado
-          console.warn("Erro 401: Usuário não autorizado. Reautenticação necessária.");
+          //console.warn("Erro 401: Usuário não autorizado. Reautenticação necessária.");
         }
         return Promise.reject(error); // Rejeita o erro para ser tratado onde a requisição foi feita
       }
@@ -65,13 +65,34 @@ const logout = async () => {
 };
 
 const getUserInfo = async () => {
-    return apiClient.get('/user/info');
+    return apiClient.get('/user/info'); // Retorna o status mesmo em erro
+};
+
+const getUserAuth = async () => {
+  try {
+    const res = await apiClient.get('/user/auth');
+    
+    if (res && res.data?.result === 1) {
+      console.log(res.data.data);
+      return res.data.data;
+    }
+
+    return 'anonymous'; // caso result seja !== 1
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      return 'anonymous';
+    }
+  
+    console.error('Erro inesperado em getUserAuth:', error);
+    return 'anonymous';
+  }
 };
 
 export const apiGateway = {
     login,
     logout,
     getUserInfo,
+    getUserAuth
 };
     
 export default apiGateway;

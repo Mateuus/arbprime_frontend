@@ -31,17 +31,23 @@ interface Props {
 
     return (
       <div className="overflow-y-auto h-[calc(91vh)]">
-        {sorted.map((item) => {
-          const best = getBestSurebet(item.surebets);
-          return (
-            <ArbCard
-              key={item.id}
-              data={{ ...item, surebets: [best] }}
-              selected={item.id === selectedId}
-              onSelect={() => onSelect(item.id)}
-            />
-          );
-        })}
+        {sorted.length === 0 ? (
+          <div className="text-white text-center py-10">
+            Nenhuma surebet encontrada.
+          </div>
+        ) : (
+          sorted.map((item) => {
+            const best = getBestSurebet(item.surebets);
+            return (
+              <ArbCard
+                key={item.id}
+                data={{ ...item, surebets: [best] }}
+                selected={item.id === selectedId}
+                onSelect={() => onSelect(item.id)}
+              />
+            );
+          })
+        )}
       </div>
     );
   }
