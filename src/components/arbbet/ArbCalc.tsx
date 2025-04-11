@@ -1,207 +1,250 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { CheckCircle, XCircle, ListOrdered } from 'lucide-react';
-import { SurebetData, SurebetOdd } from '@/interfaces/arbitragem.interface';
+import { SurebetData } from '@/interfaces/arbitragem.interface';
+import { CheckCircle, ListOrdered, XCircle } from 'lucide-react';
 
 interface ArbCalcProps {
   data: SurebetData;
+  selectedSurebetIndex?: number;
   showToggleButton?: boolean;
   showMobileDetails?: boolean;
   setShowMobileDetails?: (value: boolean) => void;
-  selectedSurebetIndex?: number;
 }
 
 export default function ArbCalc({
   data,
+  selectedSurebetIndex = 0,
   showToggleButton = false,
   showMobileDetails,
   setShowMobileDetails,
-  selectedSurebetIndex = 0
 }: ArbCalcProps) {
   const latestData = useRef<SurebetData>(data);
-  const [base, setBase] = useState(5000);
-  const [selectedOdds, setSelectedOdds] = useState<SurebetOdd[]>([]);
+
+  const [base, setBase] = useState(1000);
+  const [selectedBookmakers, setSelectedBookmakers] = useState<string[]>([]);
+  const [oddInputs, setOddInputs] = useState<string[]>([]);
+  const [originalOddsMap, setOriginalOddsMap] = useState<Map<string, number[]>>(new Map());
   const [stakes, setStakes] = useState<number[]>([]);
   const [stakeInputs, setStakeInputs] = useState<string[]>([]);
-  const [editedStake, setEditedStake] = useState<boolean[]>([]);
 
-  // Atualiza a ref sempre que `data` mudar (WebSocket)
   useEffect(() => {
     latestData.current = data;
   }, [data]);
 
-  // Só atualiza os campos quando o selectedSurebetIndex muda
   useEffect(() => {
     const surebet = latestData.current.surebets[selectedSurebetIndex];
     if (!surebet) return;
+
     const initialOdds = surebet.surebet;
-    const defaultBase = 5000;
+    const bookmakers = initialOdds.map(o => o.bookmaker);
+    const odds = initialOdds.map(o => o.price.toString().replace('.', ','));
+
+    const oddsMap = new Map<string, number[]>();
+    initialOdds.forEach((odd, i) => {
+      const all = [odd, ...(odd.otherOdds || [])];
+      all.forEach(o => {
+        if (!oddsMap.has(o.bookmaker)) oddsMap.set(o.bookmaker, []);
+        oddsMap.get(o.bookmaker)![i] = o.price;
+      });
+    });
+
     const totalInverse = initialOdds.reduce((acc, o) => acc + 1 / o.price, 0);
-    const newStakes = initialOdds.map((o) => (defaultBase * (1 / o.price)) / totalInverse);
-    setBase(defaultBase);
-    setSelectedOdds(initialOdds);
-    setStakes(newStakes);
-    setStakeInputs(newStakes.map(s => s.toFixed(2).replace('.', ',')));
-    setEditedStake(new Array(newStakes.length).fill(false));
+    const initialStakes = initialOdds.map((o) => (base * (1 / o.price)) / totalInverse);
+
+    setSelectedBookmakers(bookmakers);
+    setOriginalOddsMap(oddsMap);
+    setOddInputs(odds);
+    setStakes(initialStakes);
+    setStakeInputs(initialStakes.map(s => s.toFixed(2).replace('.', ',')));
   }, [selectedSurebetIndex]);
 
   const surebet = latestData.current.surebets[selectedSurebetIndex];
   if (!surebet) return null;
 
-  function handleOddChange(index: number, newOdd: SurebetOdd) {
-    const updated = [...selectedOdds];
-    updated[index] = newOdd;
-    setSelectedOdds(updated);
-  }
+  const oddsAsNumbers = oddInputs.map(o => parseFloat(o.replace(',', '.')));
+  const totalInverse = oddsAsNumbers.reduce((acc, price) => acc + 1 / price, 0);
+  const profit = (1 - totalInverse) * 100;
+  const expectedReturn = Math.min(...stakes.map((s, i) => s * oddsAsNumbers[i]));
+  const netProfit = expectedReturn - base;
 
-  function handleStakeTyping(index: number, value: string) {
+  const handleStakeTyping = (index: number, value: string) => {
     const updatedInputs = [...stakeInputs];
     updatedInputs[index] = value;
     setStakeInputs(updatedInputs);
-    const updatedEdited = [...editedStake];
-    updatedEdited[index] = true;
-    setEditedStake(updatedEdited);
-  }
+  };
 
-  function applyStakeChange(index: number) {
-    const parsed = parseFloat(stakeInputs[index].replace(',', '.'));
-    if (isNaN(parsed)) return;
-
-    const fixed = parsed;
-    const fixedOdd = selectedOdds[index];
-    const totalInv = selectedOdds.reduce((acc, o) => acc + 1 / o.price, 0);
-    const newBase = (fixed * totalInv) / (1 / fixedOdd.price);
-    const newStakes = selectedOdds.map((o) => (newBase * (1 / o.price)) / totalInv);
-
+  const updateStakeFromOdds = (updatedOdds: number[]) => {
+    const totalInv = updatedOdds.reduce((acc, price) => acc + 1 / price, 0);
+    const newStakes = updatedOdds.map((price) => (base * (1 / price)) / totalInv);
     setStakes(newStakes);
     setStakeInputs(newStakes.map(s => s.toFixed(2).replace('.', ',')));
-    setBase(newBase);
-    const updatedEdited = [...editedStake];
-    updatedEdited[index] = false;
-    setEditedStake(updatedEdited);
-  }
-
-  const totalInverse = selectedOdds.reduce((acc, o) => acc + 1 / o.price, 0);
-  const newProfit = (1 - totalInverse) * 100;
-  const expectedReturn = Math.min(...stakes.map((s, i) => s * selectedOdds[i].price));
-  const netProfit = expectedReturn - base;
-
-  function getOtherOptions(baseOdd: SurebetOdd): SurebetOdd[] {
-    return baseOdd.otherOdds?.map((alt) => ({
-      ...baseOdd,
-      bookmaker: alt.bookmaker,
-      price: alt.price
-    })) || [];
-  }
+  };
 
   return (
-    <div className="flex flex-col h-full text-sm bg-[#2e3340] rounded overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-2 py-1 bg-[#1f2937] text-white">
-        <div className="flex items-center gap-2">
-          <div className={`px-2 font-bold ${newProfit >= 0 ? 'bg-[#9adb52] text-black' : 'bg-red-500 text-white'}`}>{newProfit.toFixed(2)}%</div>
-          <div className="font-semibold">{data.sport}</div>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-gray-300">
-          <span>{formatTimer(surebet.update_at)}</span>
+    <div className="p-2 bg-[#f5f6f7] text-sm text-black rounded">
+      <div className="flex justify-between items-center font-bold mb-2">
+        <div className="text-green-700">{profit.toFixed(2)}%</div>
+        <div className="text-gray-600">
+          {data.sport} - {data.home} x {data.away}
         </div>
       </div>
 
-      {/* Event */}
-      <div className="bg-[#232b3b] text-white px-2 py-1 text-xs font-semibold border-b border-black">
-        {data.home} x {data.away}
-      </div>
+      {surebet.surebet.map((odd, index) => {
+        const allOptions = [odd, ...(odd.otherOdds || [])];
+        const uniqueOptions = allOptions.filter(
+          (opt, idx, self) =>
+            self.findIndex(o => o.bookmaker === opt.bookmaker) === idx
+        );
+        const currentBookmaker = selectedBookmakers[index];
+        const currentOdd = parseFloat(oddInputs[index]?.replace(',', '.'));
 
-      {/* Odds */}
-      <div className="flex-1 bg-[#3b4252] text-white p-2 space-y-3">
-        {selectedOdds.map((odd, index) => {
-          const otherOptions = getOtherOptions(odd);
-          const fullList = [odd, ...otherOptions.filter(o => o.bookmaker !== odd.bookmaker)];
+        return (
+          <div key={index} className="flex flex-wrap items-center bg-[#e6f5e5] mb-2 rounded px-2 py-1 gap-2">
+            <div className="min-w-[100px] font-semibold text-gray-700">{odd.option}</div>
 
-          return (
-            <div key={index} className="bg-[#2d3648] p-2 rounded space-y-2">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div className="font-bold min-w-[120px]">{odd.option}</div>
-                <select
-                  value={odd.bookmaker + '_' + odd.price}
-                  onChange={(e) => {
-                    const [bookmaker, price] = e.target.value.split('_');
-                    const newOdd = fullList.find(o => o.bookmaker === bookmaker && o.price === Number(price));
-                    if (newOdd) handleOddChange(index, newOdd);
-                  }}
-                  className="bg-white text-black text-xs px-2 py-1 rounded w-full sm:w-auto"
-                >
-                  {fullList.map((o, i) => (
-                    <option key={i} value={o.bookmaker + '_' + o.price}>
-                      {o.bookmaker}: {o.price.toFixed(2)} ({i})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold">Stake:</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  className="text-black text-xs rounded px-1 w-full max-w-[120px]"
-                  value={stakeInputs[index] || ''}
-                  onChange={(e) => handleStakeTyping(index, e.target.value)}
-                />
-                {editedStake[index] && (
-                  <button
-                    onClick={() => applyStakeChange(index)}
-                    className="text-green-500 hover:text-green-300"
-                    title="Aplicar stake"
-                  >
-                    <CheckCircle size={18} />
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            {/* Casa de aposta */}
+            <select
+              className="bg-white border border-gray-300 rounded px-2 py-1 text-xs"
+              value={currentBookmaker}
+              onChange={(e) => {
+                const updated = [...selectedBookmakers];
+                updated[index] = e.target.value;
+                setSelectedBookmakers(updated);
 
-      {/* Footer */}
-      <div className="shrink-0 px-2 py-2 bg-[#111318] text-white text-xs flex justify-between items-center">
-        <div className="flex flex-col gap-1">
-          <span className="flex items-center gap-2">
-            Total:
+                const resetPrice = originalOddsMap.get(e.target.value)?.[index];
+                if (resetPrice) {
+                  const updatedOdds = [...oddInputs];
+                  updatedOdds[index] = resetPrice.toString().replace('.', ',');
+                  setOddInputs(updatedOdds);
+                  updateStakeFromOdds(updatedOdds.map(p => parseFloat(p.replace(',', '.'))));
+                }
+              }}
+            >
+              {uniqueOptions.map((o, i) => (
+                <option key={i} value={o.bookmaker}>
+                  {o.bookmaker}: {o.price.toFixed(2)}
+                </option>
+              ))}
+            </select>
+
+            {/* Refresh odd */}
+            <button
+              title="Restaurar odd original"
+              className="text-blue-600 hover:text-blue-800"
+              onClick={() => {
+                const resetPrice = originalOddsMap.get(currentBookmaker)?.[index];
+                if (resetPrice) {
+                  const updatedOdds = [...oddInputs];
+                  updatedOdds[index] = resetPrice.toString().replace('.', ',');
+                  setOddInputs(updatedOdds);
+                  updateStakeFromOdds(updatedOdds.map(p => parseFloat(p.replace(',', '.'))));
+                }
+              }}
+            >
+              🔄
+            </button>
+
+            {/* Cotação (editável) */}
             <input
-              type="number"
-              value={base}
-              onChange={(e) => setBase(Number(e.target.value))}
-              className="w-20 px-1 py-0.5 text-black text-xs rounded"
+              type="text"
+              className="w-[100px] text-center bg-white border border-gray-300 rounded px-2 py-1"
+              value={oddInputs[index]}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => {
+                const updated = [...oddInputs];
+                updated[index] = e.target.value;
+                setOddInputs(updated);
+                const parsed = parseFloat(e.target.value.replace(',', '.'));
+                if (!isNaN(parsed) && parsed > 0) {
+                  updateStakeFromOdds(updated.map(p => parseFloat(p.replace(',', '.'))));
+                }
+              }}
             />
-          </span>
-          <span className="text-green-400">
-            Retorno: R$ {expectedReturn.toFixed(2)} | Lucro: R$ {netProfit.toFixed(2)}
-          </span>
+
+            {/* Stake (editável) */}
+            <input
+              type="text"
+              className="w-[80px] text-right bg-white border border-gray-300 rounded px-2 py-1"
+              value={stakeInputs[index] || ''}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => handleStakeTyping(index, e.target.value)}
+              onBlur={() => {
+                const val = stakeInputs[index];
+                const parsed = parseFloat(val.replace(',', '.'));
+                if (!isNaN(parsed) && parsed > 0) {
+                  const totalInv = oddsAsNumbers.reduce((acc, price) => acc + 1 / price, 0);
+                  const newBase = (parsed * totalInv) / (1 / oddsAsNumbers[index]);
+                  const newStakes = oddsAsNumbers.map((price) => (newBase * (1 / price)) / totalInv);
+
+                  setBase(newBase);
+                  setStakes(newStakes);
+                  setStakeInputs(newStakes.map(s => s.toFixed(2).replace('.', ',')));
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+            />
+
+            {/* Lucro estimado */}
+            <div className="w-[50px] text-center text-green-600 font-bold">
+              {((currentOdd * stakes[index]) - base).toFixed(2)}
+            </div>
+
+            {/* Ação futura */}
+            <button className="ml-auto bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-1 rounded">
+              BET
+            </button>
+          </div>
+        );
+      })}
+
+      {/* Rodapé com total + toggle */}
+      <div className="mt-3 flex justify-between items-center text-xs text-gray-700">
+        <div className="flex items-center gap-1">
+          Total:
+          <input
+            type="text"
+            className="w-[80px] text-right bg-white border border-gray-300 rounded px-2 py-1"
+            value={base.toString().replace('.', ',')}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => {
+              const raw = e.target.value.replace(',', '.');
+              let parsed = parseFloat(raw);
+              if (isNaN(parsed) || parsed <= 0) parsed = 1000;
+              setBase(parsed);
+              const totalInv = oddsAsNumbers.reduce((acc, price) => acc + 1 / price, 0);
+              const newStakes = oddsAsNumbers.map((price) => (parsed * (1 / price)) / totalInv);
+              setStakes(newStakes);
+              setStakeInputs(newStakes.map(s => s.toFixed(2).replace('.', ',')));
+            }}
+          />
         </div>
 
-        {showToggleButton && setShowMobileDetails && (
+        <div className="flex items-center gap-2">
+          <span>
+            Retorno: <strong>{expectedReturn.toFixed(2)}</strong> | Lucro: <strong>{netProfit.toFixed(2)}</strong>
+          </span>
+
+          {showToggleButton && setShowMobileDetails && (
           <button
             onClick={() => setShowMobileDetails(!showMobileDetails)}
             className="relative flex items-center justify-center w-7 h-7"
             title={showMobileDetails ? 'Voltar' : 'Ver Detalhes'}
           >
-            <ListOrdered size={24} className="text-slate-300" />
+            <ListOrdered size={20} className="text-black" />
             {showMobileDetails ? (
               <CheckCircle size={14} className="text-green-500 absolute -bottom-1 -left-1 bg-gray-800 rounded-full" />
             ) : (
               <XCircle size={14} className="text-red-500 absolute -bottom-1 -left-1 bg-gray-800 rounded-full" />
             )}
           </button>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
-}
-
-function formatTimer(updateAt: string): string {
-  const updateTime = new Date(updateAt).getTime();
-  const now = Date.now();
-  const seconds = Math.floor((now - updateTime) / 1000);
-  return `${seconds}s`;
 }
