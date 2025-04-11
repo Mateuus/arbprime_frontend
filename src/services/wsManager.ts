@@ -43,12 +43,24 @@ class WSManager {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
     } else {
-      console.warn('[WS] Não conectado. Aguardando conexão...');
-      this.ws?.addEventListener('open', () => {
+      console.warn('[WS] Ainda não conectado. Aguardando abrir...');
+  
+      const sendWhenReady = () => {
         this.ws?.send(JSON.stringify(data));
-      }, { once: true });
+        console.log('[WS] Mensagem enviada após conexão:', data);
+      };
+  
+      // Se estiver "connecting", escuta o evento
+      if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
+        this.ws.addEventListener('open', sendWhenReady, { once: true });
+      } else {
+        // Se a conexão nem existir ainda, tenta reconectar e então enviar
+        this.connect(this.token); // reconecta
+        this.ws?.addEventListener('open', sendWhenReady, { once: true });
+      }
     }
   }
+  
 
   public subscribe(cb: WSCallback) {
     this.listeners.push(cb);
