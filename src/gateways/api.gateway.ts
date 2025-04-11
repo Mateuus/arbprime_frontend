@@ -73,7 +73,6 @@ const getUserAuth = async () => {
     const res = await apiClient.get('/user/auth');
     
     if (res && res.data?.result === 1) {
-      console.log(res.data.data);
       return res.data.data;
     }
 

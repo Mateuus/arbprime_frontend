@@ -1,7 +1,6 @@
-// ✅ ArbCalc.tsx com stake fixo, update responsivo e botão de check ao lado externo do input
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle, XCircle, ListOrdered } from 'lucide-react';
 import { SurebetData, SurebetOdd } from '@/interfaces/arbitragem.interface';
 
@@ -20,14 +19,21 @@ export default function ArbCalc({
   setShowMobileDetails,
   selectedSurebetIndex = 0
 }: ArbCalcProps) {
-  const surebet = data.surebets[selectedSurebetIndex];
+  const latestData = useRef<SurebetData>(data);
   const [base, setBase] = useState(5000);
   const [selectedOdds, setSelectedOdds] = useState<SurebetOdd[]>([]);
   const [stakes, setStakes] = useState<number[]>([]);
   const [stakeInputs, setStakeInputs] = useState<string[]>([]);
   const [editedStake, setEditedStake] = useState<boolean[]>([]);
 
+  // Atualiza a ref sempre que `data` mudar (WebSocket)
   useEffect(() => {
+    latestData.current = data;
+  }, [data]);
+
+  // Só atualiza os campos quando o selectedSurebetIndex muda
+  useEffect(() => {
+    const surebet = latestData.current.surebets[selectedSurebetIndex];
     if (!surebet) return;
     const initialOdds = surebet.surebet;
     const defaultBase = 5000;
@@ -38,7 +44,10 @@ export default function ArbCalc({
     setStakes(newStakes);
     setStakeInputs(newStakes.map(s => s.toFixed(2).replace('.', ',')));
     setEditedStake(new Array(newStakes.length).fill(false));
-  }, [data, selectedSurebetIndex, surebet]);
+  }, [selectedSurebetIndex]);
+
+  const surebet = latestData.current.surebets[selectedSurebetIndex];
+  if (!surebet) return null;
 
   function handleOddChange(index: number, newOdd: SurebetOdd) {
     const updated = [...selectedOdds];
@@ -85,8 +94,6 @@ export default function ArbCalc({
       price: alt.price
     })) || [];
   }
-
-  if (!surebet) return null;
 
   return (
     <div className="flex flex-col h-full text-sm bg-[#2e3340] rounded overflow-hidden">
