@@ -101,7 +101,7 @@ const ArbList: React.FC<ArbListProps> = ({ data, previousData = [] }) => {
                     onMouseEnter={(e) => showTooltip(`Comprar em Spot: ${item.spots[0]?.exchange || 'N/A'}`, e)}
                     onMouseLeave={hideTooltip}
                 >
-                    <p className="text-red-500 font-medium">{item.spots[0]?.bid.toFixed(6) || 'N/A'}</p>
+                    <p className="text-red-500 font-medium">{item.spots[0]?.ask.toFixed(6) || 'N/A'}</p>
                     <p className="text-xs text-gray-400">{item.spots[0]?.exchange || 'N/A'} (Spot)</p>
                 </td>
 
@@ -111,7 +111,7 @@ const ArbList: React.FC<ArbListProps> = ({ data, previousData = [] }) => {
                     onMouseEnter={(e) => showTooltip(`Abrir Short: ${item.futures[0]?.exchange || 'N/A'}`, e)}
                     onMouseLeave={hideTooltip}
                 >
-                    <p className="text-green-500 font-medium">{item.futures[0]?.ask.toFixed(6) || 'N/A'}</p>
+                    <p className="text-green-500 font-medium">{item.futures[0]?.bid.toFixed(6) || 'N/A'}</p>
                     <p className="text-xs text-gray-400">{item.futures[0]?.exchange || 'N/A'} (Future)</p>
                 </td>
 

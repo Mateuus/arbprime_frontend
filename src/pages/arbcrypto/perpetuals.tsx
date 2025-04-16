@@ -23,19 +23,17 @@ const ArbCryptoPerpetuals: React.FC = () => {
 
     wsManager.subscribe(handler);
 
-    if (autoUpdate) {
-      wsManager.send({
-        method: 'arbitrage_pairs',
-        options: { autoUpdate: true },
-      });
-    }
+    wsManager.send({
+      method: 'arbitrage_pairs',
+      options: { autoUpdate: autoUpdate },
+    });
 
     return () => wsManager.unsubscribe(handler);
   }, [autoUpdate]);
 
   // Manual fetch para botão
   const fetchArbitrageData = () => {
-    wsManager.send({ method: 'arbitrage_pairs' });
+    wsManager.send({ method: 'arbitrage_pairs',  options: {} });
   };
 
   useEffect(() => {

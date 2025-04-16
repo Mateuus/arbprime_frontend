@@ -52,14 +52,14 @@ const ArbCard: React.FC<ArbCardProps> = ({ data, highlightClass, previousData })
         {/* Exchange A */}
         <div className="flex flex-col items-center">
           <span className="text-sm text-gray-400">Exchange A</span>
-          <span className="text-red-500 text-xl font-medium">{data.spots[0]?.bid.toFixed(6) || 'N/A'}</span>
+          <span className="text-red-500 text-xl font-medium">{data.spots[0]?.ask.toFixed(6) || 'N/A'}</span>
           <span className="text-xs text-gray-200">{data.spots[0]?.exchange || 'N/A'} (Spot)</span>
         </div>
         
         {/* Exchange B */}
         <div className="flex flex-col items-center">
           <span className="text-sm text-gray-400">Exchange B</span>
-          <span className="text-green-500 text-xl font-medium">{data.futures[0]?.ask.toFixed(6) || 'N/A'}</span>
+          <span className="text-green-500 text-xl font-medium">{data.futures[0]?.bid.toFixed(6) || 'N/A'}</span>
           <span className="text-xs text-gray-200">{data.futures[0]?.exchange || 'N/A'} (Futuros)</span>
         </div>
       </div>
