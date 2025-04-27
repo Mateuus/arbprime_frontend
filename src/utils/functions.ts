@@ -175,7 +175,7 @@ export function getMarketName(marketKey: string): string | undefined {
     { id: "total-goals", subId: 7, name: "Total de Gols - 2H" },
     { id: "both-teams-score", subId: 8, name: "Ambas equipes Marcam" },
     { id: "total-cards", subId: 9, name: "Total de Cartões" },
-    { id: "total-cards-yellow", subId: 9001, name: "Total de Cartões" },
+    { id: "total-cards-yellow", subId: 9001, name: "Cartões Amarelo" },
     { id: "total-cards-yellow-home", subId: 9002, name: "Cartões Amarelo Casa O/U" },
     { id: "total-cards-yellow-away", subId: 9003, name: "Cartões Amarelo Fora O/U" },
     { id: "total-corners", subId: 10, name: "Escanteios" },
