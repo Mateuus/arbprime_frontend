@@ -14,7 +14,7 @@ const CalculatorPage: React.FC = () => {
   // Envio automático quando os parâmetros estiverem disponíveis
   useEffect(() => {
     if (symbol && spot && future) {
-      wsManager.send({
+      wsManager.sendWhenReady({
         method: 'monitor_pairs',
         options: {
           symbol,
@@ -23,6 +23,8 @@ const CalculatorPage: React.FC = () => {
           exchangeB: future,
           exchangeB_type: 'future',
         },
+      }).catch((err) => {
+        console.error('[WS] Falha ao enviar monitor_pairs:', err.message);
       });
     }
   }, [symbol, spot, future]);

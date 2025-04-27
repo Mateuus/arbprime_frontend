@@ -175,6 +175,9 @@ export function getMarketName(marketKey: string): string | undefined {
     { id: "total-goals", subId: 7, name: "Total de Gols - 2H" },
     { id: "both-teams-score", subId: 8, name: "Ambas equipes Marcam" },
     { id: "total-cards", subId: 9, name: "Total de Cartões" },
+    { id: "total-cards-yellow", subId: 9001, name: "Total de Cartões" },
+    { id: "total-cards-yellow-home", subId: 9002, name: "Cartões Amarelo Casa O/U" },
+    { id: "total-cards-yellow-away", subId: 9003, name: "Cartões Amarelo Fora O/U" },
     { id: "total-corners", subId: 10, name: "Escanteios" },
     { id: "double-chance", subId: 11, name: "Chance Dupla" },
     { id: "double-chance", subId: 12, name: "Chance Dupla - 1H" },
@@ -185,6 +188,7 @@ export function getMarketName(marketKey: string): string | undefined {
     { id: "asian-handicap", subId: 17, name: "Handicap Asiático" },
     { id: "goal-line-handicap", subId: 18, name: "Handicap Gols Linhas" },
     { id: "qualify", subId: 19, name: "Classificar-se" },
+    { id: "shots-ongoal-winner", subId: 20, name: "Chutes no Gol Ganhador" },
   ];
 
   const found = marketList.find((m) => m.id === id && m.subId === subId);

@@ -60,8 +60,36 @@ class WSManager {
       }
     }
   }
-  
 
+  public async sendWhenReady(data: unknown, timeoutMs = 5000): Promise<void> {
+    const trySend = (): boolean => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify(data));
+        console.log('[WS] Mensagem enviada:', data);
+        return true;
+      }
+      return false;
+    };
+  
+    if (trySend()) return;
+  
+    this.connect(this.token); // conecta, caso ainda não esteja
+  
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('[WS] Timeout esperando conexão WebSocket'));
+      }, timeoutMs);
+  
+      const handleOpen = () => {
+        clearTimeout(timeout);
+        trySend();
+        resolve();
+      };
+  
+      this.ws?.addEventListener('open', handleOpen, { once: true });
+    });
+  }
+  
   public subscribe(cb: WSCallback) {
     this.listeners.push(cb);
   }
