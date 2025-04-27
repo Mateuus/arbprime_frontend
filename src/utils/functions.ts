@@ -189,6 +189,10 @@ export function getMarketName(marketKey: string): string | undefined {
     { id: "goal-line-handicap", subId: 18, name: "Handicap Gols Linhas" },
     { id: "qualify", subId: 19, name: "Classificar-se" },
     { id: "shots-ongoal-winner", subId: 20, name: "Chutes no Gol Ganhador" },
+    { id: "offsides-matchresult", subId: 41, name: "Impedimentos Resultado" },
+    { id: "offsides-over-under", subId: 42, name: "Total Impedimentos" },
+    { id: "home-offsides-over-under", subId: 43, name: "Impedimentos: Casa" },
+    { id: "away-offsides-over-under", subId: 44, name: "Impedimentos: Fora" },
   ];
 
   const found = marketList.find((m) => m.id === id && m.subId === subId);
