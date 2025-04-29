@@ -48,7 +48,7 @@ export function RenderPriceWithHistory({ odd }: { odd: SurebetOdd }) {
         onClose={() => setShowTooltip(false)}
         autoCloseAfterMs={4000}
       >
-        {history.slice(0, 2).map((entry, i) => {
+        {history.slice(0, 4).map((entry, i) => {
           const formattedTime = format(new Date(entry.timestamp * 1000), 'dd MMM HH:mm');
           return (
           <div
