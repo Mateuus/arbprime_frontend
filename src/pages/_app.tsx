@@ -6,8 +6,10 @@ import Head from 'next/head';
 import NProgress from 'nprogress';
 import '@/styles/globals.css';
 import { UserProvider } from "@/context/UserContext";
-import NavBar from "@/components/NavBar";
+import Sidebar from "@/components/SideBar";
+//import MobileMenu from '@/components/MobileMenu';
 import { useWebSocketClient } from '@/hooks/useWebSocketClient';
+import Navbar from "@/components/NavBar";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -38,17 +40,21 @@ export default function ArbCrypto({ Component, pageProps }: AppProps) {
   }
   return (
     <UserProvider>
-      <div className={`flex flex-col min-h-screen bg-zinc-900 ${inter.className}`}>
+      <div className={`flex min-h-screen ${inter.className}`}>
         <Head>
           <meta name="description" content="ArbPrime!" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <link rel="icon" href="/favicon.ico" /> 
+          <link rel="icon" href="/favicon.ico" />
           <title>ArbPrime</title>
         </Head>
-        <NavBar />
-        <main className="flex-grow pt-16">
-          <Component {...pageProps} />
-        </main>
+
+        <Sidebar />
+        <div className="flex-1 flex flex-col bg-brand-dark">
+          <Navbar />
+          <main className="flex-1 overflow-y-auto">
+            <Component {...pageProps} />
+          </main>
+        </div>
       </div>
     </UserProvider>
   );

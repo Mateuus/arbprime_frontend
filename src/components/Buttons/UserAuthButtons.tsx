@@ -29,7 +29,7 @@ const UserAuthButtons: React.FC = () => {
                 REGISTRAR
                 </button>
                 <button 
-                className="bg-white text-red-600 px-4 py-1 rounded hover:bg-gray-200 text-sm sm:px-2 sm:text-xs"
+                className="bg-brand-button text-black font-semibold text-sm px-4 py-1 rounded-lg hover:opacity-90 transition"
                 onClick={handleLoginOpen}
                 >
                 ENTRAR

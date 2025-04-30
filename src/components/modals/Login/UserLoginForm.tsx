@@ -80,7 +80,7 @@ const UserLoginForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
             <button 
                 onClick={handleLogin} 
-                className={`w-full p-3 rounded-lg font-semibold ${email && password ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gray-400 text-gray-800 cursor-not-allowed'}`}
+                className={`w-full p-3 rounded-lg font-semibold ${email && password ? 'bg-brand-button text-white hover:bg-brand-dark' : 'bg-gray-400 text-gray-800 cursor-not-allowed'}`}
                 disabled={!email || !password || loading}
             >
                 {loading ? 'Carregando...' : 'ENTRAR'}

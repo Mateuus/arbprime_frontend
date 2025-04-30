@@ -64,10 +64,9 @@ export default function ArbCalc({
   if (!surebet) return null;
 
   const oddsAsNumbers = oddInputs.map(o => parseFloat(o.replace(',', '.')));
-  const totalInverse = oddsAsNumbers.reduce((acc, price) => acc + 1 / price, 0);
-  const profit = (1 - totalInverse) * 100;
   const expectedReturn = Math.min(...stakes.map((s, i) => s * oddsAsNumbers[i]));
   const netProfit = expectedReturn - base;
+  const profit = (netProfit / base) * 100;
 
   const handleStakeTyping = (index: number, value: string) => {
     const updatedInputs = [...stakeInputs];
@@ -124,7 +123,7 @@ export default function ArbCalc({
             >
               {uniqueOptions.map((o, i) => (
                 <option key={i} value={o.bookmaker}>
-                  {o.bookmaker}: {o.price.toFixed(2)}
+                  {o.bookmaker}: {o.price}
                 </option>
               ))}
             </select>

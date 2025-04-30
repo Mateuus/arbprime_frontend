@@ -1,7 +1,7 @@
 import React from 'react';
 import { User as IconUser } from 'lucide-react';
-import { User } from '@/context/UserContext'; // Importe o tipo User
-import { useAuth } from '@/hooks/useAuth'; // Importe o hook useAuth
+import { User } from '@/context/UserContext';
+import { useAuth } from '@/hooks/useAuth';
 
 interface AccountDetailsModalProps {
   isOpen: boolean;
@@ -10,49 +10,55 @@ interface AccountDetailsModalProps {
 }
 
 const UserDetailsModal: React.FC<AccountDetailsModalProps> = ({ isOpen, onClose, user }) => {
-  const { logout } = useAuth(); // Acesse a função de logout
+  const { logout } = useAuth();
 
   if (!isOpen || !user) return null;
 
   const handleLogout = async () => {
     await logout();
-    onClose(); // Feche o modal após o logout
+    onClose();
   };
 
   return (
-    <div 
-      className="absolute top-full mt-2 right-0 bg-white p-4 rounded-lg shadow-lg w-72 z-50"
-      onClick={(e) => e.stopPropagation()} // Evita fechar o modal ao clicar nele
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
+      onClick={onClose} // Clicar fora do modal fecha ele
     >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <IconUser size={24} className="text-gray-700" />
-          <span>{user.username}</span>
+      <div
+        className="bg-white dark:bg-zinc-800 p-6 rounded-lg shadow-lg w-full max-w-sm relative"
+        onClick={(e) => e.stopPropagation()} // Impede fechar ao clicar dentro do modal
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <IconUser size={24} className="text-gray-700 dark:text-white" />
+            <span className="text-gray-900 dark:text-white">{user.username}</span>
+          </div>
+          <button onClick={onClose} className="text-gray-600 dark:text-white hover:text-red-600">
+            ✕
+          </button>
         </div>
-        <button onClick={onClose}>
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
+
+        {/* Plano */}
+        <div className="mb-4">
+          <div className="flex items-center">
+            <p className="font-semibold mr-2 text-gray-800 dark:text-white">Plano Atual:</p>
+            <p className="text-xl font-bold text-green-500">GOLD</p>
+          </div>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">(5 dias para expirar)</p>
+        </div>
+
+        {/* Ações */}
+        <button className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 mb-2">
+          MINHA CONTA
+        </button>
+        <button
+          className="w-full bg-red-600 text-white py-2 rounded hover:bg-red-700"
+          onClick={handleLogout}
+        >
+          SAIR
         </button>
       </div>
-      <div className="mb-4">
-        <div className="flex items-center">
-          <p className="font-semibold mr-2">Plano Atual:</p>
-          <p className="text-xl font-bold">GOLD</p>
-        </div>
-        <p className="text-gray-500 text-sm">(5 dias para expirar)</p>
-      </div>
-
-
-      <button className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
-        MINHA CONTA
-      </button>
-      <button 
-        className="w-full mt-2 bg-red-600 text-white py-2 rounded hover:bg-red-700"
-        onClick={handleLogout}
-      >
-        SAIR
-      </button>
     </div>
   );
 };

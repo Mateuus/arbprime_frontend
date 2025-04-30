@@ -63,7 +63,7 @@ useEffect(() => {
 
   return (
     <div className={`${darkMode ? 'dark' : ''}`}>
-      <div className="flex flex-col bg-gray-800 dark:bg-gray-900 min-h-screen py-3">
+      <div className="flex flex-col bg-gray-800 dark:bg-gray-900 min-h-screen">
         <HeaderTop
           onToggleSidebar={() => setShowSidebar((prev) => !prev)}
           showSidebar={showSidebar}
