@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/router";
-import { X, User as IconUser, ScrollText, Wallet, Gift, ChevronDown, ChevronUp } from "lucide-react";
+import { X, User as IconUser, ScrollText, ChevronDown, ChevronUp } from "lucide-react";
 import { useUserContext } from "@/context/UserContext";
 import DadosPessoais from "@/pages/user/details";
 import UserMensagens from "@/pages/user/mensagens";
 import ChangePassword from "@/pages/user/change-password";
+import { GiCoins, GiSoccerBall } from "react-icons/gi";
 
 export const abaTabs = ["details", "change-password", "mensagens"] as const;
 export type AbaTab = typeof abaTabs[number];
@@ -50,12 +51,21 @@ const UserProfileModal: React.FC<Props> = ({ isOpen, onClose, initialTab }) => {
       ]
     },
     {
-      name: 'Financeiro',
-      id: 'financeiro',
-      icon: <Wallet size={24} />,
+        name: 'ARB BET',
+        id: 'arbbet',
+        icon: <GiSoccerBall size={24} />,
+        subItems: [
+          { id: 'ab-bookmakers', name: 'Casas de Apostas' },
+          { id: 'ab-filters', name: 'Filtros' }
+        ]
+    },
+    {
+      name: 'ARB CRYPTO',
+      id: 'arbcrypto',
+      icon: <GiCoins size={24} />,
       subItems: [
-        { id: 'carteira', name: 'Gestão do Saldo' },
-        { id: 'bonus', name: 'Bônus' }
+        { id: 'ac-exchanges', name: 'Exchanges' },
+        { id: 'ac-filters', name: 'Filtros' }
       ]
     },
     {
@@ -65,14 +75,6 @@ const UserProfileModal: React.FC<Props> = ({ isOpen, onClose, initialTab }) => {
       subItems: [
         { id: 'historico', name: 'Histórico de Apostas' },
         { id: 'criador', name: 'Histórico do Criador' }
-      ]
-    },
-    {
-      name: 'Outros',
-      id: 'outros',
-      icon: <Gift size={24} />,
-      subItems: [
-        { id: 'promos', name: 'Promoções ArbPrime' }
       ]
     }
   ], []);

@@ -3,9 +3,7 @@ import { useRouter } from 'next/router';
 import {
   User as IconUser,
   History,
-  ScrollText,
   Wallet,
-  Gift,
   Mail
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -58,6 +56,20 @@ const UserArea: React.FC<UserAreaProps> = ({ isAuthenticated }) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setOpen(false);
     setSelectedTab(tab);
+  
+    // Atualiza a query na URL (sem reload)
+    router.replace(
+      {
+        pathname: router.pathname,
+        query: {
+          ...router.query,
+          profile: "open",
+          page: tab,
+        },
+      },
+      undefined,
+      { shallow: true }
+    );
   };
 
   const handleCloseModal = () => {
@@ -96,13 +108,7 @@ const UserArea: React.FC<UserAreaProps> = ({ isAuthenticated }) => {
             <History size={18} /> Histórico de apostas
           </button>
           <button className="w-full px-4 py-3 text-left hover:bg-[#143630] flex items-center gap-2 text-sm border-b border-[#1d3e3a]">
-            <ScrollText size={18} /> Histórico do Criador de Apostas
-          </button>
-          <button className="w-full px-4 py-3 text-left hover:bg-[#143630] flex items-center gap-2 text-sm border-b border-[#1d3e3a]">
-            <Wallet size={18} /> Gestão do saldo
-          </button>
-          <button className="w-full px-4 py-3 text-left hover:bg-[#143630] flex items-center gap-2 text-sm border-b border-[#1d3e3a]">
-            <Gift size={18} /> Bônus
+            <Wallet size={18} /> Gestão de Banca
           </button>
           <button
             onClick={() => handleOpenModal("mensagens")}

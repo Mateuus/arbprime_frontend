@@ -139,3 +139,27 @@ html, body {
   50% { box-shadow: 0 0 20px 4px rgba(239, 68, 68, 0.6); }
   100% { box-shadow: 0 0 10px 2px rgba(239, 68, 68, 0); }
 }
+
+@keyframes spin-slow {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+.animate-spin-slow {
+  animation: spin-slow 2.5s linear infinite;
+}
+
+@keyframes bounce-alt {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-0.75rem);
+  }
+}
+.animate-bounce-alt {
+  animation: bounce-alt 1.2s ease-in-out infinite;
+}

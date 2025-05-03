@@ -1,10 +1,10 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
-import SportsSidebar from '@/components/arbbet/SportsSidebar';
-import SportsArbList from '@/components/arbbet/SportsArbList';
-import ArbCalc from '@/components/arbbet/ArbCalc';
-import ArbsSelected from '@/components/arbbet/ArbsSelected';
-import HeaderTop from '@/components/arbbet/HeaderTop';
+import SportsSidebar from '@/components/ArbBet/SportsSidebar';
+import SportsArbList from '@/components/ArbBet/SportsArbList';
+import ArbCalc from '@/components/ArbBet/ArbCalc';
+import ArbsSelected from '@/components/ArbBet/ArbsSelected';
+import HeaderTop from '@/components/ArbBet/HeaderTop';
 import { wsManager } from '@/services/wsManager';
 
 const ArbitragemEsportivaPage = () => {

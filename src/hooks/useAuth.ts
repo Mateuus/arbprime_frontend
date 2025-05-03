@@ -2,7 +2,6 @@ import { useUserContext } from "@/context/UserContext";
 import { apiGateway } from '@/gateways';
 import { wsManager } from "@/services/wsManager";
 
-
 export const useAuth = () => {
   const context = useUserContext();
   if (!context) {
@@ -10,26 +9,31 @@ export const useAuth = () => {
   }
 
   const { user, setUser, isAuthenticated, setIsAuthenticated } = context;
-  const login = async (username: string, password: string) => {
+  const login = async (email: string, password: string) => {
     try {
-      const response = await apiGateway.login(username, password);
-
-      if (response.status === 200) {
-        // Ao receber a data de expiração do backend
-        setUser(response.data.data); // Atualiza o estado do usuário
+      const response = await apiGateway.login(email, password);
+      const resData = response.data;
+  
+      if (response.status === 200 && resData.result === 1) {
+        setUser(resData.data);
         setIsAuthenticated(true);
-
-        const newToken = response.data.data.token;
-        if (newToken) {
-          wsManager.reconnect(newToken); // reconecta com token novo
+  
+        const token = resData.data.token;
+        if (token) {
+          wsManager.reconnect(token);
         }
+  
+        return { success: true, data: resData.data };
       }
-
-      return response; // Retorna a resposta da API para que possa ser manipulada fora da função
-    } catch (error) {
-      console.error('Erro ao fazer login:', error);
-      throw error; // Re-lança o erro para ser capturado pelo chamador
-    } finally {}
+  
+      // Mesmo com 200, se result !== 1, falhou
+      return { success: false, message: resData.message || 'Login falhou' };
+  
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      const message = error?.response?.data?.message || 'Erro ao fazer login.';
+      return { success: false, message };
+    }
   };
 
   const logout = async () => {

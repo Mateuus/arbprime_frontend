@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Eye, EyeOff } from 'lucide-react';
-import { AxiosError } from 'axios';
 
 const UserLoginForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { login } = useAuth();
@@ -14,35 +13,20 @@ const UserLoginForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const handleLogin = async () => {
         setLoading(true);
         setErrorMessage(null);
-
-        try {
-            const response = await login(email, password);
-
-            if (response.status === 200) {
-                onClose(); // Fecha o modal após o sucesso do login
-            } else {
-                setErrorMessage(response.data?.message || "Erro ao tentar fazer login.");
-            }
-        } catch (error: unknown) {
-            const axiosError = error as AxiosError;
-            if (axiosError.response) {
-                if (axiosError.response.status === 401) {
-                    setErrorMessage(
-                        (axiosError.response.data as { message: string })?.message || "Nome de usuário ou senha inválidos"
-                    );
-                } else {
-                    setErrorMessage("Ocorreu um erro ao tentar fazer login. Por favor, tente novamente.");
-                }
-            } else {
-                setErrorMessage("Erro inesperado. Por favor, verifique sua conexão ou tente novamente.");
-            }
-        } finally {
-            setLoading(false);
+      
+        const result = await login(email, password);
+      
+        if (result.success) {
+          onClose(); // Login bem-sucedido
+        } else {
+          setErrorMessage(result.message);
         }
-    };
-
+      
+        setLoading(false);
+      };
+      
     return (
-        <div className="bg-gray-300 flex-grow p-6 flex flex-col">
+        <div className="bg-gray-300 flex-grow p-6 flex flex-col text-black">
             <label htmlFor="email" className="mb-1 text-gray-700 font-semibold">Email</label>
             <input 
                 id="email"
@@ -61,7 +45,7 @@ const UserLoginForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     value={password} 
                     onChange={(e) => setPassword(e.target.value)} 
                     placeholder="Digite sua senha" 
-                    className={`w-full p-3 border ${errorMessage ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:${errorMessage ? 'ring-red-600' : 'ring-red-600'}`}
+                    className={`w-full p-3  border ${errorMessage ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:${errorMessage ? 'ring-red-600' : 'ring-red-600'}`}
                 />
                 <button 
                     type="button"

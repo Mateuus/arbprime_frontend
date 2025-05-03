@@ -14,6 +14,9 @@ export default {
         foreground: "var(--foreground)",
         arbcrypto: "#1f2937",
         brand: {
+          input: {
+            focus: '#22c55e', // green-500 puro
+          },
           sidebar: '#00181c',
           button: '#48fff3',
           dark: '#00191d',

@@ -1,13 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import {
-  Ticket, Bitcoin, /*Radio,*/ CalendarClock, Infinity, ChevronDown, ChevronUp, Gift,
-  Volleyball,
+ /*Radio,*/ CalendarClock, Infinity, ChevronDown, ChevronUp, Gift,
   AlignJustify,
   X
 } from 'lucide-react';
 import { useUserContext } from '@/context/UserContext';
+import { GiCoins, GiHomeGarage, GiSoccerBall, GiWallet } from 'react-icons/gi';
 
 const Sidebar = () => {
   const router = useRouter();
@@ -16,15 +16,21 @@ const Sidebar = () => {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const menuItems = useMemo(() => [
-    { name: 'Home', path: '/', id: 'home', icon: <Ticket size={22} />, requiresAuth: false },
+    { name: 'Home', path: '/', id: 'home', icon: <GiHomeGarage size={22} />, requiresAuth: false },
     {
-      name: 'Arb Crypto', id: 'arbcrypto', icon: <Bitcoin size={22} />, requiresAuth: true,
+        name: 'PRIME ANALYTIX', id: 'analytix', icon: <GiWallet size={22} />, requiresAuth: true,
+        subItems: [
+          { name: 'Bankroll', path: '/analytix/bankroll', id: 'bankroll', icon: <Infinity size={18} /> },
+        ]
+      },
+    {
+      name: 'Arb Crypto', id: 'arbcrypto', icon: <GiCoins size={22} />, requiresAuth: true,
       subItems: [
         { name: 'Perpetuals', path: '/arbcrypto/perpetuals', id: 'perp', icon: <Infinity size={18} /> },
       ]
     },
     {
-      name: 'Arb Bets', id: 'arbbets', icon: <Volleyball size={22} />, requiresAuth: true,
+      name: 'Arb Bets', id: 'arbbets', icon: <GiSoccerBall size={22} />, requiresAuth: true,
       subItems: [
         //{ name: 'Live', path: '/arbbets', id: 'live', icon: <Radio size={18} color="red" /> },
         { name: 'Prematch', path: '/arbbets', id: 'prematch', icon: <CalendarClock size={18} /> },
@@ -35,7 +41,21 @@ const Sidebar = () => {
 
   const filteredItems = menuItems.filter(item => !item.requiresAuth || isAuthenticated);
 
-  const isActive = (path?: string) => path && router.pathname === path;
+  useEffect(() => {
+    for (const item of filteredItems) {
+      if (item.subItems?.some(sub => sub.path === router.pathname)) {
+        setOpenMenu(item.id);
+        setCollapsed(false); // apenas abre, sem loop
+        break;
+      }
+    }
+  }, [router.pathname]); // ✅ apenas isso
+
+  const isActive = (path?: string, subItems?: { path: string }[]) => {
+    if (path && router.pathname === path) return true;
+    if (subItems?.some(sub => sub.path === router.pathname)) return true;
+    return false;
+  };
 
   return (
     <div className={`h-screen bg-brand-dark text-white ${collapsed ? 'w-20' : 'w-64'} transition-all duration-300 flex flex-col`} style={{ boxShadow: '0 0 12px rgba(0, 0, 0, 0.25)', zIndex: 0 }}>
@@ -59,10 +79,13 @@ const Sidebar = () => {
           <div key={item.id}>
             <div
               className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl cursor-pointer hover:bg-brand-hover transition-all
-              ${isActive(item.path) ? 'bg-brand-active border border-teal-500' : ''} 
+              ${isActive(item.path, item.subItems) ? 'bg-brand-active border border-teal-500' : ''}
               ${item.button ? 'border border-teal-400 text-teal-300 mt-4 justify-center' : ''}`}
               onClick={() => {
                 if (item.subItems) {
+                  if (collapsed) {
+                    setCollapsed(false);
+                  }
                   setOpenMenu(openMenu === item.id ? null : item.id);
                 } else if (item.path) {
                   router.push(item.path);
@@ -70,7 +93,7 @@ const Sidebar = () => {
               }}
             >
               <span>{item.icon}</span>
-              {!collapsed && <span className="text-sm font-medium flex-1 truncate">{item.name}</span>}
+              {!collapsed && <span className="text-sm font-medium flex-1 truncate">{item.name.toUpperCase()}</span>}
               {!collapsed && item.subItems && (openMenu === item.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />)}
               {item.id === 'promo' && !collapsed && (
                 <span className="ml-auto text-xs bg-pink-600 px-2 py-0.5 rounded-full">NOVO</span>
@@ -85,7 +108,7 @@ const Sidebar = () => {
                       ${isActive(sub.path) ? 'text-teal-300 bg-[#024c3b]' : 'text-gray-300'}`}>
                       <span className="flex items-center gap-2">
                         {sub.icon}
-                        <span className="truncate">{sub.name}</span>
+                        <span className="truncate">{sub.name.toUpperCase()}</span>
                       </span>
                     </a>
                   </Link>

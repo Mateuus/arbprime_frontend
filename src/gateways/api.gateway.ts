@@ -44,7 +44,12 @@ export const setupAxiosInterceptors = (
         return response;
       },
       error => {
-        if (error.response?.status === 401) {
+        const originalRequest = error.config;
+
+        // Se a URL do request for /user/auth ou /user/info ou /user/logout
+        const isAuthCheck = originalRequest?.url?.includes("/user/auth") || originalRequest?.url?.includes("/user/info");
+
+        if (error.response?.status === 401 && isAuthCheck) {
           // Trate o erro 401, removendo o usuário e autenticidade
           setUser(null); // Reseta o usuário
           setIsAuthenticated(false); // Define como não autenticado
@@ -87,11 +92,16 @@ const getUserAuth = async () => {
   }
 };
 
+const changePassowrd = async (currentPassword: string, newPassword: string) => {
+  return apiClient.put('/user/change-password', { currentPassword, newPassword });
+};
+
 export const apiGateway = {
     login,
     logout,
     getUserInfo,
-    getUserAuth
+    getUserAuth,
+    changePassowrd
 };
     
 export default apiGateway;
