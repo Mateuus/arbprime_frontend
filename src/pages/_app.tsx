@@ -11,6 +11,7 @@ import Sidebar from "@/components/SideBar";
 import { useWebSocketClient } from '@/hooks/useWebSocketClient';
 import Navbar from "@/components/NavBar";
 import AuthModal from "@/components/modals/AuthModal";
+import MobileTabMenu from "@/components/Mobile/MobileTabMenu";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -58,12 +59,15 @@ export default function ArbCrypto({ Component, pageProps }: AppProps) {
           <title>ArbPrime</title>
         </Head>
 
-        <Sidebar />
+        <div className="hidden lg:block">
+          <Sidebar />
+        </div>
         <div className="flex-1 flex flex-col bg-brand-dark">
           <Navbar />
           <main className="flex-1 overflow-y-auto">
             <Component {...pageProps} />
           </main>
+          <MobileTabMenu />
         </div>
       </div>
     </UserProvider>
