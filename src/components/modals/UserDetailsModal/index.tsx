@@ -32,7 +32,7 @@ const UserDetailsModal: React.FC<AccountDetailsModalProps> = ({ isOpen, onClose,
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <IconUser size={24} className="text-gray-700 dark:text-white" />
-            <span className="text-gray-900 dark:text-white">{user.username}</span>
+            <span className="text-gray-900 dark:text-white">{user.fullname}</span>
           </div>
           <button onClick={onClose} className="text-gray-600 dark:text-white hover:text-red-600">
             ✕

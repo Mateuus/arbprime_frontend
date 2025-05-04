@@ -111,7 +111,7 @@ const UserProfileModal: React.FC<Props> = ({ isOpen, onClose, initialTab }) => {
             {/* Cabeçalho */}
             <div className={`flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-[#114646] to-[#072b2e]`} style={{ boxShadow: '5px 0 12px rgba(0, 0, 0, 0.4)', zIndex: 1 }}>
                 <div className="w-10 h-10 flex items-center justify-center rounded-full bg-[#4d5c5a] text-white font-semibold text-sm">
-                {user.fullname
+                {user?.fullname
                     .split(" ")
                     .map((n) => n[0])
                     .join("")

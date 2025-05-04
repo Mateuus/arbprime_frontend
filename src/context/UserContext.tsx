@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 // Definindo a interface User conforme especificado
 export interface User {
     id: string;
-    username: string;
+    fullname: string;
     email: string;
     role: string;
     profile: string;
