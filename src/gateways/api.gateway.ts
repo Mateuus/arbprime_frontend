@@ -59,7 +59,11 @@ export const setupAxiosInterceptors = (
       }
     );
 };
-  
+
+const register = async (email: string, fullname: string, personal_id: string, phone: string, password: string) => {
+  const inviteBy = localStorage.getItem('referralCode') || '';
+  return apiClient.post('/user/register', { email, fullname, personal_id, phone, password, inviteBy  });
+};
 
 const login = async (email: string, password: string) => {
     return apiClient.post('/user/login', { email, password });
@@ -96,12 +100,18 @@ const changePassowrd = async (currentPassword: string, newPassword: string) => {
   return apiClient.put('/user/change-password', { currentPassword, newPassword });
 };
 
+const lookupCPF = async (personal_id: string) => {
+  return apiClient.post('/user/lookup', { personal_id });
+};
+
 export const apiGateway = {
+    register,
     login,
     logout,
     getUserInfo,
     getUserAuth,
-    changePassowrd
+    changePassowrd,
+    lookupCPF
 };
     
 export default apiGateway;

@@ -10,6 +10,7 @@ import Sidebar from "@/components/SideBar";
 //import MobileMenu from '@/components/MobileMenu';
 import { useWebSocketClient } from '@/hooks/useWebSocketClient';
 import Navbar from "@/components/NavBar";
+import AuthModal from "@/components/modals/AuthModal";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,6 +19,14 @@ export default function ArbCrypto({ Component, pageProps }: AppProps) {
   useWebSocketClient(); 
 
   useEffect(() => {
+    const { referralCode } = router.query;
+
+    //Salvar Referencial Code, para não ser alterado o usuario tentar apagar etc...
+    if (typeof referralCode === 'string') {
+      // Salva no localStorage
+      localStorage.setItem('referralCode', referralCode);
+    }
+
     const handleStart = () => NProgress.start();
     const handleStop = () => NProgress.done();
 
@@ -40,6 +49,7 @@ export default function ArbCrypto({ Component, pageProps }: AppProps) {
   }
   return (
     <UserProvider>
+      <AuthModal />
       <div className={`flex min-h-screen ${inter.className}`}>
         <Head>
           <meta name="description" content="ArbPrime!" />

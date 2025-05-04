@@ -214,3 +214,19 @@ export function getMarketName(marketKey: string): string | undefined {
   const found = marketList.find((m) => m.id === id && m.subId === subId);
   return found?.name;
 }
+
+export const validatePassword = (pass: string, passLenght: number = 6) => {
+  const PASSWORD_MIN_LENGTH = passLenght;
+  const requireNumber = true;
+  const requireUppercase = true;
+  const requireSpecialChar = true;
+
+  const errors = [];
+  if (pass.length < PASSWORD_MIN_LENGTH) errors.push("Mínimo de 6 caracteres");
+  if (requireNumber && !/\d/.test(pass)) errors.push("Deve conter um número");
+  if (requireUppercase && !/[A-Z]/.test(pass)) errors.push("Deve conter letra maiúscula");
+  if (requireSpecialChar && !/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\/~`]/.test(pass)) {
+    errors.push("Deve conter caractere especial");
+  }
+  return errors;
+};

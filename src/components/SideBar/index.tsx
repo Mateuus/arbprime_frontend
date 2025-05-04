@@ -49,6 +49,7 @@ const Sidebar = () => {
         break;
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.pathname]); // ✅ apenas isso
 
   const isActive = (path?: string, subItems?: { path: string }[]) => {
