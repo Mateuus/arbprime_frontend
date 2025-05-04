@@ -21,7 +21,10 @@ const AuthModal: React.FC = () => {
     }
   }, [page]);
 
-  const PageComponent = dynamic(() => import(`@/pages/auth/${activePage}`), { ssr: false });
+  const PageComponent = dynamic<{ onClose: () => void }>(
+    () => import(`@/pages/auth/${activePage}`),
+    { ssr: false }
+  );
 
   if (!isOpen) return null;
 
@@ -39,7 +42,7 @@ const AuthModal: React.FC = () => {
         </h2>
 
         <Suspense fallback={<div className="text-white">Carregando...</div>}>
-          <PageComponent />
+          <PageComponent onClose={closeModal} />
         </Suspense>
       </div>
     </div>
