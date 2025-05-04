@@ -1,13 +1,13 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import {
- /*Radio,*/ CalendarClock, Infinity, ChevronDown, ChevronUp, Gift,
+ /*Radio,*/ChevronDown, ChevronUp,
   AlignJustify,
   X
 } from 'lucide-react';
+import { useMenuItems } from '@/utils/menu.config';
 import { useUserContext } from '@/context/UserContext';
-import { GiCoins, GiHomeGarage, GiSoccerBall, GiWallet } from 'react-icons/gi';
 
 const Sidebar = () => {
   const router = useRouter();
@@ -15,30 +15,7 @@ const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(true);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
-  const menuItems = useMemo(() => [
-    { name: 'Home', path: '/', id: 'home', icon: <GiHomeGarage size={22} />, requiresAuth: false },
-    {
-        name: 'PRIME ANALYTIX', id: 'analytix', icon: <GiWallet size={22} />, requiresAuth: true,
-        subItems: [
-          { name: 'Bankroll', path: '/analytix/bankroll', id: 'bankroll', icon: <Infinity size={18} /> },
-        ]
-      },
-    {
-      name: 'Arb Crypto', id: 'arbcrypto', icon: <GiCoins size={22} />, requiresAuth: true,
-      subItems: [
-        { name: 'Perpetuals', path: '/arbcrypto/perpetuals', id: 'perp', icon: <Infinity size={18} /> },
-      ]
-    },
-    {
-      name: 'Arb Bets', id: 'arbbets', icon: <GiSoccerBall size={22} />, requiresAuth: true,
-      subItems: [
-        //{ name: 'Live', path: '/arbbets', id: 'live', icon: <Radio size={18} color="red" /> },
-        { name: 'Prematch', path: '/arbbets', id: 'prematch', icon: <CalendarClock size={18} /> },
-      ]
-    },
-    { name: 'Promoções ArbPrime', path: '/promos', id: 'promo', icon: <Gift size={22} />, button: true, requiresAuth: false },
-  ], []);
-
+  const menuItems = useMenuItems();
   const filteredItems = menuItems.filter(item => !item.requiresAuth || isAuthenticated);
 
   useEffect(() => {

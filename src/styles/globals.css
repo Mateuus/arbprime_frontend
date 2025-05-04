@@ -169,3 +169,18 @@ input:-webkit-autofill {
   -webkit-box-shadow: 0 0 0px 1000px #1c2a2a inset !important;
   transition: background-color 5000s ease-in-out 0s;
 }
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.2s ease-out;
+}

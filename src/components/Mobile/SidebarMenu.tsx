@@ -1,6 +1,7 @@
 import { X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useMenuItems } from '@/utils/menu.config';
 import { useState, ReactNode } from 'react';
+import LogoText from '../ui/LogoText';
 
 interface MenuSubItem {
   id: string;
@@ -35,9 +36,9 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black bg-opacity-50 md:hidden">
-      <div className="absolute left-0 top-0 h-full w-[80%] max-w-xs bg-[#062121] p-4 flex flex-col overflow-y-auto">
+      <div className="absolute left-0 bottom-0 h-full w-[80%] max-w-xs bg-[#062121] p-4 flex flex-col overflow-y-auto rounded-tr-[30px] animate-slide-up">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-white text-2xl font-bold">Betão</h1>
+          <LogoText />
           <button onClick={onClose} className="text-white hover:text-red-400">
             <X />
           </button>
