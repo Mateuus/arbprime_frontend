@@ -193,14 +193,6 @@ const Register: React.FC = () => {
   return (
     <>
     <div className="w-full max-w-[700px] text-white space-y-6 mx-auto">
-      <div className="w-full">
-        <img
-          src="/banner-register.png"
-          alt="Crie sua conta"
-          className="w-full rounded-lg object-cover"
-        />
-      </div>
-
       <div>
         <h2 className="text-2xl font-bold">Crie sua conta</h2>
         <p className="text-sm text-gray-400">Cadastro rápido e seguro.</p>
