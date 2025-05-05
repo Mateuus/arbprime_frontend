@@ -175,7 +175,10 @@ const Register: React.FC = () => {
         setModalType("success");
         setModalMessage(resData.message);
         setShowModal(true);
-        router.push('/?modal=auth&page=login');
+      
+        setTimeout(() => {
+          router.push('/?modal=auth&page=login');
+        }, 1000); // espera 2 segundos
       }
   
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -14,10 +14,11 @@ const Login: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       setLoading(true);
       setCurrentError('');
       try {
-        const response = await login(email, password);
-    
+        const response = await login(email, password);    
         if (response.success) {
           onClose();
+        } else {
+          setCurrentError(response.message);
         }
     
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,6 +50,11 @@ const Login: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               placeholder="Senha"
               showTogglePassword
             />
+         {currentError && (
+              <div className="flex justify-center py-1">
+                  <p className="text-red-500 mb-4 text-center">{currentError}</p>
+              </div>
+          )}  
          {loading ? (
             <div className="w-full flex justify-center">
               <SportsCryptoLoading />
@@ -61,11 +67,6 @@ const Login: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </button>
           )}
       </div>
-      {currentError && (
-          <div className="flex justify-center">
-              <p className="text-red-500 mb-4 text-center">{currentError}</p>
-          </div>
-      )}
     </>
   );
 };
