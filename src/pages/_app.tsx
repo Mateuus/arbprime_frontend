@@ -12,6 +12,7 @@ import { useWebSocketClient } from '@/hooks/useWebSocketClient';
 import Navbar from "@/components/NavBar";
 import AuthModal from "@/components/modals/AuthModal";
 import MobileTabMenu from "@/components/Mobile/MobileTabMenu";
+import UnifiedUserModal from "@/components/modals/UnifiedUserModal";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -51,6 +52,7 @@ export default function ArbCrypto({ Component, pageProps }: AppProps) {
   return (
     <UserProvider>
       <AuthModal />
+      <UnifiedUserModal />
       <div className={`flex min-h-screen ${inter.className}`}>
         <Head>
           <meta name="description" content="ArbPrime!" />

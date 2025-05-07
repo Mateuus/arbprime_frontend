@@ -48,13 +48,13 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
         value={value}
         onChange={onChange}
         disabled={disabled}
-        className="peer block w-full appearance-none rounded-md border border-transparent bg-[#1c2a2a] px-2.5 pb-2.5 pt-6 text-sm text-white placeholder-transparent focus:outline-none focus:ring-2 focus:ring-teal-500"
+        className="peer block w-full appearance-none rounded-md border border-transparent bg-[#263a3a] disabled:bg-[#1c2a2a] px-2.5 pb-2.5 pt-6 text-sm text-white placeholder-transparent focus:outline-none focus:ring-2 focus:ring-teal-500"
       />
 
       <label
         htmlFor={name}
         className={`
-          absolute left-2 top-1 px-1 text-xs text-white transition-all duration-200 bg-[#1c2a2a] 
+          absolute left-2 top-1 px-1 text-xs text-white transition-all duration-200 
           peer-placeholder-shown:top-1/2 peer-placeholder-shown:left-3 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
           peer-focus:top-1 peer-focus:left-2 peer-focus:text-xs peer-focus:text-teal-400
         `}

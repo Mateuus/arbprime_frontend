@@ -3,11 +3,16 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 
 // Definindo a interface User conforme especificado
 export interface User {
-    id: string;
-    fullname: string;
-    email: string;
-    role: string;
-    profile: string;
+  id: string,
+  fullname: string,
+  cpf: string,
+  phone: string,
+  email: string,
+  balace: string,
+  role: string,
+  level: number,
+  referralCode: string,
+  profile: string
 }
 
 interface UserContextType {

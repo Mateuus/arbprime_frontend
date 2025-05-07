@@ -75,9 +75,6 @@ const ChangePassword = () => {
   return (
     <>
     <div className="text-white space-y-6">
-      <h1 className="text-2xl font-bold">Trocar Senha</h1>
-      <hr className="border-t border-[#2b534f83] my-4" />
-
       <div className="space-y-6 max-w-xl mt-8">
         {/* Senha atual */}
         <div className="space-y-1">
