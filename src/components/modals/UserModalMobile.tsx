@@ -6,6 +6,8 @@ import { X, ChevronRight, ChevronLeft } from 'lucide-react';
 
 import Details from '@/pages/_user/details';
 import ChangePassword from '@/pages/_user/change-password';
+import FilterListPage from '@/pages/_user/abfilter';
+import FilterFormPage from '@/pages/_user/abfilter/edit';
 
 const getPageInfo = (pageId: string) => {
   for (const menu of userMenus) {
@@ -34,10 +36,16 @@ const UserModalMobile = () => {
 
   if (!isOpen || !user) return null;
 
+  const pagesWithoutBackButton = ['abfilter-edit'];
+
   const renderPage = () => {
     switch (currentPage) {
       case 'details':
         return <Details />;
+      case 'abfilter':
+          return <FilterListPage />;
+      case 'abfilter-edit':
+            return <FilterFormPage />;
       case 'change-password':
         return <ChangePassword />;
       default:
@@ -113,12 +121,14 @@ const UserModalMobile = () => {
           <>
             <div className="mb-4">
               <div className="flex items-start gap-3">
-                <button
-                  onClick={() => push({ pathname, query: { modal: 'user' } }, undefined, { shallow: true })}
-                  className="px-3 py-3 bg-[#1a2c2e] hover:bg-[#1e3a38] text-white text-sm rounded-lg flex items-center gap-1"
-                >
-                  <ChevronLeft size={16} />
-                </button>
+               {!pagesWithoutBackButton.includes(currentPage) && (
+                  <button
+                    onClick={() => push({ pathname, query: { modal: 'user' } }, undefined, { shallow: true })}
+                    className="px-3 py-3 bg-[#1a2c2e] hover:bg-[#1e3a38] text-white text-sm rounded-lg flex items-center gap-1"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                )}
                 <div className="flex flex-col">
                   <h1 className="text-lg font-bold leading-tight">{getPageInfo(currentPage).label}</h1>
                   <p className="text-sm text-gray-400 leading-tight">{getPageInfo(currentPage).description}</p>

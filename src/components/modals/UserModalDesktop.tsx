@@ -9,6 +9,8 @@ import { useUserContext } from "@/context/UserContext";
 const UserPages: Record<string, any> = {
   details: dynamic(() => import("@/pages/_user/details")),
   mensagens: dynamic(() => import("@/pages/_user/mensagens")),
+  "abfilter": dynamic(() => import("@/pages/_user/abfilter/index")),
+  "abfilter-edit": dynamic(() => import("@/pages/_user/abfilter/edit/index")),
   "change-password": dynamic(() => import("@/pages/_user/change-password")),
 };
 
@@ -81,7 +83,7 @@ const UserModalDesktop = () => {
                             onClick={() => router.replace({ pathname: router.pathname, query: { modal: 'user', page: child.id } }, undefined, { shallow: true })}
                             className={`w-full text-left px-6 py-2 text-sm border-l-2 transition-transform duration-200 ease-in-out
                                 ${
-                                  currentPage === child.id
+                                  currentPage === child.id || child.match?.includes(currentPage ?? '')
                                     ? "border-green-400 text-white bg-gradient-to-r from-[#0f232281] to-[#0f23220e] translate-y-[2px]"
                                     : "border-[#2b534f83] text-gray-400"
                                 }`}

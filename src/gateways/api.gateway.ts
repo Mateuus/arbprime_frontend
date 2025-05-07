@@ -1,5 +1,7 @@
 import axios from "axios";
 
+import { CreateOrUpdateFilterDTO } from '@/interfaces/FilterDTO';
+
 const ApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL;
 
 const getPreferredLanguage = () => {
@@ -104,6 +106,26 @@ const lookupCPF = async (personal_id: string) => {
   return apiClient.post('/user/lookup', { personal_id });
 };
 
+const getUserFilters = async () => {
+  return apiClient.get('/user/abfilters');
+};
+
+const getFilterById = async (id: string) => {
+  return apiClient.get(`/user/abfilters/${id}`);
+};
+
+const createFilter = async (filterData: CreateOrUpdateFilterDTO) => {
+  return apiClient.post('/user/abfilters', filterData);
+};
+
+const updateFilter = async (id: string, filterData: CreateOrUpdateFilterDTO) => {
+  return apiClient.put(`/user/abfilters/${id}`, filterData);
+};
+
+const deleteFilter = async (id: string) => {
+  return apiClient.delete(`/user/abfilters/${id}`);
+};
+
 export const apiGateway = {
     register,
     login,
@@ -111,7 +133,12 @@ export const apiGateway = {
     getUserInfo,
     getUserAuth,
     changePassowrd,
-    lookupCPF
+    lookupCPF,
+    getUserFilters,
+    getFilterById,
+    createFilter,
+    updateFilter,
+    deleteFilter
 };
     
 export default apiGateway;

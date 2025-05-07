@@ -29,7 +29,7 @@ export const userMenus = [
     icon: <GiSoccerBall size={20} />,
     children: [
       { id: 'ab-bookmakers', label: 'Casas de Apostas', description: 'description.', icon: <Building2 size={16} /> },
-      { id: 'ab-filters', label: 'Filtros', description: 'description.', icon: <MdOutlineFilterAlt size={16} /> }
+      { id: 'abfilter', label: 'Filtros', description: 'Filtre os resultados de arbitragem de acordo com suas preferências.', match: ['abfilter', 'abfilter-edit'], icon: <MdOutlineFilterAlt size={16} /> }
     ]
   },
   {
