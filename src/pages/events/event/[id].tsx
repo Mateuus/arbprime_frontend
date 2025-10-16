@@ -50,6 +50,7 @@ interface SelectedOdd {
 interface EventDetailsResponse {
   event: EventDetails;
   bookmakers: string[];
+  bookmakerLinks: Record<string, string>;
   markets: Market[];
   marketsCount: number;
   bookmakersWithMarkets: string[];
@@ -127,6 +128,29 @@ export default function EventDetailsPage() {
       'bet7k': 'bg-indigo-500',
     };
     return colors[bookmaker.toLowerCase()] || 'bg-gray-500';
+  };
+
+  // Obter todas as casas de apostas únicas
+  const getAllBookmakers = () => {
+    if (!eventDetails?.markets) return [];
+    
+    const bookmakers = new Set<string>();
+    eventDetails.markets.forEach(market => {
+      market.odds.forEach(odd => {
+        bookmakers.add(odd.bookmaker);
+      });
+    });
+    
+    return Array.from(bookmakers).sort();
+  };
+
+  // Função para abrir link da casa de aposta
+  const openBookmakerLink = (bookmaker: string) => {
+    if (eventDetails?.bookmakerLinks?.[bookmaker]) {
+      window.open(eventDetails.bookmakerLinks[bookmaker], '_blank');
+    } else {
+      console.warn(`Link não encontrado para ${bookmaker}`);
+    }
   };
 
   // Função para expandir/recolher tipos de odds
@@ -354,6 +378,28 @@ export default function EventDetailsPage() {
           </div>
         </div>
 
+        {/* Lista de Casas de Apostas */}
+        <div className="bg-gray-800 border-b border-gray-700 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-white font-semibold text-sm">Casas de Apostas Disponíveis</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400 text-xs">Clique para abrir</span>
+              <span className="text-gray-400 text-xs">{getAllBookmakers().length} casas</span>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {getAllBookmakers().map((bookmaker) => (
+              <button
+                key={bookmaker}
+                onClick={() => openBookmakerLink(bookmaker)}
+                className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 ${getBookmakerColor(bookmaker)} hover:opacity-80`}
+              >
+                {bookmaker}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Pesquisa de Mercados */}
         <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-white/10">
           <div className="flex items-center gap-4">
@@ -423,7 +469,7 @@ export default function EventDetailsPage() {
 
                 {/* Odds com Expansão Inline - Sistema Simplificado */}
                 {!isCollapsed && (
-                  <div className="p-6">
+              <div className="p-6">
                     {(() => {
                       // Detecta o tipo de mercado
                       const isTotal = market.marketName.toLowerCase().includes('total') 
@@ -514,7 +560,7 @@ export default function EventDetailsPage() {
                                           >
                                             <div className="flex items-center justify-between px-3">
                                               <div className="text-sm font-bold">{formatPrice(bestMaisDe.price)}</div>
-                                              <div className={`text-xs px-2 py-1 rounded ${getBookmakerColor(bestMaisDe.bookmaker)}`}>
+                                              <div className={`text-xs px-2 py-1 rounded ${getBookmakerColor(bestMaisDe.bookmaker)}`} data-bookmaker={bestMaisDe.bookmaker}>
                                                 {bestMaisDe.bookmaker}
                                               </div>
                                             </div>
@@ -537,7 +583,7 @@ export default function EventDetailsPage() {
                                                 <div className="flex items-center justify-between px-2">
                                                   <span>{formatPrice(odd.price)}</span>
                                                   <span className={`px-1 py-0.5 rounded text-xs ${getBookmakerColor(odd.bookmaker)}`}>
-                                                    {odd.bookmaker}
+                            {odd.bookmaker}
                                                   </span>
                                                 </div>
                                               </button>
@@ -558,10 +604,10 @@ export default function EventDetailsPage() {
                                           >
                                             <div className="flex items-center justify-between px-3">
                                               <div className="text-sm font-bold">{formatPrice(bestMenosDe.price)}</div>
-                                              <div className={`text-xs px-2 py-1 rounded ${getBookmakerColor(bestMenosDe.bookmaker)}`}>
+                                              <div className={`text-xs px-2 py-1 rounded ${getBookmakerColor(bestMenosDe.bookmaker)}`} data-bookmaker={bestMenosDe.bookmaker}>
                                                 {bestMenosDe.bookmaker}
                                               </div>
-                                            </div>
+                          </div>
                                           </button>
                                         )}
                                         
@@ -587,9 +633,9 @@ export default function EventDetailsPage() {
                                               </button>
                                             ))}
                                           </div>
-                                        )}
-                                      </div>
-                                    </div>
+                          )}
+                        </div>
+                      </div>
                                   </div>
                                 );
                               });
@@ -644,7 +690,7 @@ export default function EventDetailsPage() {
                                       <div className="flex flex-col items-center justify-center h-full">
                                         <span className="text-sm font-bold">{formatPrice(bestOdd.price)}</span>
                                         <span className="text-xs text-gray-400">{bestOdd.name}</span>
-                                        <span className={`text-xs px-1 py-0.5 rounded ${getBookmakerColor(bestOdd.bookmaker)}`}>
+                                        <span className={`text-xs px-1 py-0.5 rounded ${getBookmakerColor(bestOdd.bookmaker)}`} data-bookmaker={bestOdd.bookmaker}>
                                           {bestOdd.bookmaker}
                                         </span>
                                       </div>
@@ -652,32 +698,32 @@ export default function EventDetailsPage() {
                                     
                                     {/* Lista expandida */}
                                     {isExpanded && otherOdds.length > 0 && (
-                                      <div className="space-y-1">
+                                      <div className="grid grid-cols-1 gap-1">
                                         {otherOdds.map((odd, oddIdx) => (
                                           <button
                                             key={oddIdx}
                                             onClick={() => toggleOddSelection(market.marketId, market.marketName, odd)}
                                             className={`w-full h-8 rounded text-xs transition-all duration-200 ${
                                               isOddSelected(market.marketId, odd)
-                                                ? 'bg-blue-500/20 text-white border border-blue-400' 
+                                                ? 'bg-blue-400/30 text-white border border-blue-300' 
                                                 : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
                                             }`}
                                           >
                                             <div className="flex items-center justify-between px-2">
                                               <span>{formatPrice(odd.price)}</span>
-                                              <span className={`px-1 py-0.5 rounded text-xs ${getBookmakerColor(odd.bookmaker)}`}>
+                                              <span className={`px-1 py-0.5 rounded text-xs ${getBookmakerColor(odd.bookmaker)}`} data-bookmaker={odd.bookmaker}>
                                                 {odd.bookmaker}
                                               </span>
-                                            </div>
-                                          </button>
+                        </div>
+                        </button>
                                         ))}
                                       </div>
                                     )}
                                   </div>
                                 );
                               })}
-                            </div>
-                          </div>
+                      </div>
+                    </div>
                         );
                       } else {
                         // Layout padrão para outros mercados
@@ -685,57 +731,59 @@ export default function EventDetailsPage() {
                         
                         return (
                           <div className="space-y-2">
-                            {groupedOdds.map((group, groupIndex) => {
-                              const tooltipKey = `${market.marketId}-${groupIndex}`;
-                              const otherOdds = group.odds.slice(1);
-                              const isExpanded = expandedOddTypes.has(tooltipKey);
-                              
-                              return (
-                                <div key={groupIndex} className="space-y-1">
-                                  {/* Botão principal */}
-                                  <button
-                                    onClick={() => toggleOddTypeExpansion(tooltipKey)}
-                                    className={`w-full h-14 rounded-lg transition-all duration-200 ${
-                                      isOddSelected(market.marketId, group.bestOdd)
-                                        ? 'bg-blue-500 text-white border-2 border-blue-400' 
-                                        : 'bg-gray-700 text-gray-100 hover:bg-gray-600 border border-gray-600'
-                                    }`}
-                                  >
-                                    <div className="flex flex-col items-center justify-center h-full">
-                                      <span className="text-sm font-bold">{formatPrice(group.bestOdd.price)}</span>
-                                      <span className="text-xs text-gray-400">{group.name}</span>
-                                      <span className={`text-xs px-1 py-0.5 rounded ${getBookmakerColor(group.bestOdd.bookmaker)}`}>
-                                        {group.bestOdd.bookmaker}
-                                      </span>
-                                    </div>
-                                  </button>
-                                  
-                                  {/* Lista expandida */}
-                                  {isExpanded && otherOdds.length > 0 && (
-                                    <div className="space-y-1">
-                                      {otherOdds.map((odd, oddIdx) => (
-                                        <button
-                                          key={oddIdx}
-                                          onClick={() => toggleOddSelection(market.marketId, market.marketName, odd)}
-                                          className={`w-full h-8 rounded text-xs transition-all duration-200 ${
-                                            isOddSelected(market.marketId, odd)
-                                              ? 'bg-blue-500/20 text-white border border-blue-400' 
-                                              : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
-                                          }`}
-                                        >
-                                          <div className="flex items-center justify-between px-2">
-                                            <span>{formatPrice(odd.price)}</span>
-                                            <span className={`px-1 py-0.5 rounded text-xs ${getBookmakerColor(odd.bookmaker)}`}>
-                                              {odd.bookmaker}
-                                            </span>
-                                          </div>
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+                            <div className={`grid ${groupedOdds.length <= 3 ? 'grid-cols-3' : 'grid-cols-1'} gap-3`}>
+                              {groupedOdds.map((group, groupIndex) => {
+                                const tooltipKey = `${market.marketId}-${groupIndex}`;
+                                const otherOdds = group.odds.slice(1);
+                                const isExpanded = expandedOddTypes.has(tooltipKey);
+                                
+                                return (
+                                  <div key={groupIndex} className="space-y-1">
+                                    {/* Botão principal */}
+                                    <button
+                                      onClick={() => toggleOddTypeExpansion(tooltipKey)}
+                                      className={`w-full h-14 rounded-lg transition-all duration-200 ${
+                                        isOddSelected(market.marketId, group.bestOdd)
+                                          ? 'bg-blue-500 text-white border-2 border-blue-400' 
+                                          : 'bg-gray-700 text-gray-100 hover:bg-gray-600 border border-gray-600'
+                                      }`}
+                                    >
+                                      <div className="flex flex-col items-center justify-center h-full">
+                                        <span className="text-sm font-bold">{formatPrice(group.bestOdd.price)}</span>
+                                        <span className="text-xs text-gray-400">{group.name}</span>
+                                        <span className={`text-xs px-1 py-0.5 rounded ${getBookmakerColor(group.bestOdd.bookmaker)}`} data-bookmaker={group.bestOdd.bookmaker}>
+                                          {group.bestOdd.bookmaker}
+                                        </span>
+                                      </div>
+                                    </button>
+                                    
+                                    {/* Lista expandida */}
+                                    {isExpanded && otherOdds.length > 0 && (
+                                      <div className="grid grid-cols-1 gap-1">
+                                        {otherOdds.map((odd, oddIdx) => (
+                                          <button
+                                            key={oddIdx}
+                                            onClick={() => toggleOddSelection(market.marketId, market.marketName, odd)}
+                                            className={`w-full h-8 rounded text-xs transition-all duration-200 ${
+                                              isOddSelected(market.marketId, odd)
+                                                ? 'bg-blue-400/30 text-white border border-blue-300' 
+                                                : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
+                                            }`}
+                                          >
+                                            <div className="flex items-center justify-between px-2">
+                                              <span>{formatPrice(odd.price)}</span>
+                                              <span className={`px-1 py-0.5 rounded text-xs ${getBookmakerColor(odd.bookmaker)}`} data-bookmaker={odd.bookmaker}>
+                                                {odd.bookmaker}
+                                              </span>
+                                            </div>
+                                          </button>
+                  ))}
+                </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         );
                       }
