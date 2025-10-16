@@ -126,6 +126,45 @@ const deleteFilter = async (id: string) => {
   return apiClient.delete(`/user/abfilters/${id}`);
 };
 
+// ==================== EVENTOS ====================
+
+export interface EventsParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sport?: string;
+  disabled?: string;
+  league?: string;
+  bookmaker?: string;
+}
+
+const getEvents = async (params: EventsParams = {}) => {
+  const queryParams = new URLSearchParams();
+  
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') {
+      queryParams.append(key, value.toString());
+    }
+  });
+
+  const queryString = queryParams.toString();
+  const url = `/events${queryString ? `?${queryString}` : ''}`;
+  
+  return apiClient.get(url);
+};
+
+const getEventById = async (id: string) => {
+  return apiClient.get(`/events/${id}`);
+};
+
+const getEventsStats = async () => {
+  return apiClient.get('/events/stats');
+};
+
+const getEventDetails = async (id: string) => {
+  return apiClient.get(`/events/${id}/details`);
+};
+
 export const apiGateway = {
     register,
     login,
@@ -138,7 +177,12 @@ export const apiGateway = {
     getFilterById,
     createFilter,
     updateFilter,
-    deleteFilter
+    deleteFilter,
+    // Eventos
+    getEvents,
+    getEventById,
+    getEventsStats,
+    getEventDetails
 };
     
 export default apiGateway;

@@ -40,6 +40,14 @@ export const useMenuItems = (): MenuItem[] => {
         onClick: () => router.push('/')
       },
       {
+        id: 'events',
+        name: 'Eventos',
+        path: '/events',
+        icon: <GiSoccerBall size={22} />,
+        requiresAuth: false,
+        onClick: () => router.push('/events')
+      },
+      {
         id: 'analytix',
         name: 'PRIME ANALYTIX',
         icon: <GiWallet size={22} />,
