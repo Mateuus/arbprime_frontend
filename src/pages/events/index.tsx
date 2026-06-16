@@ -51,6 +51,10 @@ export default function EventsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [limit] = useState(20);
 
+  // Chave dos filtros para detectar mudança e resetar a página (ver abaixo).
+  const filterKey = `${search}|${sport}|${disabled}|${league}|${bookmaker}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+
   // Carregar eventos
   const fetchEvents = useCallback(async () => {
     try {
@@ -88,15 +92,19 @@ export default function EventsPage() {
     }
   }, [currentPage, search, sport, disabled, league, bookmaker, limit]);
 
-  // Efeito para buscar eventos quando filtros mudarem
+  // Reset de página ao mudar filtros: ajuste de estado durante o render
+  // (padrão recomendado pelo React no lugar de um efeito com setState).
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey);
+    setCurrentPage(1);
+  }
+
+  // Busca eventos quando filtros/página mudam (fetchEvents é useCallback com essas deps).
   useEffect(() => {
+    // setState de loading/erro dentro do fetch é intencional aqui.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchEvents();
   }, [fetchEvents]);
-
-  // Resetar página quando filtros mudarem
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, sport, disabled, league, bookmaker]);
 
   // Formatar data
   const formatDate = (dateString: string) => {

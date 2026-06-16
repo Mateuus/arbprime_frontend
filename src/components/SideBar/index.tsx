@@ -21,8 +21,11 @@ const Sidebar = () => {
   useEffect(() => {
     for (const item of filteredItems) {
       if (item.subItems?.some(sub => sub.path === router.pathname)) {
+        // Abre o submenu correspondente à rota atual (sincroniza UI com o router).
+        /* eslint-disable react-hooks/set-state-in-effect */
         setOpenMenu(item.id);
         setCollapsed(false); // apenas abre, sem loop
+        /* eslint-enable react-hooks/set-state-in-effect */
         break;
       }
     }

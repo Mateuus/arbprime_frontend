@@ -42,6 +42,8 @@ const ArbCryptoPerpetuals: React.FC = () => {
     };
 
     if (highlightChange) {
+      // Snapshot do conjunto anterior para o destaque (flash) das mudanças de profit.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPreviousData([...data]);
     }
     handleResize();

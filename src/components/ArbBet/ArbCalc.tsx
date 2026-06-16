@@ -60,7 +60,9 @@ export default function ArbCalc({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSurebetIndex]);
 
-  const surebet = latestData.current.surebets[selectedSurebetIndex];
+  // Durante o render usamos a prop `data` (sempre a mais recente). O ref `latestData`
+  // serve apenas para o efeito de recálculo evitar closures obsoletas sem depender de `data`.
+  const surebet = data.surebets[selectedSurebetIndex];
   if (!surebet) return null;
 
   const oddsAsNumbers = oddInputs.map(o => parseFloat(o.replace(',', '.')));

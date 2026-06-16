@@ -43,8 +43,11 @@ const ArbList: React.FC<ArbListProps> = ({ data, previousData = [] }) => {
       }
     });
 
+    // Flash visual intencional por linha ao mudar o profit (animação de UI temporária).
+    /* eslint-disable react-hooks/set-state-in-effect */
     setProfitChanges(newProfitChanges);
     setRowHighlights(newRowHighlights);
+    /* eslint-enable react-hooks/set-state-in-effect */
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, previousData]);
 

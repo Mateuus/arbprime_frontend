@@ -1,4 +1,4 @@
-import React, { useEffect, useState, Suspense } from "react";
+import React, { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useModalManager } from "@/hooks/useModalManager";
 import { X } from "lucide-react";
@@ -10,21 +10,21 @@ export function isValidAuthPage(value: string): value is AuthPage {
   return authPages.includes(value as AuthPage);
 }
 
+// Componentes carregados estaticamente no escopo do módulo (evita recriar o
+// dynamic a cada render, o que remontaria a página de auth desnecessariamente).
+const authPageComponents: Record<AuthPage, React.ComponentType<{ onClose: () => void }>> = {
+  login: dynamic<{ onClose: () => void }>(() => import("@/pages/auth/login"), { ssr: false }),
+  register: dynamic<{ onClose: () => void }>(() => import("@/pages/auth/register"), { ssr: false }),
+  recover: dynamic<{ onClose: () => void }>(() => import("@/pages/auth/recover"), { ssr: false }),
+};
+
 const AuthModal: React.FC = () => {
   const { isOpen, page, closeModal } = useModalManager("auth");
-  const [activePage, setActivePage] = useState<AuthPage>("login");
+  // Página ativa derivada diretamente da query — sem efeito/estado intermediário.
+  const activePage: AuthPage = page && isValidAuthPage(page) ? page : "login";
   const modalWidth = activePage === "register" ? "max-w-[900px]" : "max-w-[480px]";
 
-  useEffect(() => {
-    if (page && isValidAuthPage(page)) {
-      setActivePage(page);
-    }
-  }, [page]);
-
-  const PageComponent = dynamic<{ onClose: () => void }>(
-    () => import(`@/pages/auth/${activePage}`),
-    { ssr: false }
-  );
+  const PageComponent = authPageComponents[activePage];
 
   if (!isOpen) return null;
 

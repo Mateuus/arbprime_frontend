@@ -1,7 +1,7 @@
-// middleware.ts
+// proxy.ts (Next.js 16: "middleware" renomeado para "proxy")
 import { NextRequest, NextResponse } from 'next/server';
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const token = req.cookies.get('MToken')?.value;
 
   if (!token || token === 'anonymous') {

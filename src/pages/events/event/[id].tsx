@@ -94,6 +94,8 @@ export default function EventDetailsPage() {
   }, [id]);
 
   useEffect(() => {
+    // Busca os detalhes ao montar/mudar o id (setState dentro do fetch é intencional).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchEventDetails();
   }, [fetchEventDetails]);
 

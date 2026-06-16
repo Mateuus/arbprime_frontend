@@ -18,8 +18,11 @@ const ArbCard: React.FC<ArbCardProps> = ({ data, highlightClass, previousData })
     if (previousData) {
       if (data.profit !== previousData.profit) {
         const newHighlight = data.profit > previousData.profit ? 'pulse-border-green' : 'pulse-border-red';
+        // Flash visual intencional ao mudar o profit (animação de UI temporária).
+        /* eslint-disable react-hooks/set-state-in-effect */
         setProfitChange(data.profit > previousData.profit ? 'flash-green' : 'flash-red');
         setCardHighlight(newHighlight);
+        /* eslint-enable react-hooks/set-state-in-effect */
 
         setTimeout(() => {
           setProfitChange('');

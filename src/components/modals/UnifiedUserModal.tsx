@@ -11,7 +11,8 @@ const UnifiedUserModal = () => {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // Evita erro de renderização no SSR
+    // Gate de montagem no cliente para evitar mismatch de hidratação (useMediaQuery).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
