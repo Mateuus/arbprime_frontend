@@ -165,6 +165,71 @@ const getEventDetails = async (id: string) => {
   return apiClient.get(`/events/${id}/details`);
 };
 
+// ==================== PROXIES ====================
+
+export interface ProxyDTO {
+  id: string;
+  provider: string;
+  externalId: string | null;
+  protocol: string;
+  ipType: string;
+  ip: string;
+  port: number;
+  portSocks: number | null;
+  login: string;
+  password: string;
+  country: string | null;
+  countryAlpha3: string | null;
+  status: string | null;
+  isPrivate: boolean;
+  isEnabled: boolean;
+  comment: string | null;
+  createdAt: string;
+}
+
+export interface AddProxyDTO {
+  ip: string;
+  port: number;
+  protocol?: string;
+  ipType?: string;
+  login?: string;
+  password?: string;
+  isPrivate?: boolean;
+  comment?: string;
+}
+
+const getProxies = async () => {
+  return apiClient.get('/proxy');
+};
+
+const syncProxies = async (provider: string, type: string) => {
+  return apiClient.post('/proxy/sync', { provider, type });
+};
+
+const addProxy = async (data: AddProxyDTO) => {
+  return apiClient.post('/proxy', data);
+};
+
+const bulkAddProxies = async (list: string, protocol?: string) => {
+  return apiClient.post('/proxy/bulk', { list, protocol });
+};
+
+const updateProxy = async (id: string, data: Partial<ProxyDTO>) => {
+  return apiClient.put(`/proxy/${id}`, data);
+};
+
+const toggleProxy = async (id: string, isEnabled: boolean) => {
+  return apiClient.patch(`/proxy/${id}/toggle`, { isEnabled });
+};
+
+const testProxy = async (id: string) => {
+  return apiClient.post(`/proxy/${id}/test`);
+};
+
+const deleteProxy = async (id: string) => {
+  return apiClient.delete(`/proxy/${id}`);
+};
+
 export const apiGateway = {
     register,
     login,
@@ -182,7 +247,16 @@ export const apiGateway = {
     getEvents,
     getEventById,
     getEventsStats,
-    getEventDetails
+    getEventDetails,
+    // Proxies
+    getProxies,
+    syncProxies,
+    addProxy,
+    bulkAddProxies,
+    updateProxy,
+    toggleProxy,
+    testProxy,
+    deleteProxy
 };
     
 export default apiGateway;

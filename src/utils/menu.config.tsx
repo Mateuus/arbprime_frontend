@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { GiHomeGarage, GiWallet, GiCoins, GiSoccerBall } from 'react-icons/gi';
-import { Gift, Infinity, CalendarClock } from 'lucide-react';
+import { Gift, Infinity, CalendarClock, LayoutDashboard, Settings, Users, Zap, Clock, Network } from 'lucide-react';
 import { useMemo } from 'react';
 import { ReactNode } from 'react';
 import { useUserContext } from '@/context/UserContext';
@@ -12,6 +12,7 @@ export interface MenuSubItem {
   icon?: ReactNode;
   onClick?: () => void;
   requiresAuth?: boolean;
+  adminOnly?: boolean;
 }
 
 export interface MenuItem {
@@ -21,13 +22,16 @@ export interface MenuItem {
   icon: ReactNode;
   onClick?: () => void;
   requiresAuth?: boolean;
+  adminOnly?: boolean;
   button?: boolean;
+  header?: boolean; // rótulo de seção (não clicável), ex.: "PLATAFORMA"
   subItems?: MenuSubItem[];
 }
 
 export const useMenuItems = (): MenuItem[] => {
   const router = useRouter();
-  const { isAuthenticated } = useUserContext();
+  const { isAuthenticated, user } = useUserContext();
+  const isAdmin = user?.role === 'admin';
 
   return useMemo(() => {
     const allItems: MenuItem[] = [
@@ -70,7 +74,7 @@ export const useMenuItems = (): MenuItem[] => {
             onClick: () => router.push('/analytix/stats')
           }
         ]
-      },
+      },/*
       {
         id: 'arbcrypto',
         name: 'Arb Crypto',
@@ -86,7 +90,7 @@ export const useMenuItems = (): MenuItem[] => {
             onClick: () => router.push('/arbcrypto/perpetuals')
           }
         ]
-      },
+      },*/
       {
         id: 'arbbets',
         name: 'Arb Bets',
@@ -103,28 +107,75 @@ export const useMenuItems = (): MenuItem[] => {
           }
         ]
       },
+
+      // ===================== ADMIN: PLATAFORMA =====================
       {
-        id: 'promo',
-        name: 'Promoções ArbPrime',
-        path: '/promos',
-        icon: <Gift size={22} />,
-        requiresAuth: false,
-        button: true,
-        onClick: () => router.push('/promos')
-      }
+        id: 'sec-admin-platform',
+        name: 'Administração',
+        icon: null,
+        header: true,
+        requiresAuth: true,
+        adminOnly: true
+      },
+      {
+        id: 'admin-dashboard',
+        name: 'Dashboard',
+        path: '/admin/dashboard',
+        icon: <LayoutDashboard size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/dashboard')
+      },
+      {
+        id: 'admin-users',
+        name: 'Usuários',
+        path: '/admin/users',
+        icon: <Users size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/users')
+      },
+      // ===================== ADMIN: SISTEMA =====================
+      {
+        id: 'admin-actions',
+        name: 'Ações',
+        path: '/admin/actions',
+        icon: <Zap size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/actions')
+      },
+      {
+        id: 'admin-proxies',
+        name: 'Proxies',
+        path: '/admin/proxies',
+        icon: <Network size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/proxies')
+      },
+      {
+        id: 'admin-settings',
+        name: 'Configurações',
+        path: '/admin/settings',
+        icon: <Settings size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/settings')
+      },
     ];
 
     return allItems
-      .filter(item => !item.requiresAuth || isAuthenticated)
+      .filter(item => (!item.requiresAuth || isAuthenticated) && (!item.adminOnly || isAdmin))
       .map(item => {
         if (item.subItems) {
           const filteredSubItems = item.subItems.filter(
-            sub => !sub.requiresAuth || isAuthenticated
+            sub => (!sub.requiresAuth || isAuthenticated) && (!sub.adminOnly || isAdmin)
           );
           return { ...item, subItems: filteredSubItems };
         }
         return item;
       });
 
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, isAdmin, router]);
 };

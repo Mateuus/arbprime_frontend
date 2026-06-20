@@ -1,26 +1,7 @@
 import { X, ChevronDown, ChevronUp } from 'lucide-react';
-import { useMenuItems } from '@/utils/menu.config';
-import { useState, ReactNode } from 'react';
+import { useMenuItems, MenuItem, MenuSubItem } from '@/utils/menu.config';
+import { useState } from 'react';
 import LogoText from '../ui/LogoText';
-
-interface MenuSubItem {
-  id: string;
-  name: string;
-  path: string;
-  icon?: ReactNode;
-  onClick?: () => void;
-}
-
-interface MenuItem {
-  id: string;
-  name: string;
-  path?: string;
-  icon: ReactNode;
-  onClick?: () => void;
-  requiresAuth?: boolean;
-  button?: boolean;
-  subItems?: MenuSubItem[];
-}
 
 interface SidebarMenuProps {
   onClose: () => void;
@@ -45,7 +26,16 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ onClose }) => {
         </div>
 
         <ul className="space-y-1 text-white text-sm mt-4">
-          {menuItems.map((item, index) => (
+          {menuItems.map((item, index) => {
+            // Cabeçalho de seção (ex.: PLATAFORMA / SISTEMA) — não clicável.
+            if (item.header) {
+              return (
+                <li key={item.id} className="px-4 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500 select-none">
+                  {item.name}
+                </li>
+              );
+            }
+            return (
             <li key={item.id}>
               <div
                 className="flex items-center gap-3 px-4 py-2 hover:bg-[#1a3a3a] rounded cursor-pointer justify-between"
@@ -89,7 +79,8 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ onClose }) => {
                 </ul>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       </div>
     </div>

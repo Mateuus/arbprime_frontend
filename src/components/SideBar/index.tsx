@@ -56,7 +56,18 @@ const Sidebar = () => {
        </div>
 
       <nav className="flex-1 overflow-y-auto mt-4 space-y-2 px-2">
-        {filteredItems.map(item => (
+        {filteredItems.map(item => {
+          // Cabeçalho de seção (ex.: PLATAFORMA / SISTEMA) — não clicável.
+          if (item.header) {
+            return collapsed ? (
+              <div key={item.id} className="my-2 mx-2 border-t border-brand-border/60" />
+            ) : (
+              <div key={item.id} className="px-3 pt-5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500 select-none">
+                {item.name}
+              </div>
+            );
+          }
+          return (
           <div key={item.id}>
             <div
               className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} p-3 rounded-xl cursor-pointer hover:bg-brand-hover transition-all
@@ -97,7 +108,8 @@ const Sidebar = () => {
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
       </nav>
     </div>
   );
