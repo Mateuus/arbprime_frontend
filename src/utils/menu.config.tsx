@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { GiHomeGarage, GiWallet, GiCoins, GiSoccerBall } from 'react-icons/gi';
-import { Gift, Infinity, CalendarClock, LayoutDashboard, Settings, Users, Zap, Clock, Network } from 'lucide-react';
+import { Gift, Infinity, CalendarClock, LayoutDashboard, Settings, Users, Zap, Clock, Network, Store } from 'lucide-react';
 import { useMemo } from 'react';
 import { ReactNode } from 'react';
 import { useUserContext } from '@/context/UserContext';
@@ -157,11 +157,29 @@ export const useMenuItems = (): MenuItem[] => {
       {
         id: 'admin-settings',
         name: 'Configurações',
-        path: '/admin/settings',
         icon: <Settings size={22} />,
         requiresAuth: true,
         adminOnly: true,
-        onClick: () => router.push('/admin/settings')
+        subItems: [
+          {
+            id: 'admin-settings-general',
+            name: 'Geral',
+            path: '/admin/settings',
+            icon: <Settings size={18} />,
+            requiresAuth: true,
+            adminOnly: true,
+            onClick: () => router.push('/admin/settings')
+          },
+          {
+            id: 'admin-bookmakers',
+            name: 'Bookmakers',
+            path: '/admin/bookmakers',
+            icon: <Store size={18} />,
+            requiresAuth: true,
+            adminOnly: true,
+            onClick: () => router.push('/admin/bookmakers')
+          }
+        ]
       },
     ];
 

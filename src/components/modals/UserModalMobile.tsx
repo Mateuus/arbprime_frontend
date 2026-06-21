@@ -8,6 +8,7 @@ import Details from '@/pages/_user/details';
 import ChangePassword from '@/pages/_user/change-password';
 import FilterListPage from '@/pages/_user/abfilter';
 import FilterFormPage from '@/pages/_user/abfilter/edit';
+import AbBookmakersPage from '@/pages/_user/ab-bookmakers';
 
 const getPageInfo = (pageId: string) => {
   for (const menu of userMenus) {
@@ -46,6 +47,8 @@ const UserModalMobile = () => {
           return <FilterListPage />;
       case 'abfilter-edit':
             return <FilterFormPage />;
+      case 'ab-bookmakers':
+        return <AbBookmakersPage />;
       case 'change-password':
         return <ChangePassword />;
       default:

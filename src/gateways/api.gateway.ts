@@ -165,6 +165,189 @@ const getEventDetails = async (id: string) => {
   return apiClient.get(`/events/${id}/details`);
 };
 
+// ============ EVENTOS DO BANCO (arbbetting_master via DB) ============
+
+export interface ExternalEvent {
+  id: string;
+  bookmaker: string;
+  eventId: string;
+  sport: string;
+  league: string | null;
+  leagueName: string | null;
+  home: string;
+  away: string;
+  eventDate: string | null;
+  country: string | null;
+  link: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface ExternalEventsParams {
+  page?: number;
+  limit?: number;
+  bookmaker?: string;
+  sport?: string;
+  league?: string;
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  upcomingOnly?: boolean;
+  pastOnly?: boolean;
+  sort?: 'asc' | 'desc';
+}
+
+export interface ExternalOdd {
+  id: string;
+  bookmaker: string;
+  eventId: string;
+  marketId: string;
+  marketName: string | null;
+  selection: string;
+  handicap: string;
+  price: number;
+  eventDate: string | null;
+  changesCount: number;
+  updatedAt: string;
+}
+
+export interface GroupedHouse {
+  bookmaker: string;
+  eventId: string;
+  home: string;
+  away: string;
+  inverted: boolean;
+  link: string | null;
+}
+
+export interface GroupedEvent {
+  key: string;
+  sport: string;
+  home: string;
+  away: string;
+  eventDate: string | null;
+  league: string | null;
+  country: string | null;
+  houses: GroupedHouse[];
+}
+
+export interface EventGroupPrice {
+  bookmaker: string;
+  eventId: string;
+  price: number;
+  inverted: boolean;
+}
+export interface EventGroupSelection {
+  selection: string;
+  handicap: string;
+  prices: EventGroupPrice[];
+}
+export interface EventGroupMarket {
+  marketId: string;
+  marketName: string | null;
+  selections: EventGroupSelection[];
+}
+export interface EventGroupDetail {
+  event: { sport: string; home: string; away: string; eventDate: string | null; league: string | null; country: string | null };
+  houses: GroupedHouse[];
+  markets: EventGroupMarket[];
+}
+
+const buildEventsQuery = (params: ExternalEventsParams): string => {
+  const qp = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== '' && value !== false) {
+      qp.append(key, String(value));
+    }
+  });
+  const qs = qp.toString();
+  return qs ? `?${qs}` : '';
+};
+
+const getExternalEvents = async (params: ExternalEventsParams = {}) => {
+  return apiClient.get(`/external/events${buildEventsQuery(params)}`);
+};
+
+// Lista AGRUPADA (1 item por evento real, deduplicado entre casas).
+const getGroupedEvents = async (params: ExternalEventsParams = {}) => {
+  return apiClient.get(`/external/events/grouped${buildEventsQuery(params)}`);
+};
+
+// Evento real (grupo) + comparação de odds entre casas.
+const getEventGroup = async (bookmaker: string, eventId: string) => {
+  return apiClient.get(`/external/events/group/${encodeURIComponent(bookmaker)}/${encodeURIComponent(eventId)}`);
+};
+
+const getExternalEvent = async (bookmaker: string, eventId: string) => {
+  return apiClient.get(`/external/events/${encodeURIComponent(bookmaker)}/${encodeURIComponent(eventId)}`);
+};
+
+const getExternalEventOdds = async (bookmaker: string, eventId: string) => {
+  return apiClient.get(`/external/events/${encodeURIComponent(bookmaker)}/${encodeURIComponent(eventId)}/odds`);
+};
+
+// ==================== BOOKMAKERS (casas de aposta) ====================
+
+export interface BookmakerDTO {
+  id: string;
+  slug: string;
+  name: string;
+  logoUrl: string | null;
+  color: string | null;
+  url: string | null;
+  cloneOf: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertBookmakerDTO {
+  slug: string;
+  name: string;
+  logoUrl?: string | null;
+  color?: string | null;
+  url?: string | null;
+  cloneOf?: string | null;
+  isActive?: boolean;
+  sortOrder?: number;
+}
+
+const getBookmakers = async () => {
+  return apiClient.get('/bookmaker');
+};
+
+const addBookmaker = async (data: UpsertBookmakerDTO) => {
+  return apiClient.post('/bookmaker', data);
+};
+
+const updateBookmaker = async (id: string, data: Partial<UpsertBookmakerDTO>) => {
+  return apiClient.put(`/bookmaker/${id}`, data);
+};
+
+const toggleBookmaker = async (id: string, isActive: boolean) => {
+  return apiClient.patch(`/bookmaker/${id}/toggle`, { isActive });
+};
+
+const deleteBookmaker = async (id: string) => {
+  return apiClient.delete(`/bookmaker/${id}`);
+};
+
+const getExternalEventHistory = async (
+  bookmaker: string,
+  eventId: string,
+  opts: { limit?: number; marketId?: string; selection?: string } = {}
+) => {
+  const qp = new URLSearchParams();
+  if (opts.limit) qp.append('limit', String(opts.limit));
+  if (opts.marketId) qp.append('marketId', opts.marketId);
+  if (opts.selection) qp.append('selection', opts.selection);
+  const qs = qp.toString();
+  return apiClient.get(
+    `/external/events/${encodeURIComponent(bookmaker)}/${encodeURIComponent(eventId)}/history${qs ? `?${qs}` : ''}`
+  );
+};
+
 // ==================== PROXIES ====================
 
 export interface ProxyDTO {
@@ -248,6 +431,13 @@ export const apiGateway = {
     getEventById,
     getEventsStats,
     getEventDetails,
+    // Eventos do banco (arbbetting via DB)
+    getExternalEvents,
+    getGroupedEvents,
+    getEventGroup,
+    getExternalEvent,
+    getExternalEventOdds,
+    getExternalEventHistory,
     // Proxies
     getProxies,
     syncProxies,
@@ -256,7 +446,13 @@ export const apiGateway = {
     updateProxy,
     toggleProxy,
     testProxy,
-    deleteProxy
+    deleteProxy,
+    // Bookmakers
+    getBookmakers,
+    addBookmaker,
+    updateBookmaker,
+    toggleBookmaker,
+    deleteBookmaker
 };
     
 export default apiGateway;

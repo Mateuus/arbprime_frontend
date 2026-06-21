@@ -317,7 +317,7 @@ const AdminProxiesPage = () => {
   ];
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="w-full px-3 sm:px-6 py-6">
       {/* Cabeçalho */}
       <header className="mb-6 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">

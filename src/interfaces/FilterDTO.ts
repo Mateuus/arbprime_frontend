@@ -9,6 +9,9 @@ export interface CreateOrUpdateFilterDTO {
     roiMax: number;
     ageMin: number;
     ageMax: number;
+    oddsMin: number;
+    oddsMax: number;
+    stake: number;
     outcomes: number[];
     bookmakers: string[];
     sports: string[];

@@ -4,10 +4,9 @@ import {
   Lock,
   Mail,
   Building2,
-  Settings,
   ListChecks
 } from "lucide-react";
-import { GiCoins, GiSoccerBall } from "react-icons/gi";
+import { GiSoccerBall } from "react-icons/gi";
 import { RiShieldUserLine } from "react-icons/ri";
 import { MdOutlineFilterAlt } from "react-icons/md";
 import { BiBookContent } from "react-icons/bi";
@@ -32,15 +31,16 @@ export const userMenus = [
       { id: 'abfilter', label: 'Filtros', description: 'Filtre os resultados de arbitragem de acordo com suas preferências.', match: ['abfilter', 'abfilter-edit'], icon: <MdOutlineFilterAlt size={16} /> }
     ]
   },
-  {
-    id: 'arbcrypto',
-    label: 'ARB CRYPTO',
-    icon: <GiCoins size={20} />,
-    children: [
-      { id: 'ac-exchanges', label: 'Exchanges', description: 'description.', icon: <Settings size={16} /> },
-      { id: 'ac-filters', label: 'Filtros', description: 'description.', icon: <MdOutlineFilterAlt size={16} /> }
-    ]
-  },
+  // ArbCrypto desativado por enquanto (não usamos hoje).
+  // {
+  //   id: 'arbcrypto',
+  //   label: 'ARB CRYPTO',
+  //   icon: <GiCoins size={20} />,
+  //   children: [
+  //     { id: 'ac-exchanges', label: 'Exchanges', description: 'description.', icon: <Settings size={16} /> },
+  //     { id: 'ac-filters', label: 'Filtros', description: 'description.', icon: <MdOutlineFilterAlt size={16} /> }
+  //   ]
+  // },
   {
     id: 'apostador',
     label: 'APOSTAS',

@@ -11,6 +11,7 @@ const UserPages: Record<string, any> = {
   mensagens: dynamic(() => import("@/pages/_user/mensagens")),
   "abfilter": dynamic(() => import("@/pages/_user/abfilter/index")),
   "abfilter-edit": dynamic(() => import("@/pages/_user/abfilter/edit/index")),
+  "ab-bookmakers": dynamic(() => import("@/pages/_user/ab-bookmakers/index")),
   "change-password": dynamic(() => import("@/pages/_user/change-password")),
 };
 
