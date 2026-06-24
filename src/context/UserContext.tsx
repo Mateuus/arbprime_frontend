@@ -20,6 +20,9 @@ interface UserContextType {
     setUser: (user: User | null) => void;
     isAuthenticated: boolean;
     setIsAuthenticated: (auth: boolean) => void;
+    // true enquanto a verificação inicial de auth está em andamento — evita
+    // mostrar conteúdo "deslogado" por um instante para quem está logado.
+    isLoading: boolean;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -27,11 +30,12 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     // Intercepta as respostas da API para verificar se o token expirou
     setupAxiosInterceptors(setUser, setIsAuthenticated);
-    
+
     // Verificação inicial de autenticação
     const checkAuthStatus = async () => {
         try {
@@ -44,6 +48,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         } catch {
           setIsAuthenticated(false);
+        } finally {
+          setIsLoading(false);
         }
       };
       checkAuthStatus();
@@ -53,7 +59,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <UserContext.Provider value={{ user, setUser, isAuthenticated, setIsAuthenticated }}>
+    <UserContext.Provider value={{ user, setUser, isAuthenticated, setIsAuthenticated, isLoading }}>
       {children}
     </UserContext.Provider>
   );

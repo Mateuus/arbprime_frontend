@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
 import {
-  ArrowLeft, Calendar, MapPin, ExternalLink, Search, Loader2, BarChart3, Trophy, X, TrendingUp, TrendingDown, Star
+  ArrowLeft, Calendar, MapPin, ExternalLink, Search, Loader2, BarChart3, Trophy, X, TrendingUp, TrendingDown, Star, Zap
 } from 'lucide-react';
 import { apiGateway, EventGroupDetail, EventGroupSelection } from '@/gateways/api.gateway';
 import { Select } from '@/components/ui/Select';
@@ -23,16 +23,48 @@ const formatDate = (s: string | null): string => {
   if (!s) return '—';
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
 };
 const formatTime = (s: string): string => {
   const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
 };
 
+// Tradução de seleções "cruas" em inglês (sobretudo combos: home/yes, no/over...).
+// 1 = Casa, x = Empate, 2 = Fora; yes/no = Sim/Não (ambas marcam); over/under = Mais/Menos.
+const TOKEN_PT: Record<string, string> = {
+  home: 'Casa', draw: 'Empate', away: 'Fora',
+  '1': 'Casa', x: 'Empate', '2': 'Fora',
+  yes: 'Sim', no: 'Não',
+  over: 'Mais', under: 'Menos',
+  odd: 'Ímpar', even: 'Par'
+};
+
+// Linha de handicap "real" — ignora 0/-0/vazio (que não é uma linha, é só ruído ex.: "(0)").
+const realLine = (h: string | number | null | undefined): string => {
+  const t = (h ?? '').toString().trim();
+  return (t === '' || /^[+-]?0(\.0+)?$/.test(t)) ? '' : t;
+};
+
+// Rótulo legível de uma seleção. Traduz tokens conhecidos (incl. combos via "/"),
+// mas NUNCA mexe em nome de time (ex.: "FK Bodo/Glimt ou Empate") — só traduz
+// quando TODOS os tokens são reconhecidos. Anexa a linha (2.5) ao over/under.
 const selLabel = (sel: { selection: string; handicap: string }): string => {
-  const h = (sel.handicap ?? '').toString().trim();
-  if (h && !sel.selection.includes(h)) return `${sel.selection} (${h})`;
+  const line = realLine(sel.handicap);
+  const parts = sel.selection.split('/').map((p) => p.trim());
+  const allKnown = parts.length >= 1 && parts.length <= 2 && parts.every((p) => TOKEN_PT[p.toLowerCase()] !== undefined);
+
+  if (allKnown) {
+    const labels = parts.map((p) => {
+      const k = p.toLowerCase();
+      const base = TOKEN_PT[k];
+      return (k === 'over' || k === 'under') && line ? `${base} de ${line}` : base;
+    });
+    return labels.join(' & ');
+  }
+
+  // Não reconhecido (nome de time, etc.): mantém original, só anexa linha real.
+  if (line && !sel.selection.includes(line)) return `${sel.selection} (${line})`;
   return sel.selection;
 };
 
@@ -41,6 +73,7 @@ const CATEGORIES: { key: string; label: string }[] = [
   { key: 'resultado', label: 'Resultado' },
   { key: 'gols', label: 'Gols' },
   { key: 'handicap', label: 'Handicap' },
+  { key: 'combos', label: 'Combos' },
   { key: 'escanteios', label: 'Escanteios' },
   { key: 'cartoes', label: 'Cartões' },
   { key: 'chutes', label: 'Chutes' },
@@ -48,11 +81,14 @@ const CATEGORIES: { key: string; label: string }[] = [
 ];
 const categoryOf = (marketId: string): string => {
   const slug = (marketId || '').split(':')[0];
+  // Combos (mercados combinados): "Resultado & Ambas", "Ambas & Total de Gols", "DNB & Gols"...
+  // Tem que vir ANTES de gols/cartões senão "btts-and-total-goals" cairia em "gols".
+  if (slug.includes('-and-') || slug.includes('result-and-btts')) return 'combos';
   if (slug.includes('card')) return 'cartoes';
   if (slug.includes('corner')) return 'escanteios';
   if (slug.includes('shot')) return 'chutes';
   if (slug.includes('offside')) return 'impedimentos';
-  if (slug.includes('goal') || slug === 'both-teams-to-score') return 'gols';
+  if (slug.includes('goal') || slug === 'both-teams-to-score' || slug.startsWith('btts')) return 'gols';
   if (slug.includes('asian-handicap')) return 'handicap';
   return 'resultado'; // match-winner, double-chance, draw-no-bet, european-handicap, to-qualify
 };
@@ -103,6 +139,9 @@ const buildLayout = (
   selections: EventGroupSelection[],
   ev: { home: string; away: string }
 ): MarketLayout | null => {
+  // Seleções compostas (combos: "home/yes", HT/FT: "home/draw") não cabem nas
+  // colunas simples (1X2, O/U...) — caem na lista, que mostra cada via inteira.
+  if (selections.some((s) => s.selection.includes('/'))) return null;
   const tagged = selections.map((s) => ({ s, col: colOf(s, ev) }));
   const present = new Set(tagged.map((x) => x.col).filter(Boolean) as ColKey[]);
   const pick = (col: ColKey, line?: string) =>
@@ -195,7 +234,7 @@ const PriceChart = ({ points }: { points: ChartPoint[] }) => {
   };
 
   const hp = hover != null ? points[hover] : null;
-  const fmtT = (t: number) => new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const fmtT = (t: number) => new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
 
   return (
     <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto select-none" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
@@ -353,14 +392,20 @@ export default function EventDetailPage() {
     if (!sel || !p) {
       return <div className="rounded-lg bg-black/20 px-2 py-2 text-center text-xs text-gray-600">—</div>;
     }
+    const boosted = !!p.boosted;
     return (
       <button
         onClick={() => openHistory({ bookmaker: p.bookmaker, eventId: p.eventId, marketId, marketName, selection: sel.selection })}
-        title={`${p.bookmaker} — ver histórico de movimentação`}
-        className="group flex flex-col items-center justify-center rounded-lg bg-black/30 ring-1 ring-white/10 px-2 py-1.5 hover:bg-teal-500/10 hover:ring-teal-500/40 transition"
+        title={`${p.bookmaker}${boosted ? ' — odd turbinada (Super Placar/Super Odds): limite de stake' : ''} — ver histórico de movimentação`}
+        className={`group relative flex flex-col items-center justify-center rounded-lg px-2 py-1.5 transition ring-1 ${
+          boosted
+            ? 'bg-amber-500/10 ring-amber-400/50 hover:bg-amber-500/20'
+            : 'bg-black/30 ring-white/10 hover:bg-teal-500/10 hover:ring-teal-500/40'
+        }`}
       >
-        <span className="text-sm font-bold tabular-nums text-teal-300">{Number(p.price).toFixed(2)}</span>
-        {!houseFilter && <span className="text-[9px] uppercase tracking-wide text-gray-500 group-hover:text-teal-200/70">{p.bookmaker}</span>}
+        {boosted && <Zap size={11} className="absolute top-1 right-1 text-amber-400 fill-amber-400/40" />}
+        <span className={`text-sm font-bold tabular-nums ${boosted ? 'text-amber-300' : 'text-teal-300'}`}>{Number(p.price).toFixed(2)}</span>
+        {!houseFilter && <span className={`text-[9px] uppercase tracking-wide ${boosted ? 'text-amber-200/70' : 'text-gray-500 group-hover:text-teal-200/70'}`}>{p.bookmaker}</span>}
       </button>
     );
   };
@@ -507,16 +552,24 @@ export default function EventDetailPage() {
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3">
                         {m.selections.map((s, si) => {
                           const p = priceFor(s);
+                          const boosted = !!p?.boosted;
                           return (
                             <button
                               key={si}
                               disabled={!p}
                               onClick={() => p && openHistory({ bookmaker: p.bookmaker, eventId: p.eventId, marketId: m.marketId, marketName: m.marketName, selection: s.selection })}
-                              title={p ? `${p.bookmaker} — ver histórico` : undefined}
-                              className="flex items-center justify-between gap-2 rounded-lg bg-black/30 ring-1 ring-white/10 px-3 py-2 hover:bg-teal-500/10 hover:ring-teal-500/40 disabled:opacity-40 transition"
+                              title={p ? `${p.bookmaker}${boosted ? ' — odd turbinada (limite de stake)' : ''} — ver histórico` : undefined}
+                              className={`flex items-center justify-between gap-2 rounded-lg ring-1 px-3 py-2 disabled:opacity-40 transition ${
+                                boosted
+                                  ? 'bg-amber-500/10 ring-amber-400/50 hover:bg-amber-500/20'
+                                  : 'bg-black/30 ring-white/10 hover:bg-teal-500/10 hover:ring-teal-500/40'
+                              }`}
                             >
-                              <span className="text-xs text-gray-300 truncate" title={selLabel(s)}>{selLabel(s)}</span>
-                              <span className="text-sm font-bold tabular-nums text-teal-300 shrink-0">{p ? Number(p.price).toFixed(2) : '—'}</span>
+                              <span className="text-xs text-gray-300 truncate flex items-center gap-1" title={selLabel(s)}>
+                                {boosted && <Zap size={11} className="text-amber-400 fill-amber-400/40 shrink-0" />}
+                                {selLabel(s)}
+                              </span>
+                              <span className={`text-sm font-bold tabular-nums shrink-0 ${boosted ? 'text-amber-300' : 'text-teal-300'}`}>{p ? Number(p.price).toFixed(2) : '—'}</span>
                             </button>
                           );
                         })}
@@ -550,7 +603,7 @@ export default function EventDetailPage() {
               </span>
               <div className="min-w-0">
                 <h2 className="text-base font-bold text-white truncate">{hist.marketName || hist.marketId}</h2>
-                <p className="text-sm text-gray-400 truncate">{hist.selection}</p>
+                <p className="text-sm text-gray-400 truncate">{selLabel({ selection: hist.selection, handicap: '' })}</p>
               </div>
             </div>
 

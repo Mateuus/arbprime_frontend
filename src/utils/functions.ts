@@ -145,6 +145,82 @@ export function openMarketsSideBySide(data: {
   }, 500); // Pequeno atraso para garantir que a calculadora fique por cima
 }
 
+// ── ArbBets: URL do jogo na casa ─────────────────────────────────────────────
+// A majovip MIGROU: não existe mais deep-link por evento (/home/events-area/s/SC/e/<id>).
+// Agora a página é a do DIA: /esportes/futebol?data=YYYY-MM-DD. Quem ACHA e CLICA o
+// jogo dentro dela é a EXTENSÃO (content-majovip), pelo eventId / nome dos times.
+// Por isso, para majovip esta função só monta a página do dia; o "abrir o jogo" de
+// verdade depende do plugin. Sem plugin, o usuário cai na lista do dia e acha na mão.
+// SÓ MAJOVIP por enquanto: outras casas retornam null e o chamador usa o link normal.
+
+// Dia do evento no fuso de Brasília (a majovip lista os jogos por dia local).
+function majovipDay(dateISO?: string | null): string | null {
+  if (!dateISO) return null;
+  const d = new Date(dateISO);
+  if (isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d); // en-CA => YYYY-MM-DD
+}
+
+export function getBookmakerEventLink(
+  bookmaker?: string,
+  eventId?: string,
+  sport: string = 'futebol',
+  dateISO?: string | null,
+): string | null {
+  if (!bookmaker || !eventId) return null;
+
+  switch (bookmaker.toLowerCase()) {
+    case 'majovip': {
+      const day = majovipDay(dateISO);
+      return `https://majovip.net/esportes/futebol${day ? `?data=${day}` : ''}`;
+    }
+    default:
+      return null; // casa sem template conhecido
+  }
+}
+
+/**
+ * Abre cada perna da surebet (1 aba por casa) lado a lado, usando o deep-link
+ * direto montado a partir do eventId de cada perna. Casas sem template são puladas.
+ *
+ * IMPORTANTE: NÃO dá pra "controlar" a aba da casa por JS depois de aberta — é
+ * outra origem (majovip.net ≠ arbprime) e o browser bloqueia win.document. O jogo
+ * certo abre porque o eventId já vai embutido na URL. O scraper abrirJogoMajovip
+ * só funciona colado no console da PRÓPRIA majovip (mesma origem / bookmarklet).
+ */
+export function openSurebetEvents(surebet: Surebet, sport: string = 'futebol'): void {
+  const seen = new Set<string>();
+  const links: string[] = [];
+
+  for (const leg of surebet.surebet) {
+    const key = `${leg.bookmaker}:${leg.eventId}`.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // majovip → link montado do eventId; demais casas → leg.link normal
+    const url = getBookmakerEventLink(leg.bookmaker, leg.eventId, sport) || leg.link;
+    if (url) links.push(url);
+  }
+
+  if (!links.length) {
+    console.error('Nenhuma casa com deep-link conhecido nesta surebet.');
+    return;
+  }
+
+  const left = window.screenLeft || window.screenX || 0;
+  const top = window.screenTop || window.screenY || 0;
+  const w = Math.floor(window.screen.availWidth / links.length);
+  const h = Math.floor(window.screen.availHeight * 0.85);
+
+  links.forEach((url, i) =>
+    window.open(url, `arb_${i}`, `width=${w},height=${h},top=${top},left=${left + w * i}`),
+  );
+}
+
 export const formatToDollar = (value: number): string => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',

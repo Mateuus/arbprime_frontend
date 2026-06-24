@@ -1,17 +1,25 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import {
-  Calculator, RefreshCcw, Search, ExternalLink, X, Zap, Trophy, TrendingUp, Clock, Layers, HelpCircle, Filter, ChevronDown, Settings
+  Calculator, RefreshCcw, Search, ExternalLink, X, Zap, Trophy, TrendingUp, Clock, Layers, HelpCircle, Filter, ChevronDown, Settings, Bell, BellRing, Tag
 } from 'lucide-react';
 import { useSurebets } from '@/hooks/useSurebets';
+import { useUserContext } from '@/context/UserContext';
 import { useBookmakers } from '@/hooks/useBookmakers';
+import { useNotifications, AlertItem } from '@/hooks/useNotifications';
+import { useWatchSet } from '@/hooks/useWatchSet';
+import { useSurebetAlerts } from '@/hooks/useSurebetAlerts';
 import { apiGateway } from '@/gateways/api.gateway';
 import { Select } from '@/components/ui/Select';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { BookmakerTag, BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
+import { NotificationBell } from '@/components/arbbets/NotificationBell';
 import { SurebetData, Surebet, SurebetOdd } from '@/interfaces/arbitragem.interface';
 import { FilterDTO } from '@/interfaces';
+import { getBookmakerEventLink } from '@/utils/functions';
+import { detectExtension, isExtensionKnownInstalled, openGameInHouse } from '@/utils/arbExtension';
 import { marketLabel, marketCategory, optionLabel, profitTone } from '@/utils/surebet';
+import { surebetKey } from '@/utils/surebetKey';
 import { explainMarket } from '@/utils/marketExplain';
 
 // Base SEM largura (para campos de largura fixa, evita conflito com w-full).
@@ -20,18 +28,92 @@ const fieldBase =
   'focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500/50 transition';
 const inputClass = `w-full ${fieldBase}`;
 
-const CATEGORIES = [
-  { value: 'all', label: 'Todos os mercados' },
-  { value: 'resultado', label: 'Resultado' },
-  { value: 'gols', label: 'Gols' },
-  { value: 'handicap', label: 'Handicap' },
-  { value: 'escanteios', label: 'Escanteios' },
-  { value: 'cartoes', label: 'Cartões' }
+// Categorias de mercado (rótulo + ordem) do filtro rápido. Só aparecem as que
+// existem nos dados atuais; os sub-mercados de cada uma são derivados ao vivo.
+const CATEGORY_META: { key: string; label: string }[] = [
+  { key: 'resultado', label: 'Resultado' },
+  { key: 'gols', label: 'Gols' },
+  { key: 'handicap', label: 'Handicap' },
+  { key: 'combos', label: 'Combos' },
+  { key: 'escanteios', label: 'Escanteios' },
+  { key: 'cartoes', label: 'Cartões' },
+  { key: 'chutes', label: 'Chutes' },
+  { key: 'impedimentos', label: 'Impedimentos' },
+  { key: 'outros', label: 'Outros' }
 ];
+
+interface MarketCat { key: string; label: string; markets: { id: string; name: string }[] }
+
+// Filtro rápido de mercados: uma "pílula" por categoria. Cada uma abre um dropdown
+// com um checkbox "todos" (marca/desmarca a categoria inteira) + os sub-mercados,
+// que o usuário pode ligar/desligar individualmente (ex.: só "Resultado Final").
+function MarketQuickFilter({ tree, selected, onToggleMarket, onToggleCategory, onClearAll }: {
+  tree: MarketCat[];
+  selected: Set<string>;
+  onToggleMarket: (id: string) => void;
+  onToggleCategory: (ids: string[], select: boolean) => void;
+  onClearAll: () => void;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  if (!tree.length) return null;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      {tree.map((cat) => {
+        const ids = cat.markets.map((m) => m.id);
+        const selCount = ids.reduce((n, id) => n + (selected.has(id) ? 1 : 0), 0);
+        const allOn = selCount > 0 && selCount === ids.length;
+        const someOn = selCount > 0;
+        return (
+          <div key={cat.key} className="relative shrink-0">
+            <button
+              onClick={() => setOpen((o) => (o === cat.key ? null : cat.key))}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition ${someOn ? 'bg-teal-500/15 border-teal-500/40 text-teal-200' : 'bg-white/5 border-white/10 text-gray-200 hover:bg-white/10'}`}
+            >
+              {cat.label}
+              {someOn && <span className="grid place-items-center h-4 min-w-4 px-1 rounded-full bg-teal-500 text-[10px] font-bold text-slate-900">{selCount}</span>}
+              <ChevronDown size={14} className={`transition ${open === cat.key ? 'rotate-180' : ''}`} />
+            </button>
+            {open === cat.key && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setOpen(null)} />
+                <div className="absolute left-0 mt-2 z-50 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-brand-dark p-2 shadow-2xl max-h-[60vh] overflow-y-auto">
+                  <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="accent-teal-500"
+                      checked={allOn}
+                      ref={(el) => { if (el) el.indeterminate = someOn && !allOn; }}
+                      onChange={() => onToggleCategory(ids, !allOn)}
+                    />
+                    <span className="text-sm font-semibold text-white">{cat.label} — todos</span>
+                  </label>
+                  <div className="my-1 border-t border-white/10" />
+                  {cat.markets.map((m) => (
+                    <label key={m.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer">
+                      <input type="checkbox" className="accent-teal-500" checked={selected.has(m.id)} onChange={() => onToggleMarket(m.id)} />
+                      <span className="text-sm text-gray-200 truncate">{m.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })}
+      {selected.size > 0 && (
+        <button onClick={onClearAll} className="shrink-0 text-xs text-rose-300 hover:text-rose-200 px-2 py-1">Limpar mercados</button>
+      )}
+    </div>
+  );
+}
 
 const fmtDate = (s: string): string => {
   const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  if (Number.isNaN(d.getTime())) return '—';
+  // Sem a vírgula que o locale pt-BR coloca entre data e hora ("24/06, 10:00" → "24/06 10:00").
+  const date = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return `${date} ${time}`;
 };
 
 // Idade do surebet a partir do create_at.
@@ -44,6 +126,27 @@ const ageOf = (s: string): string => {
   return `${Math.floor(sec / 3600)}h`;
 };
 
+// Tempo da surebet: idade (desde que apareceu) + horário do jogo. São duas coisas
+// distintas — o tooltip explica. Cor mais legível que o cinza apagado de antes.
+const SurebetTime = ({ createAt, eventDate, className = '' }: { createAt: string; eventDate: string; className?: string }) => (
+  <Tooltip
+    label={
+      <span className="block leading-relaxed">
+        <b>{ageOf(createAt)}</b> desde que esta surebet apareceu<br />
+        Início do jogo: <b>{fmtDate(eventDate)}</b>
+      </span>
+    }
+    className={`shrink-0 ${className}`}
+  >
+    <span className="inline-flex items-center gap-1 rounded-md bg-white/5 px-1.5 py-0.5 text-[11px] text-gray-300 ring-1 ring-white/10 cursor-help">
+      <Clock size={11} className="shrink-0 text-gray-400" />
+      <span className="tabular-nums">{ageOf(createAt)}</span>
+      <span className="text-gray-500">·</span>
+      <span className="tabular-nums text-gray-400">{fmtDate(eventDate)}</span>
+    </span>
+  </Tooltip>
+);
+
 // Surebet compacta: header (mercado + ajuda + lucro + calculadora) e uma LINHA por perna.
 // Direção da última movimentação da odd (do historyPrice embutido): 1 subiu, -1 caiu, 0 igual/sem dado.
 const oddDir = (leg: SurebetOdd): 1 | -1 | 0 => {
@@ -54,10 +157,65 @@ const oddDir = (leg: SurebetOdd): 1 | -1 | 0 => {
   return last > prev ? 1 : last < prev ? -1 : 0;
 };
 
-const SurebetCompact = ({ event, sb, onCalc, onExplain, onOdd }: {
-  event: SurebetData; sb: Surebet; onCalc: () => void; onExplain: () => void; onOdd: (leg: SurebetOdd) => void;
+// Identidade de uma SELEÇÃO específica (uma odd numa casa): evento+casa+mercado+
+// seleção+linha. A mesma seleção entre surebets diferentes → a mesma chave.
+const legSelKey = (leg: SurebetOdd): string =>
+  `${leg.eventId}|${(leg.bookmaker || '').toLowerCase()}|${leg.market}|${leg.option}|${leg.handicap ?? ''}`;
+
+// Quantas surebets (do snapshot inteiro) usam cada seleção. Uma seleção que aparece
+// em VÁRIAS surebets é a provável odd com erro de precificação — a origem da arbitragem.
+const buildSurebetCounts = (data: SurebetData[]): Map<string, number> => {
+  const counts = new Map<string, number>();
+  for (const ev of data) {
+    for (const sb of ev.surebets || []) {
+      const seen = new Set<string>(); // não conta a mesma seleção 2x no mesmo surebet
+      for (const leg of sb.surebet) {
+        const k = legSelKey(leg);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        counts.set(k, (counts.get(k) || 0) + 1);
+      }
+    }
+  }
+  return counts;
+};
+
+// Perna "quente" do card: a seleção compartilhada por MAIS surebets (≥ 2). Uma única
+// bolinha por card — desempate pela maior odd (a odd inflada é a candidata a erro).
+const hotLeg = (sb: Surebet, counts?: Map<string, number>): { idx: number; count: number } | null => {
+  if (!counts) return null;
+  let idx = -1, best = 1, price = -Infinity;
+  sb.surebet.forEach((leg, i) => {
+    const c = counts.get(legSelKey(leg)) || 0;
+    if (c >= 2 && (c > best || (c === best && Number(leg.price) > price))) { idx = i; best = c; price = Number(leg.price); }
+  });
+  return idx >= 0 ? { idx, count: best } : null;
+};
+
+// Botão "seguir" (sino) — quando ativo, alerta em mudanças da surebet/evento.
+const WatchButton = ({ on, onClick }: { on: boolean; onClick: (e: React.MouseEvent) => void }) => (
+  <Tooltip label={on ? 'Seguindo — clique para parar de seguir' : 'Seguir e ser alertado quando mudar'} className="shrink-0">
+    <button
+      onClick={onClick}
+      className={`grid place-items-center h-6 w-6 rounded-md transition ${on ? 'text-amber-300 bg-amber-500/15' : 'text-gray-500 hover:text-amber-300 hover:bg-white/10'}`}
+    >
+      {on ? <BellRing size={13} /> : <Bell size={13} />}
+    </button>
+  </Tooltip>
+);
+
+// Selo "Novo" no canto do card (inclinado, sobrepondo a borda superior-esquerda).
+const NewCorner = () => (
+  <span className="pointer-events-none absolute -top-2 -left-2 z-10 -rotate-12 select-none rounded bg-teal-400 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-slate-900 shadow-lg ring-1 ring-teal-300/50">
+    Novo
+  </span>
+);
+
+const SurebetCompact = ({ event, sb, counts, onCalc, onExplain, onOdd }: {
+  event: SurebetData; sb: Surebet; counts?: Map<string, number>; onCalc: () => void; onExplain: () => void; onOdd: (leg: SurebetOdd) => void;
 }) => {
   const multiMarket = new Set(sb.surebet.map((l) => l.market)).size > 1;
+  const hot = hotLeg(sb, counts); // perna com a odd "suspeita" (presente em mais surebets)
   return (
     <div className="rounded-lg border border-white/10 bg-black/20 overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-2.5 py-1 bg-white/5 border-b border-white/10">
@@ -85,15 +243,40 @@ const SurebetCompact = ({ event, sb, onCalc, onExplain, onOdd }: {
           const dir = oddDir(leg);
           return (
           <div key={i} className="flex items-center gap-2 px-2.5 py-1 text-xs">
-            <span className="w-[92px] shrink-0"><BookmakerTag slug={leg.bookmaker} size={13} nameClassName="text-[11px]" /></span>
+            <div className="w-[104px] shrink-0 min-w-0"><BookmakerTag slug={leg.bookmaker} size={13} nameClassName="text-[11px]" className="w-full" /></div>
             <span className="flex-1 min-w-0 truncate text-gray-300">
               {multiMarket && <span className="text-gray-500">{marketLabel(leg.market)} · </span>}
-              {optionLabel(leg.option, event.home, event.away)}
+              {optionLabel(leg.option, event.home, event.away, leg.handicap)}
             </span>
+            {leg.rawMarket && (
+              <Tooltip
+                label={
+                  <span className="block">
+                    <span className="text-gray-400">Mercado na casa:</span> {leg.rawMarket}
+                    {leg.rawSelection && <span className="block"><span className="text-gray-400">Seleção:</span> {leg.rawSelection}</span>}
+                  </span>
+                }
+                className="shrink-0 text-gray-500 hover:text-teal-300 cursor-help"
+              >
+                <Tag size={11} />
+              </Tooltip>
+            )}
             {dir !== 0 && (
-              <span className={`shrink-0 text-[10px] leading-none ${dir > 0 ? 'text-emerald-400' : 'text-rose-400'}`} title={dir > 0 ? 'Odd subiu' : 'Odd caiu'}>
-                {dir > 0 ? '▲' : '▼'}
-              </span>
+              <Tooltip label={dir > 0 ? 'Odd subiu' : 'Odd caiu'} className="shrink-0">
+                <span className={`text-[10px] leading-none ${dir > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {dir > 0 ? '▲' : '▼'}
+                </span>
+              </Tooltip>
+            )}
+            {hot?.idx === i && (
+              <Tooltip
+                label={`O porquê da aposta segura: esta seleção está em ${hot.count} apostas seguras — provável odd com erro de precificação (a origem da arbitragem).`}
+                className="shrink-0"
+              >
+                <span className="grid place-items-center h-3.5 w-3.5 shrink-0 cursor-help" aria-label={`Seleção em ${hot.count} apostas seguras`}>
+                  <span className="h-2 w-2 rounded-full bg-amber-400 ring-2 ring-amber-400/25" />
+                </span>
+              </Tooltip>
             )}
             <Tooltip label="Ver esta odd em outras casas e o histórico" className="shrink-0">
               <button
@@ -103,11 +286,31 @@ const SurebetCompact = ({ event, sb, onCalc, onExplain, onOdd }: {
                 {Number(leg.price).toFixed(2)}
               </button>
             </Tooltip>
-            {leg.link && (
-              <a href={leg.link} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-gray-500 hover:text-teal-300 shrink-0" title="Abrir na casa">
+            {(() => {
+              // majovip → deep-link montado do eventId (ignora leg.link, que vai virar /esportes/futebol sem id);
+              // demais casas → leg.link normal
+              const href = getBookmakerEventLink(leg.bookmaker, leg.eventId, event.sport, event.date) || leg.link;
+              return href ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Extensão instalada → ela abre/dirige a casa (e no futuro preenche a cédula).
+                  // Sem extensão → deixa o <a> abrir o deep-link nativamente (sem bloqueio de popup).
+                  if (isExtensionKnownInstalled()) {
+                    e.preventDefault();
+                    void openGameInHouse(leg, event);
+                  }
+                }}
+                className="text-gray-500 hover:text-teal-300 shrink-0"
+                title="Abrir na casa"
+              >
                 <ExternalLink size={11} />
               </a>
-            )}
+              ) : null;
+            })()}
           </div>
           );
         })}
@@ -118,19 +321,42 @@ const SurebetCompact = ({ event, sb, onCalc, onExplain, onOdd }: {
 
 export default function ArbBetsPage() {
   const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading } = useUserContext();
   const type = (router.query.type === 'live' ? 'live' : 'prematch') as 'prematch' | 'live';
   const setType = (t: 'prematch' | 'live') => router.replace({ pathname: '/arbbets', query: { type: t } }, undefined, { shallow: true });
 
   const [autoUpdate, setAutoUpdate] = useState(true);
-  const { data, loading } = useSurebets(type, autoUpdate);
+  // Pré-aquece a detecção da extensão "Abrir Jogo na Casa" (resultado fica memoizado
+  // pra decisão síncrona no clique do link). Sem extensão, o deep-link abre normal.
+  useEffect(() => { void detectExtension(); }, []);
+  // Só assina o WS quando logado (proteção da página).
+  const { data, loading } = useSurebets(type, autoUpdate, isAuthenticated);
 
   const [view, setView] = useState<'surebets' | 'events'>('surebets');
   const [search, setSearch] = useState('');
   const [sport, setSport] = useState('');
-  const [category, setCategory] = useState('all');
+  // Filtro rápido de mercados: conjunto de ids de mercado selecionados (vazio = todos).
+  const [selectedMarkets, setSelectedMarkets] = useState<Set<string>>(new Set());
+  const toggleMarket = (id: string) => setSelectedMarkets((prev) => {
+    const s = new Set(prev);
+    if (s.has(id)) s.delete(id); else s.add(id);
+    return s;
+  });
+  const toggleMarketCategory = (ids: string[], select: boolean) => setSelectedMarkets((prev) => {
+    const s = new Set(prev);
+    if (select) ids.forEach((id) => s.add(id)); else ids.forEach((id) => s.delete(id));
+    return s;
+  });
   const [bookmaker, setBookmaker] = useState('');
   const [profitMin, setProfitMin] = useState('0');
   const [sortMode, setSortMode] = useState<'profit' | 'time'>('profit');
+  // Filtro por nº de pontas (seleções): 2, 3, 4+ (4 = 4 ou mais). Vazio = todas.
+  const [legCounts, setLegCounts] = useState<Set<number>>(new Set());
+  const toggleLeg = (n: number) => setLegCounts((prev) => {
+    const s = new Set(prev);
+    if (s.has(n)) s.delete(n); else s.add(n);
+    return s;
+  });
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Filtros salvos do usuário (ABFilter).
   const [savedFilters, setSavedFilters] = useState<{ id: string; name: string }[]>([]);
@@ -150,6 +376,31 @@ export default function ArbBetsPage() {
     () => Array.from(new Set(data.flatMap((e) => e.surebets.flatMap((sb) => sb.surebet.map((l) => l.bookmaker))))).sort(),
     [data]
   );
+  // Quantas surebets (snapshot inteiro) usam cada seleção — marca a provável odd "com erro".
+  const surebetCounts = useMemo(() => buildSurebetCounts(data), [data]);
+
+  // Árvore de mercados presentes nos dados: categoria → sub-mercados (id + nome).
+  const marketTree = useMemo<MarketCat[]>(() => {
+    const byCat = new Map<string, Map<string, string>>();
+    for (const ev of data) {
+      for (const sb of ev.surebets || []) {
+        for (const m of sb.marketTypes || []) {
+          const cat = marketCategory(m);
+          if (!byCat.has(cat)) byCat.set(cat, new Map());
+          byCat.get(cat)!.set(m, marketLabel(m));
+        }
+      }
+    }
+    return CATEGORY_META
+      .filter((c) => byCat.has(c.key))
+      .map((c) => ({
+        key: c.key,
+        label: c.label,
+        markets: Array.from(byCat.get(c.key)!.entries())
+          .map(([id, name]) => ({ id, name }))
+          .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+      }));
+  }, [data]);
 
   // Carrega a lista de filtros salvos e auto-seleciona (lembra a escolha; senão, o 1º).
   useEffect(() => {
@@ -204,8 +455,13 @@ export default function ArbBetsPage() {
         event: e,
         surebets: e.surebets.filter((sb) => {
           if (sb.profitMargin < min) return false;
-          if (category !== 'all' && !sb.marketTypes.some((m) => marketCategory(m) === category)) return false;
+          if (selectedMarkets.size && !sb.marketTypes.some((m) => selectedMarkets.has(m))) return false;
           if (bookmaker && !sb.surebet.some((l) => l.bookmaker === bookmaker)) return false;
+          // Nº de pontas (seleções): nada marcado = todas; senão, só os buckets escolhidos (4 = 4+).
+          if (legCounts.size) {
+            const bucket = Math.min(sb.surebet.length, 4);
+            if (!legCounts.has(bucket)) return false;
+          }
           if (f) {
             if (f.profitMin != null && sb.profitMargin < f.profitMin) return false;
             if (f.profitMax && f.profitMax > 0 && sb.profitMargin > f.profitMax) return false;
@@ -222,7 +478,7 @@ export default function ArbBetsPage() {
         })
       }))
       .filter((x) => x.surebets.length > 0);
-  }, [data, sport, search, profitMin, category, bookmaker, activeFilter]);
+  }, [data, sport, search, profitMin, selectedMarkets, bookmaker, legCounts, activeFilter]);
 
   // Visão "por surebet": achata e ordena por lucro OU por tempo (mais recente).
   const flat = useMemo(
@@ -235,8 +491,45 @@ export default function ArbBetsPage() {
   );
 
   const totalSurebets = flat.length;
-  const activeFilters = [sport, category !== 'all', bookmaker, (parseFloat(profitMin) || 0) > 0].filter(Boolean).length;
-  const clearFilters = () => { setSport(''); setCategory('all'); setBookmaker(''); setProfitMin('0'); };
+  const activeFilters = [sport, selectedMarkets.size > 0, bookmaker, (parseFloat(profitMin) || 0) > 0, legCounts.size > 0].filter(Boolean).length;
+  const clearFilters = () => { setSport(''); setSelectedMarkets(new Set()); setBookmaker(''); setProfitMin('0'); setLegCounts(new Set()); };
+
+  // Modal aberto ao clicar numa notificação (feed ou notificação do Windows).
+  const [alertModal, setAlertModal] = useState<{ event: SurebetData; sb: Surebet } | null>(null);
+  // Ref com os dados atuais — o resolver da notificação roda fora do ciclo de render.
+  const dataRef = useRef<SurebetData[]>([]);
+  useEffect(() => { dataRef.current = data; }, [data]);
+
+  // Resolve a surebet referenciada por um alerta e abre o modal focado nela.
+  const openAlertFromNotification = useCallback((a: AlertItem) => {
+    const list = dataRef.current;
+    if (a.surebetKey) {
+      for (const ev of list) {
+        for (const sb of ev.surebets || []) {
+          if (surebetKey(ev, sb) === a.surebetKey) { setAlertModal({ event: ev, sb }); return; }
+        }
+      }
+    }
+    // Fallback: a surebet exata pode ter saído — abre a melhor do evento, se existir.
+    const ev = list.find((e) => e.id === a.eventId);
+    if (ev && ev.surebets?.length) {
+      const best = [...ev.surebets].sort((x, y) => y.profitMargin - x.profitMargin)[0];
+      setAlertModal({ event: ev, sb: best });
+    }
+  }, []);
+
+  // Sistema de alertas: notificações + listas de "seguidos" + detecção de novas/mudanças.
+  const notif = useNotifications(openAlertFromNotification);
+  const watchSb = useWatchSet('arbbets:watch:sb');   // surebets seguidas (por surebetKey)
+  const watchEv = useWatchSet('arbbets:watch:ev');   // eventos seguidos (por id)
+  const { newKeys } = useSurebetAlerts(data, flat, {
+    type,
+    settings: notif.settings,
+    watched: watchSb.set,
+    watchedEvents: watchEv.set,
+    notify: notif.notify
+  });
+  const watchCount = watchSb.set.size + watchEv.set.size;
 
   // Opções de casa com logo + nome na cor (BookmakerTag) no Select.
   const { bookmakers, getBookmaker } = useBookmakers();
@@ -253,6 +546,31 @@ export default function ArbBetsPage() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [houses, bookmakers]);
+
+  // Proteção: ArbBets é exclusivo para usuários logados. (Hooks acima já rodaram.)
+  if (!isAuthenticated) {
+    return (
+      <div className="w-full px-3 sm:px-6 py-6">
+        <div className="mx-auto max-w-md mt-16 rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
+          {authLoading ? (
+            <div className="flex items-center justify-center gap-2 text-gray-400"><RefreshCcw className="animate-spin" size={18} /> Verificando acesso...</div>
+          ) : (
+            <>
+              <div className="grid place-items-center h-12 w-12 mx-auto rounded-xl bg-teal-500/15 ring-1 ring-teal-500/30 mb-4"><Zap className="text-teal-300" size={24} /></div>
+              <h2 className="text-lg font-bold text-white">Entre para ver as surebets</h2>
+              <p className="text-sm text-gray-400 mt-1 mb-5">As oportunidades de arbitragem do ArbBets são exclusivas para usuários logados.</p>
+              <button
+                onClick={() => router.push({ pathname: '/arbbets', query: { ...router.query, modal: 'auth', page: 'login' } }, undefined, { shallow: true })}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-900 font-semibold transition"
+              >
+                Fazer login
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full px-3 sm:px-6 py-6">
@@ -272,6 +590,7 @@ export default function ArbBetsPage() {
             <div className="text-2xl font-bold text-white tabular-nums">{totalSurebets}</div>
             <div className="text-[11px] uppercase tracking-wider text-gray-400">surebets</div>
           </div>
+          <NotificationBell notif={notif} watchCount={watchCount} onOpenAlert={openAlertFromNotification} />
           <button
             onClick={() => setAutoUpdate((v) => !v)}
             className={`grid place-items-center h-9 w-9 rounded-lg border transition ${autoUpdate ? 'bg-teal-500/15 border-teal-500/40 text-teal-200' : 'bg-white/5 border-white/10 text-gray-400'}`}
@@ -363,8 +682,22 @@ export default function ArbBetsPage() {
                   <input value={profitMin} onChange={(e) => setProfitMin(e.target.value)} inputMode="decimal" className={`${inputClass} mt-1`} />
                 </div>
                 <div className="block text-xs text-gray-400">
-                  Mercado
-                  <Select className="mt-1" value={category} onChange={setCategory} options={CATEGORIES} />
+                  Pontas (seleções)
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {[2, 3, 4].map((n) => {
+                      const on = legCounts.has(n);
+                      return (
+                        <button
+                          key={n}
+                          onClick={() => toggleLeg(n)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium ring-1 transition ${on ? 'bg-teal-500/15 text-teal-200 ring-teal-500/40' : 'bg-white/5 text-gray-300 ring-white/10 hover:bg-white/10'}`}
+                        >
+                          {n === 4 ? '4+ pontas' : `${n} pontas`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="mt-1 block text-[10px] text-gray-600">Nada marcado = todas as pontas.</span>
                 </div>
                 <div className="block text-xs text-gray-400">
                   Esporte
@@ -390,6 +723,15 @@ export default function ArbBetsPage() {
         </div>
       </div>
 
+      {/* Filtro rápido de mercados */}
+      <MarketQuickFilter
+        tree={marketTree}
+        selected={selectedMarkets}
+        onToggleMarket={toggleMarket}
+        onToggleCategory={toggleMarketCategory}
+        onClearAll={() => setSelectedMarkets(new Set())}
+      />
+
       {/* Conteúdo */}
       {loading && data.length === 0 ? (
         <div className="flex items-center justify-center py-24 text-gray-400">
@@ -402,18 +744,28 @@ export default function ArbBetsPage() {
         </div>
       ) : view === 'surebets' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-2">
-          {flat.map(({ event, sb }, i) => (
-            <div key={`${event.id}-${i}`} className="rounded-xl border border-white/10 bg-white/5 p-2">
+          {flat.map(({ event, sb }, i) => {
+            const key = surebetKey(event, sb);
+            const isNew = newKeys.has(key);
+            const led = isNew && notif.settings.ledEffect;
+            return (
+            <div key={`${event.id}-${i}`} className={`relative rounded-xl border bg-white/5 p-2 transition ${led ? 'border-transparent shadow-[0_0_14px_rgba(56,189,248,0.25)]' : isNew ? 'border-teal-500/50 ring-1 ring-teal-500/20' : 'border-white/10'}`}>
+              {led && <span aria-hidden className="led-border" />}
+              {isNew && <NewCorner />}
               <div className="flex items-center justify-between gap-2 mb-1.5 px-0.5">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-white truncate">{event.home} <span className="text-gray-500 font-normal">x</span> {event.away}</div>
                   <div className="text-[10px] text-gray-500 truncate">{event.league || event.sport}</div>
                 </div>
-                <span className="text-[10px] text-gray-500 flex items-center gap-0.5 shrink-0"><Clock size={9} /> {ageOf(sb.create_at)} · {fmtDate(event.date)}</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <SurebetTime createAt={sb.create_at} eventDate={event.date} />
+                  <WatchButton on={watchSb.has(key)} onClick={(e) => { e.stopPropagation(); watchSb.toggle(key); }} />
+                </div>
               </div>
-              <SurebetCompact event={event} sb={sb} onCalc={() => setCalc({ event, sb })} onExplain={() => openExplain(event, sb)} onOdd={(leg) => setOddModal({ event, leg })} />
+              <SurebetCompact event={event} sb={sb} counts={surebetCounts} onCalc={() => setCalc({ event, sb })} onExplain={() => openExplain(event, sb)} onOdd={(leg) => setOddModal({ event, leg })} />
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         // Por evento: lista compacta mostrando só a MELHOR surebet; +N abre modal com todas.
@@ -426,31 +778,59 @@ export default function ArbBetsPage() {
               return { event, ordered, best: ordered[0], newest };
             })
             .sort((a, b) => (sortMode === 'time' ? b.newest - a.newest : b.best.profitMargin - a.best.profitMargin))
-            .map(({ event, ordered, best }) => (
-              <div key={event.id} className="rounded-xl border border-white/10 bg-white/5 p-2">
+            .map(({ event, ordered, best }) => {
+              const newCount = ordered.filter((sb) => newKeys.has(surebetKey(event, sb))).length;
+              const led = newCount > 0 && notif.settings.ledEffect;
+              return (
+              <div key={event.id} className={`relative rounded-xl border bg-white/5 p-2 transition ${led ? 'border-transparent shadow-[0_0_14px_rgba(56,189,248,0.25)]' : newCount > 0 ? 'border-teal-500/50 ring-1 ring-teal-500/20' : 'border-white/10'}`}>
+                {led && <span aria-hidden className="led-border" />}
                 <div className="flex items-center justify-between gap-2 mb-1.5 px-0.5">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white truncate">{event.home} <span className="text-gray-500 font-normal">x</span> {event.away}</div>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {newCount > 0 && (
+                        <Tooltip label={newCount === 1 ? 'Surebet nova neste evento' : `${newCount} surebets novas neste evento`} className="shrink-0">
+                          <span className="relative grid place-items-center h-2.5 w-2.5">
+                            <span className="absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-60 animate-ping" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-teal-400" />
+                          </span>
+                        </Tooltip>
+                      )}
+                      <div className="text-sm font-semibold text-white truncate">{event.home} <span className="text-gray-500 font-normal">x</span> {event.away}</div>
+                    </div>
                     <div className="text-[10px] text-gray-500 truncate">{event.league || event.sport} · {fmtDate(event.date)}</div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ring-1 ${profitTone(best.profitMargin)}`}>
                       <TrendingUp size={12} /> {best.profitMargin.toFixed(2)}%
                     </span>
-                    {ordered.length > 1 && (
-                      <button
-                        onClick={() => setEventModal({ event, surebets: ordered })}
-                        className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium bg-white/5 hover:bg-white/10 text-gray-300 ring-1 ring-white/10 transition"
-                        title={`Ver as ${ordered.length} surebets deste evento`}
-                      >
-                        <Layers size={12} /> +{ordered.length - 1}
-                      </button>
-                    )}
+                    {ordered.length > 1 && (() => {
+                      // Surebet(s) nova(s) que NÃO são a melhor → ficam escondidas no +N.
+                      // Destaca o botão (cor + pulso) p/ o usuário saber que precisa abrir.
+                      const newHidden = ordered.slice(1).filter((sb) => newKeys.has(surebetKey(event, sb))).length;
+                      return (
+                      <Tooltip label={newHidden > 0 ? `Ver as ${ordered.length} surebets — ${newHidden} nova${newHidden > 1 ? 's' : ''} aqui dentro` : `Ver as ${ordered.length} surebets deste evento`}>
+                        <button
+                          onClick={() => setEventModal({ event, surebets: ordered })}
+                          className={`relative inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium ring-1 transition ${newHidden > 0 ? 'bg-teal-500/15 text-teal-200 ring-teal-500/40 hover:bg-teal-500/25' : 'bg-white/5 hover:bg-white/10 text-gray-300 ring-white/10'}`}
+                        >
+                          <Layers size={12} /> +{ordered.length - 1}
+                          {newHidden > 0 && (
+                            <span className="absolute -top-1 -right-1 grid place-items-center h-2.5 w-2.5">
+                              <span className="absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-60 animate-ping" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-teal-400" />
+                            </span>
+                          )}
+                        </button>
+                      </Tooltip>
+                      );
+                    })()}
+                    <WatchButton on={watchEv.has(event.id)} onClick={(e) => { e.stopPropagation(); watchEv.toggle(event.id); }} />
                   </div>
                 </div>
-                <SurebetCompact event={event} sb={best} onCalc={() => setCalc({ event, sb: best })} onExplain={() => openExplain(event, best)} onOdd={(leg) => setOddModal({ event, leg })} />
+                <SurebetCompact event={event} sb={best} counts={surebetCounts} onCalc={() => setCalc({ event, sb: best })} onExplain={() => openExplain(event, best)} onOdd={(leg) => setOddModal({ event, leg })} />
               </div>
-            ))}
+              );
+            })}
         </div>
       )}
 
@@ -459,6 +839,9 @@ export default function ArbBetsPage() {
         <EventModal
           event={eventModal.event}
           surebets={eventModal.surebets}
+          counts={surebetCounts}
+          newKeys={newKeys}
+          ledEffect={notif.settings.ledEffect}
           onClose={() => setEventModal(null)}
           onCalc={(sb) => { setEventModal(null); setCalc({ event: eventModal.event, sb }); }}
           onExplain={(sb) => openExplain(eventModal.event, sb)}
@@ -467,6 +850,19 @@ export default function ArbBetsPage() {
       )}
       {explain && <ExplainModal marketIds={explain.marketIds} home={explain.home} away={explain.away} onClose={() => setExplain(null)} />}
       {oddModal && <OddModal event={oddModal.event} leg={oddModal.leg} onClose={() => setOddModal(null)} />}
+      {alertModal && (
+        <AlertSurebetModal
+          event={alertModal.event}
+          sb={alertModal.sb}
+          counts={surebetCounts}
+          watched={watchSb.has(surebetKey(alertModal.event, alertModal.sb))}
+          onToggleWatch={() => watchSb.toggle(surebetKey(alertModal.event, alertModal.sb))}
+          onClose={() => setAlertModal(null)}
+          onCalc={() => setCalc({ event: alertModal.event, sb: alertModal.sb })}
+          onExplain={() => openExplain(alertModal.event, alertModal.sb)}
+          onOdd={(leg) => setOddModal({ event: alertModal.event, leg })}
+        />
+      )}
     </div>
   );
 }
@@ -634,8 +1030,14 @@ function OddModal({ event, leg, onClose }: { event: SurebetData; leg: SurebetOdd
 
         <div className="mb-4 pr-8">
           <div className="text-xs text-teal-300/80">{marketLabel(leg.market)}</div>
-          <h2 className="text-base font-bold text-white">{optionLabel(leg.option, event.home, event.away)}</h2>
+          <h2 className="text-base font-bold text-white">{optionLabel(leg.option, event.home, event.away, leg.handicap)}</h2>
           <p className="text-[11px] text-gray-500">{event.home} x {event.away}</p>
+          {leg.rawMarket && (
+            <p className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-gray-400">
+              <Tag size={11} className="text-gray-500 shrink-0" />
+              Na casa: <span className="text-gray-200">{leg.rawMarket}</span>
+            </p>
+          )}
         </div>
 
         {/* Gráfico multi-linha (uma linha por casa) */}
@@ -649,30 +1051,30 @@ function OddModal({ event, leg, onClose }: { event: SurebetData; leg: SurebetOdd
           )}
         </div>
 
-        {/* Casas com esta seleção (clique para focar a linha) */}
-        <div className="mb-2 text-[11px] uppercase tracking-wider text-gray-500">Esta seleção em outras casas {loading && '(carregando histórico…)'}</div>
-        <div className="space-y-1">
-          {houses.map((h, i) => {
-            const isFocus = focus === h.bookmaker;
-            return (
-              <button
-                key={`${h.bookmaker}-${i}`}
-                onClick={() => setFocus(h.bookmaker)}
-                className={`w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 ring-1 transition text-left ${isFocus ? 'bg-teal-500/10 ring-teal-500/40' : 'bg-white/5 ring-white/10 hover:bg-white/10'}`}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: colorFor(h.bookmaker, i) }} />
-                  <BookmakerTag slug={h.bookmaker} size={15} />
-                  {h.used && <span className="text-[9px] uppercase text-teal-300/80">na surebet</span>}
-                </div>
-                <span className={`text-sm font-bold tabular-nums ${h.price === best ? 'text-emerald-300' : 'text-gray-200'}`}>{Number(h.price).toFixed(2)}</span>
-              </button>
-            );
-          })}
+        {/* Casas com esta seleção — Select (compacto mesmo com muitas casas) */}
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <span className="text-[11px] uppercase tracking-wider text-gray-500">Esta seleção em outras casas {loading && '(carregando histórico…)'}</span>
+          <span className="text-[11px] text-gray-500 shrink-0">{houses.length} {houses.length === 1 ? 'casa' : 'casas'}</span>
         </div>
+        <Select
+          value={focus}
+          onChange={setFocus}
+          className="w-full"
+          options={houses.map((h) => ({
+            value: h.bookmaker,
+            label: getBookmaker(h.bookmaker)?.name || h.bookmaker,
+            node: (
+              <span className="flex items-center gap-2 min-w-0 w-full">
+                <BookmakerTag slug={h.bookmaker} size={16} />
+                {h.used && <span className="text-[9px] uppercase text-teal-300/80 shrink-0">na surebet</span>}
+                <span className={`ml-auto pl-2 text-sm font-bold tabular-nums shrink-0 ${h.price === best ? 'text-emerald-300' : 'text-gray-200'}`}>{Number(h.price).toFixed(2)}</span>
+              </span>
+            )
+          }))}
+        />
 
         {/* Histórico detalhado da casa focada */}
-        {!loading && focusSeries && focusSeries.points.length >= 2 && (
+        {!loading && focusSeries && focusSeries.points.length >= 1 && (
           <div className="mt-4">
             <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-1.5">Mudanças — {focus}</div>
             <div className="max-h-32 overflow-y-auto space-y-0.5">
@@ -698,20 +1100,79 @@ function OddModal({ event, leg, onClose }: { event: SurebetData; leg: SurebetOdd
 }
 
 // ---- Modal com TODAS as surebets de um evento ----
-function EventModal({ event, surebets, onClose, onCalc, onExplain, onOdd }: {
-  event: SurebetData; surebets: Surebet[]; onClose: () => void; onCalc: (sb: Surebet) => void; onExplain: (sb: Surebet) => void; onOdd: (leg: SurebetOdd) => void;
+function EventModal({ event, surebets, counts, newKeys, ledEffect, onClose, onCalc, onExplain, onOdd }: {
+  event: SurebetData; surebets: Surebet[]; counts?: Map<string, number>; newKeys: Map<string, number>; ledEffect: boolean;
+  onClose: () => void; onCalc: (sb: Surebet) => void; onExplain: (sb: Surebet) => void; onOdd: (leg: SurebetOdd) => void;
 }) {
+  const newCount = surebets.filter((sb) => newKeys.has(surebetKey(event, sb))).length;
   return (
     <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
       <div className="relative w-full max-w-2xl bg-brand-dark border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-rose-400"><X size={20} /></button>
         <div className="mb-4 pr-8">
           <h2 className="text-base font-bold text-white truncate">{event.home} <span className="text-gray-500 font-normal">x</span> {event.away}</h2>
-          <p className="text-xs text-gray-400">{event.league || event.sport} · {fmtDate(event.date)} · {surebets.length} surebets</p>
+          <p className="text-xs text-gray-400">
+            {event.league || event.sport} · {fmtDate(event.date)} · {surebets.length} surebets
+            {newCount > 0 && <span className="text-teal-300"> · {newCount} nova{newCount > 1 ? 's' : ''}</span>}
+          </p>
         </div>
         <div className="space-y-2">
-          {surebets.map((sb, i) => <SurebetCompact key={i} event={event} sb={sb} onCalc={() => onCalc(sb)} onExplain={() => onExplain(sb)} onOdd={onOdd} />)}
+          {surebets.map((sb, i) => {
+            // Destaca aqui dentro as surebets NOVAS (selo "Novo" + efeito RGB): a nova
+            // pode não ser a melhor do evento e, na visão "por evento", só aparece neste modal.
+            const isNew = newKeys.has(surebetKey(event, sb));
+            const led = isNew && ledEffect;
+            return (
+              <div key={i} className={`relative rounded-xl border bg-white/5 p-2 transition ${led ? 'border-transparent shadow-[0_0_14px_rgba(56,189,248,0.25)]' : isNew ? 'border-teal-500/50 ring-1 ring-teal-500/20' : 'border-white/10'}`}>
+                {led && <span aria-hidden className="led-border" />}
+                {isNew && <NewCorner />}
+                <div className="mb-1.5 flex justify-end">
+                  <SurebetTime createAt={sb.create_at} eventDate={event.date} />
+                </div>
+                <SurebetCompact event={event} sb={sb} counts={counts} onCalc={() => onCalc(sb)} onExplain={() => onExplain(sb)} onOdd={onOdd} />
+              </div>
+            );
+          })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Modal focado numa única surebet (aberto ao clicar numa notificação) ----
+function AlertSurebetModal({ event, sb, counts, watched, onToggleWatch, onClose, onCalc, onExplain, onOdd }: {
+  event: SurebetData; sb: Surebet; counts?: Map<string, number>; watched: boolean; onToggleWatch: () => void;
+  onClose: () => void; onCalc: () => void; onExplain: () => void; onOdd: (leg: SurebetOdd) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4" onClick={onClose}>
+      <div className="relative w-full sm:max-w-lg bg-brand-dark border border-white/10 rounded-t-2xl sm:rounded-2xl p-4 sm:p-5 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="sm:hidden mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
+        <button onClick={onClose} className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-rose-400"><X size={20} /></button>
+
+        <div className="mb-3 pr-8">
+          <div className="flex items-center gap-1.5 text-[11px] text-teal-300/90"><Zap size={13} /> Surebet do alerta</div>
+          <h2 className="text-base font-bold text-white truncate">{event.home} <span className="text-gray-500 font-normal">x</span> {event.away}</h2>
+          <div className="mt-0.5 flex items-center gap-2 text-[11px] text-gray-500">
+            <span className="truncate">{event.league || event.sport}</span>
+            <SurebetTime createAt={sb.create_at} eventDate={event.date} />
+          </div>
+        </div>
+
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-bold tabular-nums ring-1 ${profitTone(sb.profitMargin)}`}>
+            <TrendingUp size={13} /> {sb.profitMargin.toFixed(2)}%
+          </span>
+          <button
+            onClick={onToggleWatch}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium ring-1 transition ${watched ? 'bg-amber-500/15 text-amber-300 ring-amber-500/40' : 'bg-white/5 text-gray-300 ring-white/10 hover:bg-white/10'}`}
+          >
+            {watched ? <BellRing size={13} /> : <Bell size={13} />}
+            {watched ? 'Seguindo' : 'Seguir'}
+          </button>
+        </div>
+
+        <SurebetCompact event={event} sb={sb} counts={counts} onCalc={onCalc} onExplain={onExplain} onOdd={onOdd} />
       </div>
     </div>
   );
@@ -942,7 +1403,7 @@ function CalcModal({ event, sb, onClose, defaultStake }: { event: SurebetData; s
                   {houseOpts.length > 1
                     ? <Select value={houseStr[i] ?? leg.bookmaker} onChange={(v) => setHouse(i, v)} options={houseOpts} buttonClassName="py-1 px-2 text-xs" />
                     : <BookmakerTag slug={houseStr[i] ?? leg.bookmaker} size={14} nameClassName="text-[11px]" />}
-                  <div className="text-[10px] text-gray-500 truncate mt-0.5">{optionLabel(leg.option, event.home, event.away)}</div>
+                  <div className="text-[10px] text-gray-500 truncate mt-0.5">{optionLabel(leg.option, event.home, event.away, leg.handicap)}</div>
                 </div>
                 <input value={oddsStr[i] ?? ''} onChange={(e) => setOdd(i, e.target.value)} inputMode="decimal" aria-label="Odd"
                   className={`${fieldBase} w-14 sm:w-20 shrink-0 text-center py-1.5 px-1`} />

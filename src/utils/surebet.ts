@@ -12,17 +12,29 @@ export const marketLabel = (marketId: string): string => {
 // Categoria do mercado (para filtro/busca), mesma lógica da página de detalhe.
 export const marketCategory = (marketId: string): string => {
   const slug = (marketId || '').split(':')[0];
+  // Combos (mercados combinados) ANTES de gols/cartões — senão "btts-and-total-goals" cairia em gols.
+  if (slug.includes('-and-') || slug.includes('result-and-btts')) return 'combos';
   if (slug.includes('card')) return 'cartoes';
   if (slug.includes('corner')) return 'escanteios';
   if (slug.includes('shot')) return 'chutes';
   if (slug.includes('offside')) return 'impedimentos';
-  if (slug.includes('goal') || slug === 'both-teams-to-score') return 'gols';
+  // Estatísticas avulsas (faltas, desarmes, laterais, tiros de meta) → Outros.
+  if (slug.includes('foul') || slug.includes('tackle') || slug.includes('throwin') || slug.includes('goalkick')) return 'outros';
+  if (slug.startsWith('win-to-nil') || slug.includes('goal') || slug.startsWith('both-teams-to-score') || slug.startsWith('btts')) return 'gols';
   if (slug.includes('asian-handicap')) return 'handicap';
   return 'resultado';
 };
 
-// Rótulo da seleção (option) no contexto do evento.
-export const optionLabel = (option: string, home?: string, away?: string): string => {
+// Linha de gols (handicap) formatada p/ exibição: 2.5, 6.5… ('' quando ausente).
+const goalLine = (h?: number | string | null): string => {
+  if (h === undefined || h === null || h === '') return '';
+  const n = Number(h);
+  return Number.isFinite(n) ? String(n) : String(h).trim();
+};
+
+// Rótulo da seleção (option) no contexto do evento. `handicap` é a linha de gols
+// usada pelos mercados combinados que NÃO carregam a linha no nome da option.
+export const optionLabel = (option: string, home?: string, away?: string, handicap?: number | string | null): string => {
   const o = (option || '').trim();
   const low = o.toLowerCase();
   if (low === 'home') return home || 'Casa';
@@ -30,9 +42,21 @@ export const optionLabel = (option: string, home?: string, away?: string): strin
   if (low === 'draw') return 'Empate';
   if (low === 'yes') return 'Sim';
   if (low === 'no') return 'Não';
+  if (low === 'odd') return 'Ímpar';
+  if (low === 'even') return 'Par';
   if (low === '1x') return '1X';
   if (low === '12') return '12';
   if (low === 'x2') return 'X2';
+  // "Ambas Marcam & Total de Gols" (btts-and-total-goals): yes/over, yes/under,
+  // no/over, no/under. A linha (2.5, 6.5…) vem no handicap da perna, não no nome.
+  const combo = low.replace(/\s*\/\s*/g, '/');
+  if (combo === 'yes/over' || combo === 'yes/under' || combo === 'no/over' || combo === 'no/under') {
+    const [btts, ou] = combo.split('/');
+    const lado = btts === 'yes' ? 'Sim' : 'Não';
+    const faixa = ou === 'over' ? 'Mais' : 'Menos';
+    const linha = goalLine(handicap);
+    return linha ? `${lado} e ${faixa} de ${linha}` : `${lado} e ${faixa}`;
+  }
   if (low.startsWith('mais')) return o.replace(/^mais\*?/i, 'Mais ').trim();
   if (low.startsWith('menos')) return o.replace(/^menos\*?/i, 'Menos ').trim();
   return o; // handicaps (H1(-0.5)) e demais ficam como estão

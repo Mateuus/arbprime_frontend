@@ -7,11 +7,17 @@ import { SurebetData } from '@/interfaces/arbitragem.interface';
  * pedido (prematch | live), com auto-update. O backend já ordena por melhor
  * lucro. A conexão do WS é gerida globalmente (wsManager); aqui só assinamos.
  */
-export function useSurebets(type: 'prematch' | 'live', autoUpdate = true) {
+export function useSurebets(type: 'prematch' | 'live', autoUpdate = true, enabled = true) {
   const [data, setData] = useState<SurebetData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Sem login (enabled=false) não assina o WS — não streama surebets p/ deslogado.
+    if (!enabled) {
+      setData([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handler = (msg: any) => {
@@ -23,7 +29,7 @@ export function useSurebets(type: 'prematch' | 'live', autoUpdate = true) {
     wsManager.subscribe(handler);
     wsManager.send({ method: 'arbitrage_betting', options: { type, autoUpdate } });
     return () => wsManager.unsubscribe(handler);
-  }, [type, autoUpdate]);
+  }, [type, autoUpdate, enabled]);
 
   return { data, loading };
 }

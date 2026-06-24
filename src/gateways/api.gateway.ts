@@ -189,6 +189,8 @@ export interface ExternalEventsParams {
   bookmaker?: string;
   sport?: string;
   league?: string;
+  countryKey?: string;
+  leagueId?: string;
   search?: string;
   dateFrom?: string;
   dateTo?: string;
@@ -226,8 +228,12 @@ export interface GroupedEvent {
   home: string;
   away: string;
   eventDate: string | null;
-  league: string | null;
-  country: string | null;
+  league: string | null;       // nome canônico da liga (fallback: cru)
+  country: string | null;      // país canônico (via leagues)
+  countryKey?: string | null;  // chave do país (ex.: "br")
+  leagueId?: string | null;
+  // 'active' | 'review' = grupo canônico (jogo casado); 'solo' = evento de 1 casa não casado.
+  status?: string;
   houses: GroupedHouse[];
 }
 
@@ -236,6 +242,8 @@ export interface EventGroupPrice {
   eventId: string;
   price: number;
   inverted: boolean;
+  // odd com vantagem (Super Placar/Super Odds). Tem limite de stake / 1 por cliente.
+  boosted?: boolean;
 }
 export interface EventGroupSelection {
   selection: string;
@@ -271,6 +279,11 @@ const getExternalEvents = async (params: ExternalEventsParams = {}) => {
 // Lista AGRUPADA (1 item por evento real, deduplicado entre casas).
 const getGroupedEvents = async (params: ExternalEventsParams = {}) => {
   return apiClient.get(`/external/events/grouped${buildEventsQuery(params)}`);
+};
+
+// Esportes + campeonatos presentes (para a sidebar de eventos).
+const getEventFacets = async (params: ExternalEventsParams = {}) => {
+  return apiClient.get(`/external/events/facets${buildEventsQuery(params)}`);
 };
 
 // Evento real (grupo) + comparação de odds entre casas.
@@ -366,6 +379,7 @@ export interface ProxyDTO {
   status: string | null;
   isPrivate: boolean;
   isEnabled: boolean;
+  scope: string[] | null; // slugs de casas; null/vazio = pool global
   comment: string | null;
   createdAt: string;
 }
@@ -378,7 +392,43 @@ export interface AddProxyDTO {
   login?: string;
   password?: string;
   isPrivate?: boolean;
+  scope?: string[] | null;
   comment?: string;
+}
+
+// Pacote residencial do Proxy-Seller (banda/tráfego em BYTES — a API entrega como string).
+export interface ResidentPackageDTO {
+  is_active?: boolean;
+  rotation?: number;
+  tarif_id?: number | string;
+  traffic_limit?: number | string;
+  traffic_usage?: number | string;
+  traffic_left?: number | string;
+  expired_at?: string;
+  auto_renew?: boolean;
+  [key: string]: unknown;
+}
+
+export interface ResidentListDTO {
+  id: number | string;
+  title?: string;
+  [key: string]: unknown;
+}
+
+export interface ResidentGeoCountryDTO {
+  code: string;
+  name: string;
+}
+
+export interface CreateResidentListDTO {
+  title: string;
+  country: string;
+  region?: string;
+  city?: string;
+  isp?: string;
+  rotation?: number;
+  ports?: number;
+  whitelist?: string;
 }
 
 const getProxies = async () => {
@@ -393,8 +443,8 @@ const addProxy = async (data: AddProxyDTO) => {
   return apiClient.post('/proxy', data);
 };
 
-const bulkAddProxies = async (list: string, protocol?: string) => {
-  return apiClient.post('/proxy/bulk', { list, protocol });
+const bulkAddProxies = async (list: string, protocol?: string, scope?: string[] | null) => {
+  return apiClient.post('/proxy/bulk', { list, protocol, scope });
 };
 
 const updateProxy = async (id: string, data: Partial<ProxyDTO>) => {
@@ -412,6 +462,235 @@ const testProxy = async (id: string) => {
 const deleteProxy = async (id: string) => {
   return apiClient.delete(`/proxy/${id}`);
 };
+
+// ---- Residencial (Proxy-Seller) ----
+const getResidentPackage = async () => {
+  return apiClient.get('/proxy/resident/package');
+};
+
+const getResidentLists = async () => {
+  return apiClient.get('/proxy/resident/lists');
+};
+
+const importResidentList = async (listId: number | string, proto?: string, scope?: string[] | null, title?: string) => {
+  return apiClient.post('/proxy/resident/import', { listId, proto, scope, title });
+};
+
+const getResidentGeo = async () => {
+  return apiClient.get('/proxy/resident/geo');
+};
+
+const createResidentList = async (data: CreateResidentListDTO) => {
+  return apiClient.post('/proxy/resident/list/create', data);
+};
+
+const renameResidentList = async (id: number | string, title: string) => {
+  return apiClient.post('/proxy/resident/list/rename', { id, title });
+};
+
+const deleteResidentList = async (id: number | string) => {
+  return apiClient.delete(`/proxy/resident/list/${id}`);
+};
+
+// ==================== TEAMS & ALIASES (curadoria — admin) ====================
+
+export interface TeamAliasDTO {
+  id: string;
+  teamId: string;
+  alias: string;
+  aliasNorm: string;
+  sport: string;
+  category: string;
+  bookmaker: string | null;
+  source: string;
+  status: string;
+  confidence: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamDTO {
+  id: string;
+  canonicalName: string;
+  canonicalNorm: string;
+  sport: string;
+  category: string;
+  country: string | null;
+  source: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  aliasCount?: number;
+}
+
+export interface TeamDetailDTO extends TeamDTO {
+  aliases: TeamAliasDTO[];
+}
+
+export interface UpsertTeamDTO {
+  canonicalName?: string;
+  sport?: string;
+  category?: string;
+  country?: string | null;
+  status?: string;
+}
+
+export interface UpsertAliasDTO {
+  alias?: string;
+  bookmaker?: string | null;
+  status?: string;
+}
+
+export interface TeamsPaginationDTO {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+export interface TeamsListDTO {
+  teams: TeamDTO[];
+  pagination: TeamsPaginationDTO;
+}
+
+const getTeams = async (params: { search?: string; sport?: string; category?: string; page?: number; limit?: number } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.search) qp.append('search', params.search);
+  if (params.sport) qp.append('sport', params.sport);
+  if (params.category) qp.append('category', params.category);
+  if (params.page) qp.append('page', String(params.page));
+  if (params.limit) qp.append('limit', String(params.limit));
+  const qs = qp.toString();
+  return apiClient.get(`/teams${qs ? `?${qs}` : ''}`);
+};
+
+const getTeam = async (id: string) => {
+  return apiClient.get(`/teams/${id}`);
+};
+
+const createTeam = async (data: UpsertTeamDTO) => {
+  return apiClient.post('/teams', data);
+};
+
+const updateTeam = async (id: string, data: UpsertTeamDTO) => {
+  return apiClient.put(`/teams/${id}`, data);
+};
+
+const mergeTeams = async (sourceId: string, targetId: string) => {
+  return apiClient.post('/teams/merge', { sourceId, targetId });
+};
+
+const addAlias = async (teamId: string, data: UpsertAliasDTO) => {
+  return apiClient.post(`/teams/${teamId}/aliases`, data);
+};
+
+const updateAlias = async (teamId: string, aliasId: string, data: UpsertAliasDTO) => {
+  return apiClient.put(`/teams/${teamId}/aliases/${aliasId}`, data);
+};
+
+const deleteAlias = async (teamId: string, aliasId: string) => {
+  return apiClient.delete(`/teams/${teamId}/aliases/${aliasId}`);
+};
+
+// ==================== LEAGUES & ALIASES (curadoria — admin) ====================
+
+export interface LeagueAliasDTO {
+  id: string;
+  leagueId: string;
+  alias: string;
+  aliasNorm: string;
+  sport: string;
+  bookmaker: string;
+  source: string;
+  status: string;
+  confidence: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeagueDTO {
+  id: string;
+  canonicalName: string;
+  canonicalNorm: string;
+  sport: string;
+  country: string | null;
+  countryKey: string | null;
+  source: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  aliasCount?: number;
+}
+
+export interface LeagueDetailDTO extends LeagueDTO {
+  aliases: LeagueAliasDTO[];
+}
+
+export interface UpsertLeagueDTO {
+  canonicalName?: string;
+  sport?: string;
+  country?: string | null;
+  countryKey?: string | null;
+  status?: string;
+}
+
+export interface UpsertLeagueAliasDTO {
+  alias?: string;
+  bookmaker?: string;
+  status?: string;
+}
+
+export interface LeagueCountryDTO {
+  countryKey: string | null;
+  country: string | null;
+  count: number;
+}
+
+const getLeagues = async (params: { search?: string; sport?: string; countryKey?: string; page?: number; limit?: number } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.search) qp.append('search', params.search);
+  if (params.sport) qp.append('sport', params.sport);
+  if (params.countryKey) qp.append('countryKey', params.countryKey);
+  if (params.page) qp.append('page', String(params.page));
+  if (params.limit) qp.append('limit', String(params.limit));
+  const qs = qp.toString();
+  return apiClient.get(`/leagues${qs ? `?${qs}` : ''}`);
+};
+const getLeagueCountries = async () => apiClient.get('/leagues/countries');
+const getLeague = async (id: string) => apiClient.get(`/leagues/${id}`);
+const createLeague = async (data: UpsertLeagueDTO) => apiClient.post('/leagues', data);
+const updateLeague = async (id: string, data: UpsertLeagueDTO) => apiClient.put(`/leagues/${id}`, data);
+const mergeLeagues = async (sourceId: string, targetId: string) => apiClient.post('/leagues/merge', { sourceId, targetId });
+const addLeagueAlias = async (leagueId: string, data: UpsertLeagueAliasDTO) => apiClient.post(`/leagues/${leagueId}/aliases`, data);
+const updateLeagueAlias = async (leagueId: string, aliasId: string, data: UpsertLeagueAliasDTO) => apiClient.put(`/leagues/${leagueId}/aliases/${aliasId}`, data);
+const deleteLeagueAlias = async (leagueId: string, aliasId: string) => apiClient.delete(`/leagues/${leagueId}/aliases/${aliasId}`);
+
+// ==================== NOMES DE MERCADO POR CASA (curadoria — admin) ====================
+
+export interface MarketNameDTO {
+  id: string;
+  bookmaker: string;   // "" = override global
+  marketId: string;    // id canônico (slug), ex.: "win-to-nil-away"
+  displayName: string; // nome como a casa apresenta no site
+  source: string;      // seed | feed | manual
+  createdAt: string;
+  updatedAt: string;
+}
+
+const getMarketNames = async (params: { search?: string; bookmaker?: string; marketId?: string } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.search) qp.append('search', params.search);
+  if (params.bookmaker !== undefined) qp.append('bookmaker', params.bookmaker);
+  if (params.marketId) qp.append('marketId', params.marketId);
+  const qs = qp.toString();
+  return apiClient.get(`/markets${qs ? `?${qs}` : ''}`);
+};
+const upsertMarketName = async (data: { bookmaker: string; marketId: string; displayName: string }) => apiClient.post('/markets', data);
+const bulkUpsertMarketNames = async (data: { marketId: string; displayName: string; bookmakers: string[] }) => apiClient.post('/markets/bulk', data);
+const updateMarketName = async (id: string, data: { displayName?: string; bookmaker?: string }) => apiClient.put(`/markets/${id}`, data);
+const deleteMarketName = async (id: string) => apiClient.delete(`/markets/${id}`);
 
 export const apiGateway = {
     register,
@@ -434,6 +713,7 @@ export const apiGateway = {
     // Eventos do banco (arbbetting via DB)
     getExternalEvents,
     getGroupedEvents,
+    getEventFacets,
     getEventGroup,
     getExternalEvent,
     getExternalEventOdds,
@@ -447,12 +727,44 @@ export const apiGateway = {
     toggleProxy,
     testProxy,
     deleteProxy,
+    getResidentPackage,
+    getResidentLists,
+    importResidentList,
+    getResidentGeo,
+    createResidentList,
+    renameResidentList,
+    deleteResidentList,
     // Bookmakers
     getBookmakers,
     addBookmaker,
     updateBookmaker,
     toggleBookmaker,
-    deleteBookmaker
+    deleteBookmaker,
+    // Times & Aliases
+    getTeams,
+    getTeam,
+    createTeam,
+    updateTeam,
+    mergeTeams,
+    addAlias,
+    updateAlias,
+    deleteAlias,
+    // Ligas & Aliases
+    getLeagues,
+    getLeagueCountries,
+    getLeague,
+    createLeague,
+    updateLeague,
+    mergeLeagues,
+    addLeagueAlias,
+    updateLeagueAlias,
+    deleteLeagueAlias,
+    // Nomes de mercado por casa
+    getMarketNames,
+    upsertMarketName,
+    bulkUpsertMarketNames,
+    updateMarketName,
+    deleteMarketName
 };
     
 export default apiGateway;

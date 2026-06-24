@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { GiHomeGarage, GiWallet, GiCoins, GiSoccerBall } from 'react-icons/gi';
-import { Gift, Infinity, CalendarClock, LayoutDashboard, Settings, Users, Zap, Clock, Network, Store } from 'lucide-react';
+import { Gift, Infinity, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags } from 'lucide-react';
 import { useMemo } from 'react';
 import { ReactNode } from 'react';
 import { useUserContext } from '@/context/UserContext';
@@ -146,15 +146,6 @@ export const useMenuItems = (): MenuItem[] => {
         onClick: () => router.push('/admin/actions')
       },
       {
-        id: 'admin-proxies',
-        name: 'Proxies',
-        path: '/admin/proxies',
-        icon: <Network size={22} />,
-        requiresAuth: true,
-        adminOnly: true,
-        onClick: () => router.push('/admin/proxies')
-      },
-      {
         id: 'admin-settings',
         name: 'Configurações',
         icon: <Settings size={22} />,
@@ -178,6 +169,42 @@ export const useMenuItems = (): MenuItem[] => {
             requiresAuth: true,
             adminOnly: true,
             onClick: () => router.push('/admin/bookmakers')
+          },
+          {
+            id: 'admin-teams',
+            name: 'Times & Aliases',
+            path: '/admin/teams',
+            icon: <Users2 size={18} />,
+            requiresAuth: true,
+            adminOnly: true,
+            onClick: () => router.push('/admin/teams')
+          },
+          {
+            id: 'admin-leagues',
+            name: 'Ligas & Aliases',
+            path: '/admin/leagues',
+            icon: <Trophy size={18} />,
+            requiresAuth: true,
+            adminOnly: true,
+            onClick: () => router.push('/admin/leagues')
+          },
+          {
+            id: 'admin-markets',
+            name: 'Mercados',
+            path: '/admin/markets',
+            icon: <Tags size={18} />,
+            requiresAuth: true,
+            adminOnly: true,
+            onClick: () => router.push('/admin/markets')
+          },
+          {
+            id: 'admin-proxies',
+            name: 'Proxies',
+            path: '/admin/proxies',
+            icon: <Network size={18} />,
+            requiresAuth: true,
+            adminOnly: true,
+            onClick: () => router.push('/admin/proxies')
           }
         ]
       },

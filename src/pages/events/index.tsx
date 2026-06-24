@@ -2,8 +2,12 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } fr
 import { useRouter } from 'next/router';
 import {
   Search, RefreshCcw, ChevronLeft, ChevronRight, ChevronDown, Trophy,
-  X, BarChart3, MapPin, Filter, Store
+  X, BarChart3, MapPin, Filter, Store, Layers
 } from 'lucide-react';
+import {
+  GiSoccerBall, GiBasketballBall, GiTennisBall, GiVolleyballBall,
+  GiBoxingGlove, GiHockey, GiBaseballBat, GiAmericanFootballHelmet, GiPingPongBat
+} from 'react-icons/gi';
 import { apiGateway, GroupedEvent, ExternalEventsParams } from '@/gateways/api.gateway';
 import { Select } from '@/components/ui/Select';
 import { BookmakerTag } from '@/components/bookmaker/BookmakerTag';
@@ -31,6 +35,39 @@ const SPORTS = [
   { value: 'tenis', label: 'Tênis' }
 ];
 
+// Facets da sidebar (esporte → país → campeonato, com contagem).
+interface FacetLeague { leagueId: string | null; league: string; count: number }
+interface FacetCountry { countryKey: string | null; country: string | null; count: number; leagues: FacetLeague[] }
+interface FacetSport { sport: string; count: number; countries: FacetCountry[] }
+
+// Sentinela do bucket "sem país" (alinha com o backend).
+const NO_COUNTRY = '__none__';
+const ckOf = (c: FacetCountry): string => c.countryKey || NO_COUNTRY;
+
+// Ícone por esporte (cobre os mais comuns; cai no troféu se desconhecido).
+type SportIcon = React.ComponentType<{ size?: number; className?: string }>;
+const SPORT_ICONS: Record<string, SportIcon> = {
+  futebol: GiSoccerBall,
+  basquete: GiBasketballBall,
+  tenis: GiTennisBall,
+  'tenis de mesa': GiPingPongBat,
+  volei: GiVolleyballBall,
+  voleibol: GiVolleyballBall,
+  mma: GiBoxingGlove,
+  boxe: GiBoxingGlove,
+  hoquei: GiHockey,
+  'hoquei no gelo': GiHockey,
+  beisebol: GiBaseballBat,
+  'futebol americano': GiAmericanFootballHelmet
+};
+const sportIcon = (sport: string, size = 16) => {
+  const Ico = SPORT_ICONS[(sport || '').toLowerCase()];
+  return Ico
+    ? <Ico size={size} className="shrink-0 text-teal-300/80" />
+    : <Trophy size={size - 2} className="shrink-0 text-teal-300/80" />;
+};
+const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
 const inputClass =
   'w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 ' +
   'focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500/50 transition';
@@ -46,8 +83,8 @@ const formatDateParts = (dateString: string | null): { day: string; time: string
   const d = new Date(dateString);
   if (Number.isNaN(d.getTime())) return { day: '—', time: '' };
   return {
-    day: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-    time: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    day: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }),
+    time: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
   };
 };
 
@@ -123,12 +160,17 @@ export default function EventsPage() {
   const [search, setSearch] = useState('');
   const [bookmaker, setBookmaker] = useState('');
   const [sport, setSport] = useState('');
-  const [league, setLeague] = useState('');
+  const [countryKey, setCountryKey] = useState('');
+  const [leagueId, setLeagueId] = useState('');
   // Aba: 'upcoming' = próximos (padrão) | 'past' = já aconteceram.
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
   const [sort, setSort] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Sidebar de esportes/campeonatos (estilo casa de aposta).
+  const [facets, setFacets] = useState<FacetSport[]>([]);
+  const [expandedSport, setExpandedSport] = useState('');
+  const [expandedCountry, setExpandedCountry] = useState(''); // chave `${sport}|${countryKey}`
   const limit = 20;
 
   // Debounce da busca (400ms).
@@ -138,7 +180,7 @@ export default function EventsPage() {
   }, [searchInput]);
 
   // Reset de página ao mudar filtros (ajuste durante render — padrão React).
-  const filterKey = `${search}|${bookmaker}|${sport}|${league}|${tab}|${sort}`;
+  const filterKey = `${search}|${bookmaker}|${sport}|${countryKey}|${leagueId}|${tab}|${sort}`;
   const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
   if (prevFilterKey !== filterKey) {
     setPrevFilterKey(filterKey);
@@ -156,7 +198,8 @@ export default function EventsPage() {
         ...(search && { search }),
         ...(bookmaker && { bookmaker }),
         ...(sport && { sport }),
-        ...(league && { league }),
+        ...(countryKey && { countryKey }),
+        ...(leagueId && { leagueId }),
         ...(tab === 'upcoming' ? { upcomingOnly: true } : { pastOnly: true })
       };
       const res = await apiGateway.getGroupedEvents(params);
@@ -171,12 +214,17 @@ export default function EventsPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, search, bookmaker, sport, league, tab, sort]);
+  }, [currentPage, search, bookmaker, sport, countryKey, leagueId, tab, sort]);
 
   // Ao trocar de aba, ajusta a ordenação padrão (próximos: mais cedo; encerrados: mais recentes).
   const switchTab = (next: 'upcoming' | 'past') => {
     setTab(next);
     setSort(next === 'past' ? 'desc' : 'asc');
+    // Os facets são por aba; limpa país/liga p/ não deixar um filtro "invisível" (a liga
+    // selecionada pode não existir na outra aba e sumiria do popover).
+    setCountryKey('');
+    setLeagueId('');
+    setExpandedCountry('');
   };
 
   useEffect(() => {
@@ -184,12 +232,41 @@ export default function EventsPage() {
     fetchEvents();
   }, [fetchEvents]);
 
+  // Carrega os esportes/campeonatos disponíveis (muda conforme a aba próximos/encerrados).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await apiGateway.getEventFacets(
+          tab === 'upcoming' ? { upcomingOnly: true } : { pastOnly: true }
+        );
+        if (!alive) return;
+        const list: FacetSport[] = res.data?.result === 1 ? (res.data.data?.sports || []) : [];
+        setFacets(list);
+        // Abre o primeiro esporte (ex.: futebol) por padrão, como numa casa de aposta.
+        setExpandedSport((cur) => cur || list[0]?.sport || '');
+      } catch {
+        /* sidebar é auxiliar — falha silenciosa não quebra a lista */
+      }
+    })();
+    return () => { alive = false; };
+  }, [tab]);
+
+  // Seleção pela sidebar (esporte → país → liga).
+  const selectSport = (s: string) => { setSport(s); setCountryKey(''); setLeagueId(''); setExpandedSport(s); };
+  const selectCountry = (s: string, ck: string) => { setSport(s); setCountryKey(ck); setLeagueId(''); setExpandedSport(s); setExpandedCountry(`${s}|${ck}`); };
+  const selectLeague = (s: string, ck: string, lid: string) => { setSport(s); setCountryKey(ck); setLeagueId(lid); setExpandedSport(s); setExpandedCountry(`${s}|${ck}`); };
+  const toggleExpand = (s: string) => setExpandedSport((cur) => (cur === s ? '' : s));
+  const toggleExpandCountry = (key: string) => setExpandedCountry((cur) => (cur === key ? '' : key));
+  const clearMarketFilters = () => { setSport(''); setCountryKey(''); setLeagueId(''); };
+
   const clearFilters = () => {
     setSearchInput('');
     setSearch('');
     setBookmaker('');
     setSport('');
-    setLeague('');
+    setCountryKey('');
+    setLeagueId('');
     setSort(tab === 'past' ? 'desc' : 'asc');
   };
 
@@ -200,10 +277,10 @@ export default function EventsPage() {
     router.push(`/events/event/${encodeURIComponent(h.bookmaker)}/${encodeURIComponent(h.eventId)}`);
   };
 
-  const hasFilters = Boolean(search || bookmaker || sport || league);
+  const hasFilters = Boolean(search || bookmaker || sport || countryKey || leagueId);
   // Quantos filtros (fora a busca/aba) estão ativos — mostrado no badge do botão.
   const defaultSort = tab === 'past' ? 'desc' : 'asc';
-  const activeFilters = [bookmaker, sport, league, sort !== defaultSort].filter(Boolean).length;
+  const activeFilters = [bookmaker, sport, countryKey || leagueId, sort !== defaultSort].filter(Boolean).length;
 
   // Janela de páginas em torno da atual.
   const pageNumbers = useMemo(() => {
@@ -261,6 +338,111 @@ export default function EventsPage() {
         ))}
       </div>
 
+      {/* Corpo: sidebar de esportes/campeonatos (lg+) + conteúdo */}
+      <div className="flex gap-4 items-start">
+        {/* Sidebar (estilo casa de aposta) — só desktop; no mobile usa-se o popover de Filtros */}
+        <aside className="hidden lg:block w-60 shrink-0 sticky top-4 self-start">
+          <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+            <div className="px-3 py-2.5 border-b border-white/10 flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Esportes</span>
+              {(sport || countryKey || leagueId) && (
+                <button onClick={clearMarketFilters} className="text-[11px] text-rose-300 hover:text-rose-200">Limpar</button>
+              )}
+            </div>
+            <div className="max-h-[calc(100vh-9rem)] overflow-y-auto p-1.5 space-y-0.5">
+              {/* Todos */}
+              <button
+                onClick={clearMarketFilters}
+                className={`flex items-center gap-2 w-full text-left rounded-lg px-2.5 py-2 text-sm transition ${
+                  !sport ? 'bg-teal-500/15 text-teal-200' : 'text-gray-200 hover:bg-white/10'
+                }`}
+              >
+                <Layers size={15} className="shrink-0 text-teal-300/80" />
+                <span className="truncate">Todos os esportes</span>
+              </button>
+
+              {facets.length === 0 && (
+                <div className="px-2.5 py-3 text-xs text-gray-500">Carregando esportes…</div>
+              )}
+
+              {facets.map((s) => {
+                const openSport = expandedSport === s.sport;
+                const activeSport = sport === s.sport;
+                return (
+                  <div key={s.sport}>
+                    <div className={`flex items-center gap-1 rounded-lg pr-1 transition ${activeSport ? 'bg-teal-500/15' : 'hover:bg-white/10'}`}>
+                      <button
+                        onClick={() => selectSport(s.sport)}
+                        className={`flex items-center gap-2 flex-1 min-w-0 text-left px-2.5 py-2 text-sm ${activeSport ? 'text-teal-200' : 'text-gray-200'}`}
+                      >
+                        {sportIcon(s.sport)}
+                        <span className="truncate">{cap(s.sport)}</span>
+                        <span className="ml-auto text-[11px] text-gray-500 tabular-nums shrink-0">{s.count}</span>
+                      </button>
+                      {s.countries.length > 0 && (
+                        <button onClick={() => toggleExpand(s.sport)} className="grid place-items-center h-6 w-6 rounded-md text-gray-400 hover:text-white hover:bg-white/10 shrink-0" title={openSport ? 'Recolher' : 'Expandir'}>
+                          <ChevronDown size={14} className={`transition ${openSport ? 'rotate-180' : ''}`} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Países do esporte */}
+                    {openSport && s.countries.map((c) => {
+                      const cKey = ckOf(c);
+                      const ckeyFull = `${s.sport}|${cKey}`;
+                      const openCountry = expandedCountry === ckeyFull;
+                      const activeCountry = activeSport && countryKey === cKey;
+                      const label = c.country || (c.countryKey ? c.countryKey : 'Sem país');
+                      return (
+                        <div key={cKey} className="mt-0.5 ml-3 pl-2 border-l border-white/10">
+                          <div className={`flex items-center gap-1 rounded-lg pr-1 transition ${activeCountry && !leagueId ? 'bg-teal-500/15' : 'hover:bg-white/10'}`}>
+                            <button
+                              onClick={() => selectCountry(s.sport, cKey)}
+                              className={`flex items-center gap-2 flex-1 min-w-0 text-left px-2.5 py-1.5 text-[13px] ${activeCountry ? 'text-teal-200' : 'text-gray-300'}`}
+                            >
+                              <span className="truncate">{label}</span>
+                              <span className="ml-auto text-[11px] text-gray-500 tabular-nums shrink-0">{c.count}</span>
+                            </button>
+                            {c.leagues.length > 0 && (
+                              <button onClick={() => toggleExpandCountry(ckeyFull)} className="grid place-items-center h-5 w-5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 shrink-0" title={openCountry ? 'Recolher' : 'Expandir'}>
+                                <ChevronDown size={13} className={`transition ${openCountry ? 'rotate-180' : ''}`} />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Ligas do país */}
+                          {openCountry && (
+                            <div className="mt-0.5 ml-3 pl-2 border-l border-white/10 space-y-0.5">
+                              {c.leagues.map((l) => {
+                                const lkey = l.leagueId || `raw:${l.league}`;
+                                const activeLeague = activeCountry && !!l.leagueId && leagueId === l.leagueId;
+                                return (
+                                  <button
+                                    key={lkey}
+                                    onClick={() => l.leagueId && selectLeague(s.sport, cKey, l.leagueId)}
+                                    disabled={!l.leagueId}
+                                    title={!l.leagueId ? 'Liga ainda não mapeada (cure em Ligas & Aliases)' : undefined}
+                                    className={`flex items-center gap-2 w-full text-left rounded-lg px-2.5 py-1.5 text-[13px] transition disabled:opacity-50 disabled:cursor-default ${activeLeague ? 'bg-teal-500/15 text-teal-200' : 'text-gray-300 hover:bg-white/10'}`}
+                                  >
+                                    <span className="truncate">{l.league}</span>
+                                    <span className="ml-auto text-[11px] text-gray-500 tabular-nums shrink-0">{l.count}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </aside>
+
+        {/* Conteúdo principal */}
+        <div className="flex-1 min-w-0">
       {/* Toolbar: busca + botão Filtros (popover) */}
       <div className="mb-4 flex items-center gap-2">
         {/* Busca */}
@@ -321,20 +503,48 @@ export default function EventsPage() {
                   <Select
                     className="mt-1"
                     value={sport}
-                    onChange={setSport}
-                    options={SPORTS.map((s) => ({ value: s.value, label: s.label }))}
+                    onChange={(v) => { setSport(v); setCountryKey(''); setLeagueId(''); }}
+                    options={
+                      facets.length
+                        ? [{ value: '', label: 'Todos os esportes' }, ...facets.map((f) => ({ value: f.sport, label: cap(f.sport) }))]
+                        : SPORTS.map((s) => ({ value: s.value, label: s.label }))
+                    }
                   />
                 </div>
 
-                <label className="block text-xs text-gray-400">
-                  Liga
-                  <input
-                    value={league}
-                    onChange={(e) => setLeague(e.target.value)}
-                    placeholder="Filtrar por liga..."
-                    className={`${inputClass} mt-1`}
-                  />
-                </label>
+                {(() => {
+                  const sportFacet = facets.find((f) => f.sport === sport);
+                  const countries = sportFacet?.countries || [];
+                  const curCountry = countries.find((c) => ckOf(c) === countryKey);
+                  return (
+                    <>
+                      <div className="block text-xs text-gray-400">
+                        País
+                        <Select
+                          className="mt-1"
+                          value={countryKey}
+                          onChange={(v) => { setCountryKey(v); setLeagueId(''); }}
+                          options={[
+                            { value: '', label: 'Todos os países' },
+                            ...countries.map((c) => ({ value: ckOf(c), label: `${c.country || c.countryKey || 'Sem país'} (${c.count})` }))
+                          ]}
+                        />
+                      </div>
+                      <div className="block text-xs text-gray-400">
+                        Liga
+                        <Select
+                          className="mt-1"
+                          value={leagueId}
+                          onChange={setLeagueId}
+                          options={[
+                            { value: '', label: 'Todas as ligas' },
+                            ...(curCountry?.leagues || []).filter((l) => l.leagueId).map((l) => ({ value: l.leagueId as string, label: `${l.league} (${l.count})` }))
+                          ]}
+                        />
+                      </div>
+                    </>
+                  );
+                })()}
 
                 <div className="block text-xs text-gray-400">
                   Ordenar por data
@@ -413,8 +623,9 @@ export default function EventsPage() {
                     )}
                   </div>
 
-                  {/* Casas (desktop) */}
-                  <div className="hidden md:block shrink-0"><HousesCount houses={ev.houses} /></div>
+                  {/* Casas (desktop) — largura fixa p/ o badge (1 casa / 11 casas) não
+                      empurrar e desalinhar a coluna do campeonato entre as linhas. */}
+                  <div className="hidden md:flex w-[92px] shrink-0 justify-end"><HousesCount houses={ev.houses} /></div>
 
                   {/* Ações */}
                   <div className="flex items-center gap-1 shrink-0">
@@ -471,6 +682,8 @@ export default function EventsPage() {
           </div>
         </div>
       )}
+        </div>{/* /conteúdo principal */}
+      </div>{/* /corpo flex */}
 
     </div>
   );

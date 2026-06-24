@@ -23,9 +23,11 @@ const familyOf = (slug: string): string => {
   if (slug.startsWith('double-chance')) return 'dc';
   if (slug === 'result-and-btts') return 'r-btts';
   if (slug === 'result-and-total-goals') return 'r-tg';
+  if (slug === 'btts-and-total-goals') return 'btts-tg';
   if (slug === 'half-time-full-time') return 'htft';
   if (slug === 'correct-score') return 'cs';
   if (slug === 'btts-both-halves') return 'btts2h';
+  if (slug.startsWith('win-to-nil')) return 'wintonil';
   if (slug.startsWith('both-teams-to-score')) return 'btts';
   if (slug.startsWith('draw-no-bet')) return 'dnb';
   if (slug.startsWith('european-handicap')) return 'eh';
@@ -80,6 +82,30 @@ export function explainMarket(marketId: string, home = 'Casa', away = 'Fora'): M
         ],
         coverage: 'Cobertura completa: ou os dois marcam, ou não.'
       };
+    case 'wintonil': {
+      // "Vence a Zero" (win-to-nil): a equipe vence E não sofre gol (clean sheet). Sim/Não.
+      const isAway = slug.includes('-away');
+      const team = isAway ? A : H;
+      const opp = isAway ? H : A;
+      const half = slug.includes('1st-half') ? ' no 1º tempo' : '';
+      return {
+        title: name,
+        summary: `"${team} vence a zero"${half}: ${team} ganha o jogo E não sofre nenhum gol (clean sheet). Mercado de 2 vias (Sim/Não).`,
+        rows: [
+          {
+            selection: 'Sim',
+            condition: `${team} vence e ${opp} não marca${half}`,
+            examples: isAway ? '0-1, 0-2, 0-3' : '1-0, 2-0, 3-0'
+          },
+          {
+            selection: 'Não',
+            condition: `${team} não vence, OU vence mas ${opp} marca${half}`,
+            examples: isAway ? '1-0, 1-1, 1-2' : '0-1, 1-1, 2-1'
+          }
+        ],
+        coverage: 'Cobertura completa: ou a equipe vence sem sofrer gols, ou não (qualquer outro placar). Surebet de 2 vias (Sim + Não complementares).'
+      };
+    }
     case 'dnb':
       return {
         title: name,
@@ -198,6 +224,18 @@ export function explainMarket(marketId: string, home = 'Casa', away = 'Fora'): M
           { selection: `${A} & Mais/Menos`, condition: `${A} vence em faixa de gols` }
         ],
         coverage: 'Mercado combinado — cobertura conforme as faixas usadas na surebet.'
+      };
+    case 'btts-tg':
+      return {
+        title: name,
+        summary: 'Ambas Marcam & Total de Gols: combina "ambas as equipes marcam" (Sim/Não) com o total de gols (Mais/Menos de X). Para a MESMA linha, as 4 seleções cobrem todos os placares.',
+        rows: [
+          { selection: 'Sim e Mais de X', condition: `${H} ≥ 1 e ${A} ≥ 1, e total acima da linha`, examples: 'linha 2.5 → 2-1, 2-2, 3-1' },
+          { selection: 'Sim e Menos de X', condition: `${H} ≥ 1 e ${A} ≥ 1, e total abaixo da linha`, examples: 'linha 2.5 → 1-1' },
+          { selection: 'Não e Mais de X', condition: 'pelo menos uma não marca, e total acima da linha', examples: 'linha 2.5 → 3-0, 0-3' },
+          { selection: 'Não e Menos de X', condition: 'pelo menos uma não marca, e total abaixo da linha', examples: 'linha 2.5 → 0-0, 1-0, 2-0' }
+        ],
+        coverage: 'Cobertura completa por linha: as 4 seleções (Sim/Não × Mais/Menos da MESMA linha) cobrem todo placar. Na variante "split" (3 vias), duas seleções do mesmo lado somam-se e cobrem aquele lado, complementadas por "Ambas Marcam" (Sim/Não) oposto.'
       };
     default:
       return {

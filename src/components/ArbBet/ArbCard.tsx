@@ -3,7 +3,7 @@ import { SurebetData, SurebetOdd } from '@/interfaces/arbitragem.interface';
 import { Calendar, Clock, Edit, Trash2 } from 'lucide-react';
 import { format, isBefore, differenceInHours, differenceInMinutes, parseISO, isValid } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
-import { capitalizeFirstLetter, getMarketName } from '@/utils/functions';
+import { capitalizeFirstLetter, getMarketName, getBookmakerEventLink } from '@/utils/functions';
 import { RenderPriceWithHistory } from './components/renderPriceWithHistory';
 import Link from 'next/link';
 
@@ -77,7 +77,7 @@ export default function ArbCard({ data, selected, onSelect }: Props) {
                 </div>
                 <div className="flex-1 text-left">
                     <Link
-                      href={`${odd.link}`}
+                      href={getBookmakerEventLink(odd.bookmaker, odd.eventId, data.sport, data.date) || odd.link || '#'}
                       className="block text-blue-500 hover:underline"
                       target="_blank"
                       rel="noopener noreferrer"
@@ -93,7 +93,7 @@ export default function ArbCard({ data, selected, onSelect }: Props) {
                     <span className="text-gray-500 font-semibold text-xs">R${odd.size}</span>
                   )}
                 </span>
-                    <span className="text-gray-600 dark:text-gray-300">{getMarketName(odd.market)}: {odd.option}</span>
+                    <span className="text-gray-600 dark:text-gray-300" title={odd.rawMarket ? `Mercado na casa: ${odd.rawMarket}` : undefined}>{getMarketName(odd.market)}: {odd.option}</span>
                 </div>
                 </div>
             ))}

@@ -9,6 +9,7 @@ export interface SelectOption {
   label: string;
   icon?: ReactNode;
   color?: string; // cor do texto do label (ex.: cor da casa de aposta)
+  node?: ReactNode; // conteúdo customizado (ex.: BookmakerTag) renderizado no lugar do label
 }
 
 interface SelectProps {
@@ -30,6 +31,7 @@ export function Select({ value, onChange, options, placeholder = '—', classNam
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<{ left: number; top: number; width: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const selected = options.find((o) => o.value === value);
 
@@ -46,10 +48,14 @@ export function Select({ value, onChange, options, placeholder = '—', classNam
     setOpen(true);
   };
 
-  // Fecha/reposiciona ao rolar ou redimensionar.
+  // Fecha ao rolar a PÁGINA/container (o menu é fixed e se descolaria do botão),
+  // mas IGNORA o scroll de dentro do próprio menu.
   useIsoLayoutEffect(() => {
     if (!open) return;
-    const onScroll = () => setOpen(false);
+    const onScroll = (e: Event) => {
+      if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+      setOpen(false);
+    };
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', onScroll);
     return () => {
@@ -69,11 +75,15 @@ export function Select({ value, onChange, options, placeholder = '—', classNam
           open ? 'border-teal-500/50' : 'border-white/10 hover:border-white/20'
         } ${buttonClassName}`}
       >
-        <span className="flex items-center gap-2 truncate">
-          {selected?.icon}
-          {selected
-            ? <span className="truncate" style={{ color: selected.color }}>{selected.label}</span>
-            : <span className="text-gray-500">{placeholder}</span>}
+        <span className="flex items-center gap-2 truncate flex-1 min-w-0">
+          {selected?.node
+            ? selected.node
+            : <>
+                {selected?.icon}
+                {selected
+                  ? <span className="truncate" style={{ color: selected.color }}>{selected.label}</span>
+                  : <span className="text-gray-500">{placeholder}</span>}
+              </>}
         </span>
         <ChevronDown size={14} className={`shrink-0 text-gray-400 transition ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -82,6 +92,7 @@ export function Select({ value, onChange, options, placeholder = '—', classNam
         <>
           <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />
           <div
+            ref={menuRef}
             style={{ left: rect.left, top: rect.top, minWidth: rect.width }}
             className="fixed z-[9999] max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-brand-dark p-1 shadow-2xl"
           >
@@ -94,7 +105,9 @@ export function Select({ value, onChange, options, placeholder = '—', classNam
                   o.value === value ? 'bg-teal-500/15 text-teal-200' : 'text-gray-200 hover:bg-white/10'
                 }`}
               >
-                <span className="flex items-center gap-2 truncate">{o.icon}<span className="truncate" style={{ color: o.color }}>{o.label}</span></span>
+                <span className="flex items-center gap-2 truncate flex-1 min-w-0">
+                  {o.node ? o.node : <>{o.icon}<span className="truncate" style={{ color: o.color }}>{o.label}</span></>}
+                </span>
                 {o.value === value && <Check size={14} className="shrink-0 text-teal-300" />}
               </button>
             ))}

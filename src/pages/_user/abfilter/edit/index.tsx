@@ -1,8 +1,8 @@
 'use client';
-import { ChevronLeft, Check, HelpCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, HelpCircle } from 'lucide-react';
 import { useRouter } from 'next/router';
 import { useEffect, useState, ReactNode } from 'react';
-import { apiGateway } from '@/gateways/api.gateway';
+import { apiGateway, BookmakerDTO } from '@/gateways/api.gateway';
 import FloatingInput from '@/components/ui/FloatingInput';
 import SportsCryptoLoading from '@/components/loaders/SportsCryptoLoading';
 import { CreateOrUpdateFilterDTO } from '@/interfaces';
@@ -57,6 +57,8 @@ const FilterFormPage = () => {
   const [selected, setSelected] = useState<string[]>([]);
   // Marca que já inicializamos as casas (para não re-selecionar todas após o usuário mexer).
   const [housesInit, setHousesInit] = useState(false);
+  // Famílias de clones expandidas (recolhidas por padrão; slug da mãe).
+  const [expandedHouses, setExpandedHouses] = useState<Set<string>>(new Set());
 
   // Edição: carrega o filtro.
   useEffect(() => {
@@ -104,6 +106,12 @@ const FilterFormPage = () => {
     setSelected((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]));
   const allSelected = registry.length > 0 && selected.length === registry.length;
   const toggleAll = () => setSelected(allSelected ? [] : registry.map((b) => b.slug));
+  const toggleHouseExpand = (slug: string) =>
+    setExpandedHouses((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug); else next.add(slug);
+      return next;
+    });
 
   // Aceita número (inclusive negativo) ou vazio.
   const numOrNull = (v: string): number | null => {
@@ -186,6 +194,22 @@ const FilterFormPage = () => {
 
   const inputBg = 'w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500/50 transition';
 
+  // Agrupa as casas por "família": mãe + clones (mesma operação/odds).
+  const bySort = (a: BookmakerDTO, b: BookmakerDTO) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+  const clonesByParent = new Map<string, BookmakerDTO[]>();
+  for (const b of registry) {
+    if (b.cloneOf) {
+      if (!clonesByParent.has(b.cloneOf)) clonesByParent.set(b.cloneOf, []);
+      clonesByParent.get(b.cloneOf)!.push(b);
+    }
+  }
+  const slugSet = new Set(registry.map((b) => b.slug));
+  // Topo: casas que não são clones + clones órfãos (mãe não cadastrada).
+  const topHouses = [
+    ...registry.filter((b) => !b.cloneOf),
+    ...registry.filter((b) => b.cloneOf && !slugSet.has(b.cloneOf))
+  ].sort(bySort);
+
   return (
     <div className="max-w-3xl mx-auto p-1 sm:p-2 text-white">
       <div className="flex items-center gap-2 mb-5">
@@ -232,20 +256,64 @@ const FilterFormPage = () => {
             {registry.length === 0 ? (
               <p className="text-xs text-gray-500">Nenhuma casa cadastrada. Cadastre em Configurações → Bookmakers.</p>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {registry.map((b) => {
-                  const on = selected.includes(b.slug);
+              <div className="space-y-1.5">
+                {topHouses.map((parent) => {
+                  const clones = (clonesByParent.get(parent.slug) || []).slice().sort(bySort);
+                  const hasClones = clones.length > 0;
+                  const open = hasClones && expandedHouses.has(parent.slug);
+                  const familySlugs = [parent.slug, ...clones.map((c) => c.slug)];
+                  const selInFamily = familySlugs.filter((s) => selected.includes(s)).length;
+                  const parentOn = selected.includes(parent.slug);
+                  const badgeClass = selInFamily === familySlugs.length
+                    ? 'bg-teal-500/15 text-teal-300 ring-teal-500/30'
+                    : selInFamily === 0
+                      ? 'bg-white/5 text-gray-400 ring-white/10'
+                      : 'bg-violet-500/15 text-violet-300 ring-violet-500/30';
                   return (
-                    <button
-                      type="button"
-                      key={b.slug}
-                      onClick={() => toggleHouse(b.slug)}
-                      className={`flex items-center gap-2 rounded-lg px-2.5 py-2 ring-1 transition text-left ${on ? 'bg-teal-500/15 ring-teal-500/40' : 'bg-white/5 ring-white/10 hover:bg-white/10'}`}
-                    >
-                      <BookmakerLogo name={b.name} slug={b.slug} logoUrl={b.logoUrl} color={b.color} size={18} />
-                      <span className="text-sm truncate flex-1" style={{ color: b.color || undefined }}>{b.name}</span>
-                      {on && <Check size={14} className="text-teal-300 shrink-0" />}
-                    </button>
+                    <div key={parent.slug}>
+                      <div className="flex items-center gap-2">
+                        {hasClones ? (
+                          <button type="button" onClick={() => toggleHouseExpand(parent.slug)} className="grid place-items-center h-9 w-7 shrink-0 rounded text-gray-400 hover:text-teal-300 hover:bg-white/10 transition" title={open ? 'Recolher' : 'Expandir'}>
+                            <ChevronRight size={16} className={`transition ${open ? 'rotate-90' : ''}`} />
+                          </button>
+                        ) : (
+                          <span className="w-7 shrink-0" />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => toggleHouse(parent.slug)}
+                          className={`flex items-center gap-2 rounded-lg px-2.5 py-2 ring-1 transition text-left flex-1 min-w-0 ${parentOn ? 'bg-teal-500/15 ring-teal-500/40' : 'bg-white/5 ring-white/10 hover:bg-white/10'}`}
+                        >
+                          <BookmakerLogo name={parent.name} slug={parent.slug} logoUrl={parent.logoUrl} color={parent.color} size={20} />
+                          <span className="text-sm truncate flex-1" style={{ color: parent.color || undefined }}>{parent.name}</span>
+                          {hasClones && (
+                            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ${badgeClass}`} title={`${selInFamily} de ${familySlugs.length} selecionadas nesta família`}>
+                              {selInFamily}/{familySlugs.length}
+                            </span>
+                          )}
+                          {parentOn && <Check size={14} className="text-teal-300 shrink-0" />}
+                        </button>
+                      </div>
+                      {open && (
+                        <div className="mt-1.5 ml-7 pl-3 border-l border-white/10 space-y-1.5">
+                          {clones.map((c) => {
+                            const on = selected.includes(c.slug);
+                            return (
+                              <button
+                                type="button"
+                                key={c.slug}
+                                onClick={() => toggleHouse(c.slug)}
+                                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 ring-1 transition text-left ${on ? 'bg-teal-500/15 ring-teal-500/40' : 'bg-white/5 ring-white/10 hover:bg-white/10'}`}
+                              >
+                                <BookmakerLogo name={c.name} slug={c.slug} logoUrl={c.logoUrl} color={c.color} size={18} />
+                                <span className="text-sm truncate flex-1" style={{ color: c.color || undefined }}>{c.name}</span>
+                                {on && <Check size={14} className="text-teal-300 shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>

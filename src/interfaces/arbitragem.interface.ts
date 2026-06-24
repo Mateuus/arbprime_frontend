@@ -20,6 +20,9 @@ export interface SurebetOdd {
     bookmaker: string;
     eventId: string;
     market: string;
+    rawMarket?: string;   // nome do mercado COMO A CASA mostra no site (ajuda a achar lá); pode faltar
+    rawSelection?: string; // nome da seleção/option como a casa mostra (opcional)
+    handicap?: number | string | null; // linha de gols dos mercados combinados (ex.: btts-and-total-goals)
     link?: string;
     historyPrice: { timestamp: number; price: number }[];
     otherOdds: { eventId: string; bookmaker: string; price: number, size?: number }[];

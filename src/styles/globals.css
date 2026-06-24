@@ -184,3 +184,47 @@ input:-webkit-autofill {
 .animate-slide-up {
   animation: slideUp 0.2s ease-out;
 }
+
+/* -------------------------------------------------------------------------
+   Borda "fita de LED" RGB que percorre a borda do card (surebets novas).
+   Usa um conic-gradient cuja origem (--led-angle) é animada via @property,
+   mascarado para aparecer SÓ na espessura da borda. Cobre os cantos porque
+   o conic-gradient preenche a caixa toda. Degrada para borda estática se o
+   browser não suportar @property.
+   ------------------------------------------------------------------------- */
+@property --led-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes led-rotate {
+  to { --led-angle: 360deg; }
+}
+
+.led-border {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px; /* espessura da fita */
+  background: conic-gradient(
+    from var(--led-angle),
+    #f43f5e, #f59e0b, #fde047, #4ade80, #22d3ee, #3b82f6, #a855f7, #f43f5e
+  );
+  /* mantém só o anel (exclui o miolo) */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: led-rotate 2.4s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .led-border { animation: none; }
+}

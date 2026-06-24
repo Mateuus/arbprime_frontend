@@ -61,7 +61,7 @@ export function BookmakerTag({ slug, size = 18, showName = true, className = '',
     <span className={`inline-flex items-center gap-1.5 min-w-0 ${className}`}>
       <BookmakerLogo name={name} slug={slug} logoUrl={b?.logoUrl} color={b?.color} size={size} />
       {showName && (
-        <span className={`font-medium truncate ${nameClassName}`} style={{ color: b?.color || undefined }}>
+        <span className={`font-medium truncate min-w-0 ${nameClassName}`} style={{ color: b?.color || undefined }}>
           {name}
         </span>
       )}
