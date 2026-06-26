@@ -35,9 +35,6 @@ const Register: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [cpf, setCpf] = useState('');
- 
-  const [nameDisabled, setNameDisabled] = useState(false);
-  const [isVerifyingCpf, setIsVerifyingCpf] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [currentError, setCurrentError] = useState("");
@@ -49,7 +46,12 @@ const Register: React.FC = () => {
   const PASSWORD_MIN_LENGTH = 6;
 
   const newPassErrors = validatePassword(password);
-  const isValid = password.length >= PASSWORD_MIN_LENGTH && newPassErrors.length === 0 && confirmPassword === password;
+  const isValid =
+    isValidCpf(cpf.replace(/\D/g, '')) &&
+    fullName.trim().length > 1 &&
+    password.length >= PASSWORD_MIN_LENGTH &&
+    newPassErrors.length === 0 &&
+    confirmPassword === password;
 
   const formatCpf = (value: string) => {
     return value
@@ -62,13 +64,7 @@ const Register: React.FC = () => {
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\D/g, '');
     if (raw.length <= 11) {
-      const formatted = formatCpf(raw);
-      setCpf(formatted);
-  
-      // Verifica automaticamente quando o CPF tiver 11 dígitos
-      if (raw.length === 11) {
-        handleCpfVerify(formatted);
-      }
+      setCpf(formatCpf(raw));
     }
   };
 
@@ -91,38 +87,6 @@ const Register: React.FC = () => {
     }
 
     setPhone(formatted);
-  };
-
-  const handleClearCpf = () => {
-    setCpf('');
-    setFirstName('');
-    setNameDisabled(false);
-  };
-
-  const handleCpfVerify = async (cpfToVerify: string = cpf) => {
-    const cleanCpf = cpfToVerify.replace(/\D/g, '');
-    setCurrentError('');
-    if (!isValidCpf(cleanCpf)) {
-      setCurrentError('CPF inválido');
-      return;
-    }
-  
-    setIsVerifyingCpf(true);
-    try {
-      const res = await apiGateway.lookupCPF(cleanCpf);
-      const data = res?.data?.data;
-      if (data?.name) {
-        setFirstName(data.name);
-        setNameDisabled(true);
-      } else {
-        setCurrentError('Nome não encontrado para este CPF');
-      }
-    } catch (err) {
-      console.error('Erro ao verificar CPF:', err);
-      setCurrentError('Erro ao verificar CPF');
-    } finally {
-      setIsVerifyingCpf(false);
-    }
   };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -214,16 +178,6 @@ const Register: React.FC = () => {
         value={cpf}
         onChange={handleCpfChange}
         placeholder="000.000.000-00"
-        rightButtonLabel={
-          nameDisabled && cpf.replace(/\D/g, '').length === 11
-            ? isVerifyingCpf ? '...' : 'Limpar'
-            : 'Verificar'
-        }
-        onRightButtonClick={
-          nameDisabled && cpf.replace(/\D/g, '').length === 11
-            ? handleClearCpf
-            : () => handleCpfVerify()
-        }
       />
 
         <FloatingInput
@@ -233,7 +187,6 @@ const Register: React.FC = () => {
           value={fullName}
           onChange={(e) => setFirstName(e.target.value)}
           placeholder="Seu nome completo"
-          disabled={nameDisabled}
         />
 
       <div className="grid grid-cols-[100px_1fr] gap-2">

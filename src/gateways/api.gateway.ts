@@ -124,9 +124,6 @@ const changePassowrd = async (currentPassword: string, newPassword: string) => {
   return apiClient.put('/user/change-password', { currentPassword, newPassword });
 };
 
-const lookupCPF = async (personal_id: string) => {
-  return apiClient.post('/user/lookup', { personal_id });
-};
 
 const getUserFilters = async () => {
   return apiClient.get('/user/abfilters');
@@ -1442,7 +1439,6 @@ export const apiGateway = {
     getUserInfo,
     getUserAuth,
     changePassowrd,
-    lookupCPF,
     getUserFilters,
     getFilterById,
     createFilter,
