@@ -1,10 +1,11 @@
 import React from 'react';
 import { RefreshCw, Zap, Server as ServerIcon } from 'lucide-react';
 import { useServer } from '@/hooks/useServer';
+import { Select, SelectOption } from '@/components/ui/Select';
 import type { ServerPreference } from '@/services/serverManager';
 
 interface ServerSelectorProps {
-  /** Compacto: usado no modal de login (menos texto). */
+  /** Compacto: usado no modal de login — renderiza um Select (dropdown). */
   compact?: boolean;
   className?: string;
 }
@@ -30,7 +31,8 @@ function pingLabel(ms: number | null | undefined): string {
 
 /**
  * Seletor de servidor (Principal / Secundário / Automático) com ping ao vivo.
- * Reutilizado no login e na aba "Servidor" do modal de conta.
+ * - No login (`compact`) vira um Select/dropdown enxuto.
+ * - Na aba "Servidor" do modal de conta, mostra cards com detalhes.
  *
  * Em ambiente local (dev) não há o que escolher, então o componente não renderiza.
  */
@@ -39,14 +41,37 @@ const ServerSelector: React.FC<ServerSelectorProps> = ({ compact = false, classN
 
   if (isLocal) return null;
 
-  const options: { value: ServerPreference; label: string; sub: string }[] = [
-    { value: 'auto', label: 'Automático', sub: 'Melhor ping + failover' },
+  const activeLabel = servers.find((s) => s.id === activeId)?.label;
+
+  const options: { value: ServerPreference; label: string }[] = [
+    { value: 'auto', label: 'Automático' },
     ...servers.map((s) => ({
       value: s.id as ServerPreference,
       label: s.label,
-      sub: s.apiUrl.replace(/^https?:\/\//, ''),
     })),
   ];
+
+  // Conteúdo de uma opção (usado tanto na lista quanto no botão do Select).
+  const optionNode = (value: ServerPreference, label: string) => {
+    const isAuto = value === 'auto';
+    const ms = isAuto ? latencies[activeId] : latencies[value as string];
+    return (
+      <span className="flex w-full items-center gap-2">
+        {isAuto ? <Zap size={14} className="shrink-0 text-green-400" /> : <StatusDot ms={ms} />}
+        <span className="font-medium text-white">{label}</span>
+        <span className="ml-auto flex items-center gap-1.5 text-xs">
+          {isAuto && activeLabel && <span className="text-gray-500">{activeLabel}</span>}
+          <span className={`font-mono ${ms === null ? 'text-red-400' : 'text-gray-300'}`}>{pingLabel(ms)}</span>
+        </span>
+      </span>
+    );
+  };
+
+  const selectOptions: SelectOption[] = options.map((opt) => ({
+    value: opt.value,
+    label: opt.label,
+    node: optionNode(opt.value, opt.label),
+  }));
 
   return (
     <div className={`w-full ${className}`}>
@@ -64,50 +89,14 @@ const ServerSelector: React.FC<ServerSelectorProps> = ({ compact = false, classN
         </button>
       </div>
 
-      <div className={`grid ${compact ? 'grid-cols-3' : 'grid-cols-1'} gap-2`}>
-        {options.map((opt) => {
-          const isAuto = opt.value === 'auto';
-          const selected = preference === opt.value;
-          // Para 'auto', mostramos o ping do servidor que está ativo no momento.
-          const ms = isAuto ? latencies[activeId] : latencies[opt.value as string];
-          const isActiveServer = !isAuto && opt.value === activeId;
-
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setPreference(opt.value)}
-              className={`flex flex-col items-start gap-1 rounded-lg border px-3 py-2 text-left transition-colors
-                ${selected
-                  ? 'border-green-400 bg-gradient-to-r from-[#0f2322] to-[#0f23220e]'
-                  : 'border-[#2b534f83] bg-brand-dark hover:border-green-700'}`}
-            >
-              <div className="flex w-full items-center justify-between gap-2">
-                <span className="flex items-center gap-2 text-sm font-semibold text-white">
-                  {isAuto ? <Zap size={14} className="text-green-400" /> : <StatusDot ms={ms} />}
-                  {opt.label}
-                </span>
-                {!isAuto && (
-                  <span className={`text-xs font-mono ${ms === null ? 'text-red-400' : 'text-gray-300'}`}>
-                    {pingLabel(ms)}
-                  </span>
-                )}
-              </div>
-              {!compact && (
-                <span className="flex w-full items-center justify-between text-[11px] text-gray-500">
-                  <span className="truncate">{opt.sub}</span>
-                  {isAuto && isActiveServer === false && (
-                    <span className="ml-2 shrink-0 text-gray-400">→ {servers.find((s) => s.id === activeId)?.label}</span>
-                  )}
-                </span>
-              )}
-              {compact && isAuto && (
-                <span className="text-[11px] text-gray-500">ativo: {servers.find((s) => s.id === activeId)?.label}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <Select
+        value={preference}
+        onChange={(v) => setPreference(v as ServerPreference)}
+        options={selectOptions}
+        className="w-full"
+        buttonClassName={compact ? '!bg-[#263a3a] !border-transparent' : '!bg-brand-dark !border-[#2b534f83]'}
+        title="Escolher servidor"
+      />
 
       {!compact && (
         <p className="mt-2 text-[11px] leading-snug text-gray-500">

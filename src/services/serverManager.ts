@@ -32,7 +32,6 @@ const PREF_KEY = 'arbprime.serverPref';
 const ACTIVE_KEY = 'arbprime.activeServer';
 
 const PING_TIMEOUT = 4000;       // ms — além disso o servidor é considerado fora
-const HEALTH_INTERVAL = 15000;   // ms — re-checagem periódica de saúde
 // Em modo 'auto' só troca de servidor se o concorrente for relevantemente
 // melhor, evitando "flapping" entre dois servidores de latência parecida.
 const HYSTERESIS_MS = 40;
@@ -43,7 +42,6 @@ class ServerManager {
   private latencies = new Map<string, number | null>();
   private pinging = false;
   private listeners = new Set<Listener>();
-  private healthTimer: ReturnType<typeof setInterval> | null = null;
   private started = false;
 
   /** Inicializa no cliente: carrega preferência salva e começa o monitor. */
@@ -70,9 +68,10 @@ class ServerManager {
       this.activeId = savedActive;
     }
 
-    // Mede agora e passa a re-checar periodicamente.
+    // Mede UMA vez no boot (no F5 → 2 pings, um por servidor). NÃO ficamos
+    // pingando em intervalo: re-medição só sob demanda (botão "testar"),
+    // ao trocar de preferência ou em failover (requisição real falhou).
     void this.pingAll();
-    this.healthTimer = setInterval(() => void this.pingAll(), HEALTH_INTERVAL);
   }
 
   // ---- leitura ----------------------------------------------------------
