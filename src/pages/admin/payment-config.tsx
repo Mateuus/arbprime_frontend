@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiGateway, ProviderConfigDTO, UpdateProviderConfigDTO } from '@/gateways/api.gateway';
 import {
-  RefreshCcw, Loader2, X, Save, Webhook, ServerCog, FlaskConical, Rocket, KeyRound
+  RefreshCcw, Loader2, X, Save, Webhook, ServerCog, FlaskConical, Rocket, KeyRound, Upload, FileCheck2
 } from 'lucide-react';
 
 const errorMessage = (e: unknown, fallback: string): string => {
@@ -19,6 +19,83 @@ const SecretField = ({ label, value, onChange, placeholder }: { label: string; v
     <input value={value} onChange={(e) => onChange(e.target.value)} className={`${inputClass} mt-1 font-mono`} placeholder={placeholder} />
   </label>
 );
+
+// Lê um arquivo e devolve seu conteúdo em base64 (sem o prefixo data URI).
+const fileToBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      resolve(result.replace(/^data:[^;]*;base64,/, ''));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
+// Campo do certificado .p12: caminho editável + botão de upload do arquivo.
+// O upload salva o .p12 em /certs no backend e devolve o caminho, que preenche o input.
+const CertField = ({
+  environment, value, onChange, placeholder, onMsg,
+}: {
+  environment: 'sandbox' | 'production';
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  onMsg: (m: { type: 'ok' | 'err'; text: string }) => void;
+}) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (file?: File | null) => {
+    if (!file) return;
+    if (!/\.p12$/i.test(file.name)) {
+      onMsg({ type: 'err', text: 'Selecione um arquivo .p12.' });
+      return;
+    }
+    setUploading(true);
+    try {
+      const dataBase64 = await fileToBase64(file);
+      const res = await apiGateway.uploadProviderCert({ environment, filename: file.name, dataBase64 });
+      if (res.data?.result === 1) {
+        const certPath: string = res.data.data?.certPath || `./certs/${file.name}`;
+        onChange(certPath);
+        onMsg({ type: 'ok', text: res.data.message || 'Certificado enviado.' });
+      } else {
+        onMsg({ type: 'err', text: res.data?.message || 'Falha ao enviar certificado.' });
+      }
+    } catch (e: unknown) {
+      const resp = (e as { response?: { data?: { message?: string } } })?.response;
+      onMsg({ type: 'err', text: resp?.data?.message || 'Falha ao enviar certificado.' });
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="text-xs text-gray-400">
+      <span className="block">Certificado (.p12)</span>
+      <div className="mt-1 flex gap-2">
+        <input value={value} onChange={(e) => onChange(e.target.value)} className={`${inputClass} font-mono flex-1`} placeholder={placeholder} />
+        <input ref={inputRef} type="file" accept=".p12,application/x-pkcs12" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-50 text-white text-xs font-medium transition"
+          title="Enviar arquivo .p12"
+        >
+          {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Enviar
+        </button>
+      </div>
+      {value && (
+        <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-300/80">
+          <FileCheck2 size={12} /> {value}
+        </span>
+      )}
+    </div>
+  );
+};
 
 const AdminPaymentConfigPage = () => {
   const [cfg, setCfg] = useState<ProviderConfigDTO | null>(null);
@@ -155,9 +232,7 @@ const AdminPaymentConfigPage = () => {
                 <>
                   <SecretField label="Client ID" value={form.prodClientId || ''} onChange={(v) => setForm({ ...form, prodClientId: v })} />
                   <SecretField label="Client Secret" value={form.prodClientSecret || ''} onChange={(v) => setForm({ ...form, prodClientSecret: v })} />
-                  <label className="block text-xs text-gray-400">Caminho do certificado (.p12)
-                    <input value={form.prodCertPath || ''} onChange={(e) => setForm({ ...form, prodCertPath: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="./certs/producao-xxx.p12" />
-                  </label>
+                  <CertField environment="production" value={form.prodCertPath || ''} onChange={(v) => setForm({ ...form, prodCertPath: v })} onMsg={setMsg} placeholder="./certs/producao-xxx.p12" />
                   <label className="block text-xs text-gray-400">Chave PIX recebedora
                     <input value={form.prodPixKey || ''} onChange={(e) => setForm({ ...form, prodPixKey: e.target.value })} className={`${inputClass} mt-1`} placeholder="chave PIX" />
                   </label>
@@ -166,9 +241,7 @@ const AdminPaymentConfigPage = () => {
                 <>
                   <SecretField label="Client ID" value={form.sandboxClientId || ''} onChange={(v) => setForm({ ...form, sandboxClientId: v })} />
                   <SecretField label="Client Secret" value={form.sandboxClientSecret || ''} onChange={(v) => setForm({ ...form, sandboxClientSecret: v })} />
-                  <label className="block text-xs text-gray-400">Caminho do certificado (.p12)
-                    <input value={form.sandboxCertPath || ''} onChange={(e) => setForm({ ...form, sandboxCertPath: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="./certs/homologacao-xxx.p12" />
-                  </label>
+                  <CertField environment="sandbox" value={form.sandboxCertPath || ''} onChange={(v) => setForm({ ...form, sandboxCertPath: v })} onMsg={setMsg} placeholder="./certs/homologacao-xxx.p12" />
                   <label className="block text-xs text-gray-400">Chave PIX recebedora
                     <input value={form.sandboxPixKey || ''} onChange={(e) => setForm({ ...form, sandboxPixKey: e.target.value })} className={`${inputClass} mt-1`} placeholder="chave PIX" />
                   </label>

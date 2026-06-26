@@ -996,6 +996,8 @@ const getPaymentTransactions = async (params: { status?: string; page?: number; 
 };
 const getProviderConfig = async () => apiClient.get('/payment/config');
 const updateProviderConfig = async (data: UpdateProviderConfigDTO) => apiClient.put('/payment/config', data);
+const uploadProviderCert = async (data: { environment: 'sandbox' | 'production'; filename: string; dataBase64: string }) =>
+  apiClient.post('/payment/config/cert', data);
 const registerPaymentWebhook = async () => apiClient.post('/payment/config/register-webhook');
 const getPaymentWebhookInfo = async () => apiClient.get('/payment/config/webhook-info');
 
@@ -1520,6 +1522,7 @@ export const apiGateway = {
     getPaymentTransactions,
     getProviderConfig,
     updateProviderConfig,
+    uploadProviderCert,
     registerPaymentWebhook,
     getPaymentWebhookInfo,
     // Usuários (admin)
