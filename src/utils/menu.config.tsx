@@ -209,7 +209,7 @@ export const useMenuItems = (): MenuItem[] => {
         ]
       },
 
-      // ===================== ADMIN: PLATAFORMA =====================
+      // ===================== ADMIN =====================
       {
         id: 'sec-admin-platform',
         name: 'Administração',
@@ -226,6 +226,16 @@ export const useMenuItems = (): MenuItem[] => {
         requiresAuth: true,
         adminOnly: true,
         onClick: () => router.push('/admin/dashboard')
+      },
+
+      // ----- Gestão: usuários, financeiro, afiliados, suporte -----
+      {
+        id: 'sec-admin-gestao',
+        name: 'Gestão',
+        icon: null,
+        header: true,
+        requiresAuth: true,
+        adminOnly: true
       },
       {
         id: 'admin-users',
@@ -264,15 +274,6 @@ export const useMenuItems = (): MenuItem[] => {
         onClick: () => router.push('/admin/payment-approvals')
       },
       {
-        id: 'admin-reports',
-        name: 'Reclamações',
-        path: '/admin/reports',
-        icon: <Flag size={22} />,
-        requiresAuth: true,
-        adminOnly: true,
-        onClick: () => router.push('/admin/reports')
-      },
-      {
         id: 'admin-affiliates',
         name: 'Afiliados',
         icon: <Handshake size={22} />,
@@ -299,7 +300,71 @@ export const useMenuItems = (): MenuItem[] => {
           }
         ]
       },
-      // ===================== ADMIN: SISTEMA =====================
+      {
+        id: 'admin-reports',
+        name: 'Reclamações',
+        path: '/admin/reports',
+        icon: <Flag size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/reports')
+      },
+
+      // ----- Catálogo: curadoria de dados que alimenta o matching -----
+      {
+        id: 'sec-admin-catalog',
+        name: 'Catálogo',
+        icon: null,
+        header: true,
+        requiresAuth: true,
+        adminOnly: true
+      },
+      {
+        id: 'admin-bookmakers',
+        name: 'Bookmakers',
+        path: '/admin/bookmakers',
+        icon: <Store size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/bookmakers')
+      },
+      {
+        id: 'admin-teams',
+        name: 'Times & Aliases',
+        path: '/admin/teams',
+        icon: <Users2 size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/teams')
+      },
+      {
+        id: 'admin-leagues',
+        name: 'Ligas & Aliases',
+        path: '/admin/leagues',
+        icon: <Trophy size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/leagues')
+      },
+      {
+        id: 'admin-markets',
+        name: 'Mercados',
+        path: '/admin/markets',
+        icon: <Tags size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/markets')
+      },
+
+      // ----- Sistema: operação e configurações -----
+      {
+        id: 'sec-admin-system',
+        name: 'Sistema',
+        icon: null,
+        header: true,
+        requiresAuth: true,
+        adminOnly: true
+      },
       {
         id: 'admin-actions',
         name: 'Ações',
@@ -308,6 +373,15 @@ export const useMenuItems = (): MenuItem[] => {
         requiresAuth: true,
         adminOnly: true,
         onClick: () => router.push('/admin/actions')
+      },
+      {
+        id: 'admin-proxies',
+        name: 'Proxies',
+        path: '/admin/proxies',
+        icon: <Network size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/proxies')
       },
       {
         id: 'admin-settings',
@@ -335,42 +409,6 @@ export const useMenuItems = (): MenuItem[] => {
             onClick: () => router.push('/admin/payment-config')
           },
           {
-            id: 'admin-bookmakers',
-            name: 'Bookmakers',
-            path: '/admin/bookmakers',
-            icon: <Store size={18} />,
-            requiresAuth: true,
-            adminOnly: true,
-            onClick: () => router.push('/admin/bookmakers')
-          },
-          {
-            id: 'admin-teams',
-            name: 'Times & Aliases',
-            path: '/admin/teams',
-            icon: <Users2 size={18} />,
-            requiresAuth: true,
-            adminOnly: true,
-            onClick: () => router.push('/admin/teams')
-          },
-          {
-            id: 'admin-leagues',
-            name: 'Ligas & Aliases',
-            path: '/admin/leagues',
-            icon: <Trophy size={18} />,
-            requiresAuth: true,
-            adminOnly: true,
-            onClick: () => router.push('/admin/leagues')
-          },
-          {
-            id: 'admin-markets',
-            name: 'Mercados',
-            path: '/admin/markets',
-            icon: <Tags size={18} />,
-            requiresAuth: true,
-            adminOnly: true,
-            onClick: () => router.push('/admin/markets')
-          },
-          {
             id: 'admin-valuebet',
             name: 'Value Bets',
             path: '/admin/valuebet-config',
@@ -378,15 +416,6 @@ export const useMenuItems = (): MenuItem[] => {
             requiresAuth: true,
             adminOnly: true,
             onClick: () => router.push('/admin/valuebet-config')
-          },
-          {
-            id: 'admin-proxies',
-            name: 'Proxies',
-            path: '/admin/proxies',
-            icon: <Network size={18} />,
-            requiresAuth: true,
-            adminOnly: true,
-            onClick: () => router.push('/admin/proxies')
           }
         ]
       },

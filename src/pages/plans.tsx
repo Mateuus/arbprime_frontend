@@ -263,42 +263,28 @@ const EfiCheckout = ({ plan, onClose, onPaid }: { plan: PlanDTO; onClose: () => 
 // ----- Checkout manual (QR estático + comprovante + aprovação) -----
 
 const ManualCheckout = ({ plan, onClose, onPaid }: { plan: PlanDTO; onClose: () => void; onPaid: () => void }) => {
-  const [loading, setLoading] = useState(true);
+  // 'form' = revisão + cupom; 'pay' = dados de pagamento + comprovante.
+  const [phase, setPhase] = useState<'form' | 'pay'>('form');
+  const [generating, setGenerating] = useState(false);
   const [data, setData] = useState<ManualCheckoutDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('pending');
   const [reviewNote, setReviewNote] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
+  // Cupom
+  const [couponInput, setCouponInput] = useState('');
+  const [applied, setApplied] = useState<CouponValidationDTO | null>(null);
+  const [couponMsg, setCouponMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [validating, setValidating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await apiGateway.createManualCheckout(plan.id);
-        if (!mounted) return;
-        if (res.data?.result === 1) {
-          const d: ManualCheckoutDTO = res.data.data;
-          setData(d);
-          setStatus(d.status);
-          setReviewNote(d.reviewNote || null);
-        } else setError(res.data?.message || 'Erro ao iniciar pagamento manual.');
-      } catch (e: unknown) {
-        if (mounted) setError(errorMessage(e, 'Erro ao iniciar pagamento manual.'));
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; stopPolling(); };
-  }, [plan.id]);
-
   // Após enviar o comprovante (in_review), faz polling aguardando a aprovação do admin.
   useEffect(() => {
-    if (!data?.txid || status !== 'in_review') return;
+    if (phase !== 'pay' || !data?.txid || status !== 'in_review') return;
     pollRef.current = setInterval(async () => {
       try {
         const res = await apiGateway.getCheckoutStatus(data.txid);
@@ -311,7 +297,35 @@ const ManualCheckout = ({ plan, onClose, onPaid }: { plan: PlanDTO; onClose: () 
     }, 5000);
     return stopPolling;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.txid, status]);
+  }, [phase, data?.txid, status]);
+
+  const applyCoupon = async () => {
+    const code = couponInput.trim();
+    if (!code) return;
+    setValidating(true); setCouponMsg(null);
+    try {
+      const res = await apiGateway.validateCoupon(code, plan.id);
+      const d = res.data?.data as CouponValidationDTO | undefined;
+      if (res.data?.result === 1 && d?.valid) { setApplied(d); setCouponMsg({ type: 'ok', text: res.data.message || 'Cupom aplicado!' }); }
+      else { setApplied(null); setCouponMsg({ type: 'err', text: res.data?.message || 'Cupom inválido.' }); }
+    } catch (e: unknown) {
+      setApplied(null); setCouponMsg({ type: 'err', text: errorMessage(e, 'Erro ao validar cupom.') });
+    } finally { setValidating(false); }
+  };
+  const removeCoupon = () => { setApplied(null); setCouponInput(''); setCouponMsg(null); };
+
+  const generate = async () => {
+    setGenerating(true); setError(null);
+    try {
+      const res = await apiGateway.createManualCheckout(plan.id, applied?.couponCode || undefined);
+      if (res.data?.result === 1) {
+        const d: ManualCheckoutDTO = res.data.data;
+        setData(d); setStatus(d.status); setReviewNote(d.reviewNote || null); setPhase('pay');
+      } else setError(res.data?.message || 'Erro ao iniciar pagamento manual.');
+    } catch (e: unknown) {
+      setError(errorMessage(e, 'Erro ao iniciar pagamento manual.'));
+    } finally { setGenerating(false); }
+  };
 
   const copy = async () => {
     if (!data?.pixCopiaECola) return;
@@ -336,9 +350,51 @@ const ManualCheckout = ({ plan, onClose, onPaid }: { plan: PlanDTO; onClose: () 
     }
   };
 
-  if (loading) return <div className="py-12 text-center text-gray-400"><Loader2 className="animate-spin mx-auto mb-3" /> Carregando dados de pagamento...</div>;
-  if (error && !data) return <div className="py-8 text-center"><div className="bg-rose-500/10 ring-1 ring-rose-500/30 text-rose-200 rounded-xl px-4 py-3 text-sm">{error}</div></div>;
   if (status === 'completed') return <PaidView planName={plan.name} onClose={onClose} />;
+
+  // ---- Fase de revisão + cupom ----
+  if (phase === 'form') {
+    const total = applied ? applied.finalAmountCents / 100 : plan.finalPrice;
+    const discount = applied ? applied.discountCents / 100 : 0;
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4 flex items-center justify-between">
+          <div>
+            <div className="font-semibold text-white">{plan.name}</div>
+            <div className="text-xs text-gray-400">{plan.durationInDays} dias de acesso</div>
+          </div>
+          <div className="text-right">
+            <div className="text-lg font-bold text-teal-300">{brl(total)}</div>
+            {discount > 0 && <div className="text-[11px] text-gray-500 line-through">{brl(plan.finalPrice)}</div>}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Cupom de desconto</label>
+          {applied ? (
+            <div className="flex items-center justify-between rounded-lg bg-teal-500/10 ring-1 ring-teal-500/30 px-3 py-2">
+              <span className="inline-flex items-center gap-2 text-sm text-teal-200 font-semibold"><Tag size={15} /> {applied.couponCode} <span className="text-teal-300/80 font-normal">−{brl(discount)}</span></span>
+              <button onClick={removeCoupon} className="text-gray-400 hover:text-rose-400" title="Remover cupom"><X size={16} /></button>
+            </div>
+          ) : (
+            <div className="flex items-stretch gap-2">
+              <input value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} onKeyDown={(e) => { if (e.key === 'Enter') applyCoupon(); }} placeholder="Digite seu cupom" className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40 uppercase" />
+              <button onClick={applyCoupon} disabled={validating || !couponInput.trim()} className="px-4 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold text-sm disabled:opacity-50 inline-flex items-center gap-1.5">{validating ? <Loader2 className="animate-spin" size={15} /> : 'Aplicar'}</button>
+            </div>
+          )}
+          {couponMsg && <p className={`mt-1.5 text-xs ${couponMsg.type === 'ok' ? 'text-teal-300' : 'text-rose-300'}`}>{couponMsg.text}</p>}
+        </div>
+
+        {error && <div className="bg-rose-500/10 ring-1 ring-rose-500/30 text-rose-200 rounded-xl px-4 py-3 text-sm">{error}</div>}
+
+        <button onClick={generate} disabled={generating} className="w-full py-3 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold inline-flex items-center justify-center gap-2 disabled:opacity-60">
+          {generating ? <><Loader2 className="animate-spin" size={18} /> Gerando...</> : <><ScanLine size={18} /> Continuar • {brl(total)}</>}
+        </button>
+      </div>
+    );
+  }
+
+  if (error && !data) return <div className="py-8 text-center"><div className="bg-rose-500/10 ring-1 ring-rose-500/30 text-rose-200 rounded-xl px-4 py-3 text-sm">{error}</div></div>;
 
   if (status === 'in_review') {
     return (

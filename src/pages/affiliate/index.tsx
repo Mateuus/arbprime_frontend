@@ -18,6 +18,11 @@ const errorMessage = (e: unknown, fallback: string): string => {
 const brlCents = (c: number) => ((c || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const dateTime = (d: string | null) => (d ? new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 const dateOnly = (d: string | null) => (d ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—');
+// Rótulo para datas 'YYYY-MM-DD' (date-only): formata sem passar pelo UTC (evita off-by-one).
+const dayLabel = (d: string) => {
+  const [y, m, dd] = (d || '').split('-');
+  return y && m && dd ? `${dd}/${m}/${y.slice(2)}` : d;
+};
 
 const PERIODS: { key: 'week' | 'month' | 'year' | 'all'; label: string }[] = [
   { key: 'week', label: '7 dias' },
@@ -54,7 +59,7 @@ const StatCard = ({ icon, label, value, hint, tone = 'teal' }: { icon: React.Rea
 
 const AffiliatePanel = () => {
   const router = useRouter();
-  const { user, isLoading } = useUserContext();
+  const { isLoading } = useUserContext();
   const [period, setPeriod] = useState<'week' | 'month' | 'year' | 'all'>('month');
   const [dash, setDash] = useState<AffiliateDashboardDTO | null>(null);
   const [coupons, setCoupons] = useState<CouponDTO[]>([]);
@@ -114,7 +119,7 @@ const AffiliatePanel = () => {
     return <div className="w-full px-3 sm:px-6 py-16 text-center text-gray-400"><Loader2 className="animate-spin mx-auto" /></div>;
   }
 
-  if (notAffiliate || (user && !user.isAffiliate && !dash)) {
+  if (notAffiliate) {
     return (
       <div className="w-full px-3 sm:px-6 py-16">
         <div className="max-w-md mx-auto text-center rounded-2xl border border-white/10 bg-white/5 p-8">
@@ -205,7 +210,7 @@ const AffiliatePanel = () => {
             {dash!.daily.map((d) => (
               <div key={d.date} className="flex-1 group relative flex flex-col items-center justify-end">
                 <div className="w-full rounded-t bg-teal-500/60 hover:bg-teal-400 transition-all" style={{ height: `${Math.max(3, (d.commissionCents / maxDaily) * 100)}%` }} />
-                <div className="absolute -top-7 hidden group-hover:block whitespace-nowrap text-[10px] bg-black/80 text-white px-1.5 py-0.5 rounded">{dateOnly(d.date)}: {brlCents(d.commissionCents)}</div>
+                <div className="absolute -top-7 hidden group-hover:block whitespace-nowrap text-[10px] bg-black/80 text-white px-1.5 py-0.5 rounded">{dayLabel(d.date)}: {brlCents(d.commissionCents)}</div>
               </div>
             ))}
           </div>
