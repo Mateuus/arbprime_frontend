@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Store, ExternalLink, ChevronRight, X, ArrowLeftRight, Link2, BarChart3 } from 'lucide-react';
 import { useBookmakers } from '@/hooks/useBookmakers';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
+import { CommissionBadge } from '@/components/bookmaker/CommissionBadge';
 import { GroupedHouse, BookmakerDTO } from '@/gateways/api.gateway';
 
 // Casa do evento já mesclada com o registro (nome/cor/logo/site) da casa.
@@ -299,6 +300,7 @@ function HouseRow({
               <ArrowLeftRight size={9} /> inv
             </span>
           )}
+          <CommissionBadge pct={n.b?.commissionPct} />
         </div>
         <div className="truncate font-mono text-[11px] text-gray-500">{n.slug}</div>
       </div>

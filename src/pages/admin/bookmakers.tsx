@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiGateway, BookmakerDTO, UpsertBookmakerDTO } from '@/gateways/api.gateway';
 import { Store, Plus, RefreshCcw, Pencil, Trash2, X, Search, CheckCircle2, XCircle, ChevronRight, ChevronLeft, ImagePlus } from 'lucide-react';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
+import { CommissionBadge } from '@/components/bookmaker/CommissionBadge';
 import { Select } from '@/components/ui/Select';
 
 // Slugs que o arbbetting_master fornece (atalho ao cadastrar).
@@ -19,8 +20,9 @@ interface BookmakerForm {
   url: string;
   cloneOf: string;
   sortOrder: string;
+  commissionPct: string;
 }
-const emptyForm: BookmakerForm = { slug: '', name: '', logoUrl: '', color: '', url: '', cloneOf: '', sortOrder: '0' };
+const emptyForm: BookmakerForm = { slug: '', name: '', logoUrl: '', color: '', url: '', cloneOf: '', sortOrder: '0', commissionPct: '' };
 
 const errorMessage = (e: unknown, fallback: string): string => {
   const resp = (e as { response?: { data?: { message?: string } } })?.response;
@@ -72,7 +74,7 @@ const AdminBookmakersPage = () => {
   const openAdd = () => { setEditing(null); setForm(emptyForm); setModalOpen(true); };
   const openEdit = (b: BookmakerDTO) => {
     setEditing(b);
-    setForm({ slug: b.slug, name: b.name, logoUrl: b.logoUrl || '', color: b.color || '', url: b.url || '', cloneOf: b.cloneOf || '', sortOrder: String(b.sortOrder ?? 0) });
+    setForm({ slug: b.slug, name: b.name, logoUrl: b.logoUrl || '', color: b.color || '', url: b.url || '', cloneOf: b.cloneOf || '', sortOrder: String(b.sortOrder ?? 0), commissionPct: b.commissionPct != null ? String(b.commissionPct) : '' });
     setModalOpen(true);
   };
 
@@ -83,6 +85,7 @@ const AdminBookmakersPage = () => {
     }
     setSaving(true);
     try {
+      const comm = parseFloat(form.commissionPct.replace(',', '.'));
       const payload: UpsertBookmakerDTO = {
         slug: form.slug.trim(),
         name: form.name.trim(),
@@ -90,6 +93,7 @@ const AdminBookmakersPage = () => {
         color: form.color.trim() || null,
         url: form.url.trim() || null,
         cloneOf: form.cloneOf.trim() || null,
+        commissionPct: Number.isFinite(comm) ? comm : null,
         sortOrder: Number(form.sortOrder) || 0
       };
       if (editing) {
@@ -236,7 +240,10 @@ const AdminBookmakersPage = () => {
             </span>
           )}
         </div>
-        <div className="text-[11px] text-gray-500 font-mono truncate">{b.slug}</div>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[11px] text-gray-500 font-mono truncate">{b.slug}</span>
+          <CommissionBadge pct={b.commissionPct} />
+        </div>
         {/* Linha do clone já fica aninhada na mãe; "clone de X" só p/ clone órfão (mãe não cadastrada). */}
         {!isClone && b.cloneOf && (
           <div className="text-[10px] text-violet-300/80 truncate">↳ clone de {b.cloneOf}</div>
@@ -451,6 +458,12 @@ const AdminBookmakersPage = () => {
               <label className="block text-xs text-gray-400">
                 Site (opcional)
                 <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} className={`${inputClass} mt-1`} placeholder="https://pinnacle.com" />
+              </label>
+              {/* Comissão da casa (exchange) — entra automática na calculadora */}
+              <label className="block text-xs text-gray-400">
+                Comissão (%) <span className="text-gray-600">(exchange — ex.: Betfair)</span>
+                <input value={form.commissionPct} onChange={(e) => setForm({ ...form, commissionPct: e.target.value })} inputMode="decimal" className={`${inputClass} mt-1`} placeholder="ex.: 6.5" />
+                <span className="mt-1 block text-[11px] text-gray-500">Preenche a comissão automaticamente na calculadora (incide sobre o lucro). Deixe vazio para casas comuns.</span>
               </label>
               {/* Clone de outra casa (opcional) */}
               <div className="block text-xs text-gray-400">

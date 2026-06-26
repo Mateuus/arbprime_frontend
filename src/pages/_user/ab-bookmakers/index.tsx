@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Store, ExternalLink, ChevronRight } from 'lucide-react';
 import { useBookmakers } from '@/hooks/useBookmakers';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
+import { CommissionBadge } from '@/components/bookmaker/CommissionBadge';
 import { BookmakerDTO } from '@/gateways/api.gateway';
 
 const HouseRow = ({
@@ -29,6 +30,7 @@ const HouseRow = ({
               {cloneCount} {cloneCount === 1 ? 'clone' : 'clones'}
             </span>
           )}
+          <CommissionBadge pct={b.commissionPct} />
         </div>
         <div className="text-[11px] text-gray-500 font-mono truncate">{b.slug}</div>
       </div>

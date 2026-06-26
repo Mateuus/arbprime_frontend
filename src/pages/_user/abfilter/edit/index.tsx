@@ -10,6 +10,7 @@ import AlertModal from '@/components/modals/AlertModal';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useBookmakers } from '@/hooks/useBookmakers';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
+import { CommissionBadge } from '@/components/bookmaker/CommissionBadge';
 
 // Label com ícone [?] e tooltip explicativo.
 const FieldLabel = ({ children, help }: { children: ReactNode; help: ReactNode }) => (
@@ -286,6 +287,7 @@ const FilterFormPage = () => {
                         >
                           <BookmakerLogo name={parent.name} slug={parent.slug} logoUrl={parent.logoUrl} color={parent.color} size={20} />
                           <span className="text-sm truncate flex-1" style={{ color: parent.color || undefined }}>{parent.name}</span>
+                          <CommissionBadge pct={parent.commissionPct} />
                           {hasClones && (
                             <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ${badgeClass}`} title={`${selInFamily} de ${familySlugs.length} selecionadas nesta família`}>
                               {selInFamily}/{familySlugs.length}
@@ -307,6 +309,7 @@ const FilterFormPage = () => {
                               >
                                 <BookmakerLogo name={c.name} slug={c.slug} logoUrl={c.logoUrl} color={c.color} size={18} />
                                 <span className="text-sm truncate flex-1" style={{ color: c.color || undefined }}>{c.name}</span>
+                                <CommissionBadge pct={c.commissionPct} />
                                 {on && <Check size={14} className="text-teal-300 shrink-0" />}
                               </button>
                             );

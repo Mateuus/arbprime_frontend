@@ -20,7 +20,7 @@ interface Props {
   sb: Surebet;
   leg: SurebetOdd;
   // Ocultar (do hook useHiddenSet)
-  onHide: (type: HideType, itemKey: string, label?: string) => void;
+  onHide: (type: HideType, itemKey: string, label?: string, eventStartAt?: string | null) => void;
   isHidden: (type: HideType, itemKey: string) => boolean;
   notify?: (text: string) => void;
 }
@@ -109,7 +109,8 @@ const SurebetActionsMenu = ({ event, sb, leg, onHide, isHidden, notify }: Props)
   const evHidden = isHidden('event', event.id);
 
   const doHide = (type: HideType, key: string, label: string) => {
-    onHide(type, key, label);
+    // Leva o início do evento (event.date) p/ o item ser auto-removido quando o jogo começar.
+    onHide(type, key, label, event.date || null);
     notify?.('Ocultado. Você pode reexibir nas configurações.');
     close();
   };

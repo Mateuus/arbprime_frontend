@@ -331,6 +331,7 @@ export interface BookmakerDTO {
   color: string | null;
   url: string | null;
   cloneOf: string | null;
+  commissionPct: number | null;
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
@@ -344,6 +345,7 @@ export interface UpsertBookmakerDTO {
   color?: string | null;
   url?: string | null;
   cloneOf?: string | null;
+  commissionPct?: number | null;
   isActive?: boolean;
   sortOrder?: number;
 }
@@ -943,6 +945,7 @@ export interface HiddenItemDTO {
   type: 'event' | 'house' | 'selection';
   itemKey: string;
   label: string | null;
+  eventStartAt: string | null;
   createdAt: string;
 }
 
@@ -976,7 +979,7 @@ const updateReport = async (id: string, data: { status?: string; adminNote?: str
 
 // Ocultar (usuário)
 const getHidden = async () => apiClient.get('/hidden');
-const addHidden = async (type: 'event' | 'house' | 'selection', itemKey: string, label?: string) => apiClient.post('/hidden', { type, itemKey, label });
+const addHidden = async (type: 'event' | 'house' | 'selection', itemKey: string, label?: string, eventStartAt?: string | null) => apiClient.post('/hidden', { type, itemKey, label, eventStartAt });
 const removeHidden = async (type: 'event' | 'house' | 'selection', itemKey: string) => apiClient.delete('/hidden', { data: { type, itemKey } });
 const clearHidden = async () => apiClient.delete('/hidden/clear');
 

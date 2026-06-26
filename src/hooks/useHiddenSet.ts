@@ -39,26 +39,33 @@ export function useHiddenSet() {
     load();
   }, [load]);
 
+  // Oculta cujo evento já começou não deve mais aparecer: o backend já EXCLUI
+  // esses ao listar; aqui filtramos na tela para sumirem na hora também.
+  const activeItems = useMemo(() => {
+    const now = Date.now();
+    return items.filter((it) => !it.eventStartAt || new Date(it.eventStartAt).getTime() > now);
+  }, [items]);
+
   const sets = useMemo(() => {
     const events = new Set<string>();
     const houses = new Set<string>();
     const selections = new Set<string>();
-    for (const it of items) {
+    for (const it of activeItems) {
       if (it.type === 'event') events.add(it.itemKey);
       else if (it.type === 'house') houses.add(it.itemKey);
       else if (it.type === 'selection') selections.add(it.itemKey);
     }
     return { events, houses, selections };
-  }, [items]);
+  }, [activeItems]);
 
-  const hide = useCallback(async (type: HideType, itemKey: string, label?: string) => {
+  const hide = useCallback(async (type: HideType, itemKey: string, label?: string, eventStartAt?: string | null) => {
     if (!isAuthenticated) return false;
     // Otimista
     setItems((prev) => prev.some((i) => i.type === type && i.itemKey === itemKey)
       ? prev
-      : [{ id: `tmp-${itemKey}`, type, itemKey, label: label || null, createdAt: new Date().toISOString() }, ...prev]);
+      : [{ id: `tmp-${itemKey}`, type, itemKey, label: label || null, eventStartAt: eventStartAt || null, createdAt: new Date().toISOString() }, ...prev]);
     try {
-      const res = await apiGateway.addHidden(type, itemKey, label);
+      const res = await apiGateway.addHidden(type, itemKey, label, eventStartAt);
       if (res.data?.result === 1) { await load(); return true; }
     } catch { /* reverte abaixo */ }
     await load();
@@ -93,5 +100,5 @@ export function useHiddenSet() {
     return sets.selections.has(itemKey);
   }, [sets]);
 
-  return { items, loading, hide, unhide, clearAll, reload: load, isSurebetVisible, isEventHidden, isHidden, count: items.length };
+  return { items: activeItems, loading, hide, unhide, clearAll, reload: load, isSurebetVisible, isEventHidden, isHidden, count: activeItems.length };
 }

@@ -13,6 +13,7 @@ import { apiGateway } from '@/gateways/api.gateway';
 import { Select } from '@/components/ui/Select';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { BookmakerTag, BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
+import { CommissionBadge } from '@/components/bookmaker/CommissionBadge';
 import { NotificationBell } from '@/components/arbbets/NotificationBell';
 import SurebetActionsMenu from '@/components/arbbets/SurebetActionsMenu';
 import HiddenItemsModal from '@/components/arbbets/HiddenItemsModal';
@@ -233,7 +234,7 @@ const NewCorner = () => (
 
 const SurebetCompact = ({ event, sb, counts, onCalc, onExplain, onOdd, onHide, isHidden, notify }: {
   event: SurebetData; sb: Surebet; counts?: Map<string, number>; onCalc: () => void; onExplain: () => void; onOdd: (leg: SurebetOdd) => void;
-  onHide?: (type: HideType, itemKey: string, label?: string) => void; isHidden?: (type: HideType, itemKey: string) => boolean; notify?: (text: string) => void;
+  onHide?: (type: HideType, itemKey: string, label?: string, eventStartAt?: string | null) => void; isHidden?: (type: HideType, itemKey: string) => boolean; notify?: (text: string) => void;
 }) => {
   const multiMarket = new Set(sb.surebet.map((l) => l.market)).size > 1;
   const hot = hotLeg(sb, counts); // perna com a odd "suspeita" (presente em mais surebets)
@@ -850,7 +851,7 @@ export default function ArbBetsPage() {
                     <WatchButton on={watchEv.has(event.id)} onClick={(e) => { e.stopPropagation(); watchEv.toggle(event.id); }} />
                     <HideEventButton
                       hidden={hidden.isEventHidden(event.id)}
-                      onClick={(e) => { e.stopPropagation(); hidden.hide('event', event.id, `${event.home} x ${event.away}`); notify('Evento ocultado — reexiba no painel de ocultos (ícone de olho no topo).'); }}
+                      onClick={(e) => { e.stopPropagation(); hidden.hide('event', event.id, `${event.home} x ${event.away}`, event.date || null); notify('Evento ocultado — reexiba no painel de ocultos (ícone de olho no topo).'); }}
                     />
                   </div>
                 </div>
@@ -1152,7 +1153,7 @@ function OddModal({ event, leg, onClose }: { event: SurebetData; leg: SurebetOdd
 function EventModal({ event, surebets, counts, newKeys, ledEffect, onClose, onCalc, onExplain, onOdd, onHide, isHidden, notify }: {
   event: SurebetData; surebets: Surebet[]; counts?: Map<string, number>; newKeys: Map<string, number>; ledEffect: boolean;
   onClose: () => void; onCalc: (sb: Surebet) => void; onExplain: (sb: Surebet) => void; onOdd: (leg: SurebetOdd) => void;
-  onHide?: (type: HideType, itemKey: string, label?: string) => void; isHidden?: (type: HideType, itemKey: string) => boolean; notify?: (text: string) => void;
+  onHide?: (type: HideType, itemKey: string, label?: string, eventStartAt?: string | null) => void; isHidden?: (type: HideType, itemKey: string) => boolean; notify?: (text: string) => void;
 }) {
   const newCount = surebets.filter((sb) => newKeys.has(surebetKey(event, sb))).length;
   return (
@@ -1167,7 +1168,7 @@ function EventModal({ event, surebets, counts, newKeys, ledEffect, onClose, onCa
           </p>
           {onHide && (
             <button
-              onClick={() => { onHide('event', event.id, `${event.home} x ${event.away}`); notify?.('Evento ocultado — reexiba no painel de ocultos.'); onClose(); }}
+              onClick={() => { onHide('event', event.id, `${event.home} x ${event.away}`, event.date || null); notify?.('Evento ocultado — reexiba no painel de ocultos.'); onClose(); }}
               disabled={isHidden?.('event', event.id)}
               className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-300 ring-1 ring-rose-500/30 transition hover:bg-rose-500/20 disabled:opacity-40"
             >
@@ -1202,7 +1203,7 @@ function EventModal({ event, surebets, counts, newKeys, ledEffect, onClose, onCa
 function AlertSurebetModal({ event, sb, counts, watched, onToggleWatch, onClose, onCalc, onExplain, onOdd, onHide, isHidden, notify }: {
   event: SurebetData; sb: Surebet; counts?: Map<string, number>; watched: boolean; onToggleWatch: () => void;
   onClose: () => void; onCalc: () => void; onExplain: () => void; onOdd: (leg: SurebetOdd) => void;
-  onHide?: (type: HideType, itemKey: string, label?: string) => void; isHidden?: (type: HideType, itemKey: string) => boolean; notify?: (text: string) => void;
+  onHide?: (type: HideType, itemKey: string, label?: string, eventStartAt?: string | null) => void; isHidden?: (type: HideType, itemKey: string) => boolean; notify?: (text: string) => void;
 }) {
   return (
     <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4" onClick={onClose}>
@@ -1307,7 +1308,13 @@ const fmt = (n: number) => n.toFixed(2);
 const effOdd = (odd: number, commFrac: number) => (odd > 0 ? 1 + (odd - 1) * (1 - commFrac) : 0);
 
 function CalcModal({ event, sb, onClose, defaultStake, notify }: { event: SurebetData; sb: Surebet; onClose: () => void; defaultStake?: number; notify?: (text: string) => void }) {
-  const { getBookmaker } = useBookmakers();
+  const { getBookmaker, bookmakers } = useBookmakers();
+  // Comissão cadastrada na casa (modelo de exchange, ex.: Betfair) em string p/ o input.
+  // '0' quando a casa não tem comissão (ou ainda não carregou o registro de casas).
+  const commFor = (slug: string) => {
+    const c = getBookmaker(slug)?.commissionPct;
+    return c != null && Number(c) > 0 ? String(c) : '0';
+  };
   const base0 = defaultStake && defaultStake > 0 ? defaultStake : 1000;
   const [oddsStr, setOddsStr] = useState<string[]>(sb.surebet.map((l) => String(l.price)));
   const [stakesStr, setStakesStr] = useState<string[]>([]);
@@ -1326,10 +1333,22 @@ function CalcModal({ event, sb, onClose, defaultStake, notify }: { event: Surebe
     const odds = sb.surebet.map((l) => Number(l.price) || 0);
     setOddsStr(sb.surebet.map((l) => String(l.price)));
     setStakesStr(balancedStakes(odds, base0).map(fmt));
-    setCommStr(sb.surebet.map(() => '0'));
+    const comms = sb.surebet.map((l) => commFor(l.bookmaker));
+    setCommStr(comms);
+    if (comms.some((c) => num(c) > 0)) setShowComm(true);
     setHouseStr(sb.surebet.map((l) => l.bookmaker));
     setTotalStr(String(base0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sb, base0]);
+
+  // O registro de casas carrega de forma assíncrona: quando chegar, preenche a
+  // comissão das pernas que ainda estão zeradas (sem sobrescrever edição manual).
+  useEffect(() => {
+    const autos = houseStr.map((slug) => commFor(slug));
+    setCommStr((prev) => prev.map((p, i) => (num(p) > 0 ? p : autos[i])));
+    if (autos.some((a) => num(a) > 0)) setShowComm(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookmakers]);
 
   // Casas que oferecem a mesma seleção da perna (a própria + otherOdds), deduplicadas.
   const housesForLeg = (i: number) => {
@@ -1382,11 +1401,14 @@ function CalcModal({ event, sb, onClose, defaultStake, notify }: { event: Surebe
     setOddsStr(nextOdds);
     setStakesStr(applyRound(balancedStakes(nextOdds.map(num), total)).map(fmt));
   };
-  // Troca a CASA da perna → adota a odd daquela casa (e recalcula).
+  // Troca a CASA da perna → adota a odd e a comissão daquela casa (e recalcula).
   const setHouse = (i: number, slug: string) => {
     setHouseStr((p) => p.map((s, j) => (j === i ? slug : s)));
     const h = housesForLeg(i).find((x) => x.bookmaker === slug);
     if (h) setOdd(i, String(h.price));
+    const c = commFor(slug);
+    setCommStr((p) => p.map((s, j) => (j === i ? c : s)));
+    if (num(c) > 0) setShowComm(true);
   };
   // Edita a COMISSÃO → só muda o retorno daquela casa (não mexe nas stakes).
   const setComm = (i: number, v: string) => {
@@ -1512,6 +1534,7 @@ function CalcModal({ event, sb, onClose, defaultStake, notify }: { event: Surebe
                     : <BookmakerTag slug={houseStr[i] ?? leg.bookmaker} size={14} nameClassName="text-[11px]" />}
                   <div className="flex items-center gap-1 mt-0.5 min-w-0">
                     <span className="text-[10px] text-gray-500 truncate">{optionLabel(leg.option, event.home, event.away, leg.handicap)}</span>
+                    <CommissionBadge pct={getBookmaker(houseStr[i] ?? leg.bookmaker)?.commissionPct} className="!px-1 !py-0 !text-[9px]" />
                     {/* Abre o jogo na casa escolhida (effLeg traz a casa/stake do cálculo) */}
                     <OpenInHouse leg={effLeg(i)} event={event} notify={notify} iconSize={11} title="Abrir o jogo na casa" />
                   </div>
