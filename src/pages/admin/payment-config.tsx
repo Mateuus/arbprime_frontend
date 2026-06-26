@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiGateway, ProviderConfigDTO, UpdateProviderConfigDTO } from '@/gateways/api.gateway';
+import { apiGateway, ProviderConfigDTO, UpdateProviderConfigDTO, ManualConfigDTO, UpdateManualConfigDTO } from '@/gateways/api.gateway';
 import {
-  RefreshCcw, Loader2, X, Save, Webhook, ServerCog, FlaskConical, Rocket, KeyRound, Upload, FileCheck2
+  RefreshCcw, Loader2, X, Save, Webhook, ServerCog, FlaskConical, Rocket, KeyRound, Upload, FileCheck2,
+  ScanLine, QrCode, Trash2
 } from 'lucide-react';
 
 const errorMessage = (e: unknown, fallback: string): string => {
@@ -92,6 +93,155 @@ const CertField = ({
         <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-300/80">
           <FileCheck2 size={12} /> {value}
         </span>
+      )}
+    </div>
+  );
+};
+
+// ===================== Card do provider MANUAL (PIX estático + aprovação) =====================
+
+const ManualProviderCard = ({ onMsg }: { onMsg: (m: { type: 'ok' | 'err'; text: string }) => void }) => {
+  const [cfg, setCfg] = useState<ManualConfigDTO | null>(null);
+  const [form, setForm] = useState<UpdateManualConfigDTO>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploadingQr, setUploadingQr] = useState(false);
+  const qrRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await apiGateway.getManualConfig();
+      if (res.data?.result === 1) {
+        const c: ManualConfigDTO = res.data.data;
+        setCfg(c);
+        setForm({
+          isActive: c.isActive,
+          displayName: c.displayName || '',
+          pixKey: c.pixKey || '',
+          pixCopiaECola: c.pixCopiaECola || '',
+          instructions: c.instructions || '',
+        });
+      } else onMsg({ type: 'err', text: res.data?.message || 'Erro ao carregar config manual.' });
+    } catch (e: unknown) {
+      onMsg({ type: 'err', text: errorMessage(e, 'Erro ao carregar config manual.') });
+    } finally {
+      setLoading(false);
+    }
+  }, [onMsg]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await apiGateway.updateManualConfig(form);
+      onMsg({ type: res.data?.result === 1 ? 'ok' : 'err', text: res.data?.message || 'Config manual salva.' });
+      if (res.data?.result === 1) await load();
+    } catch (e: unknown) {
+      onMsg({ type: 'err', text: errorMessage(e, 'Erro ao salvar config manual.') });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const uploadQr = async (file?: File | null) => {
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { onMsg({ type: 'err', text: 'Selecione uma imagem (PNG/JPG/WEBP).' }); return; }
+    setUploadingQr(true);
+    try {
+      const dataBase64 = await fileToBase64(file);
+      const res = await apiGateway.uploadManualQr({ dataBase64, mime: file.type });
+      onMsg({ type: res.data?.result === 1 ? 'ok' : 'err', text: res.data?.message || 'QR atualizado.' });
+      if (res.data?.result === 1) await load();
+    } catch (e: unknown) {
+      onMsg({ type: 'err', text: errorMessage(e, 'Falha ao enviar QR.') });
+    } finally {
+      setUploadingQr(false);
+      if (qrRef.current) qrRef.current.value = '';
+    }
+  };
+
+  const removeQr = async () => {
+    try {
+      const res = await apiGateway.deleteManualQr();
+      onMsg({ type: res.data?.result === 1 ? 'ok' : 'err', text: res.data?.message || 'QR removido.' });
+      if (res.data?.result === 1) await load();
+    } catch (e: unknown) {
+      onMsg({ type: 'err', text: errorMessage(e, 'Erro ao remover QR.') });
+    }
+  };
+
+  return (
+    <div className="max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-5 mt-6">
+      <div className="flex items-center gap-2 mb-1">
+        <ScanLine size={18} className="text-amber-300" />
+        <h2 className="font-semibold text-white">Provedor: PIX Manual</h2>
+        {cfg && <span className={`ml-auto inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ring-1 ${cfg.isActive ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30' : 'bg-rose-500/15 text-rose-300 ring-rose-500/30'}`}>{cfg.isActive ? 'ativo' : 'inativo'}</span>}
+      </div>
+      <p className="text-xs text-gray-400 mb-4">PIX estático: o usuário paga, anexa o comprovante e você aprova na fila de aprovações.</p>
+
+      {loading ? (
+        <div className="py-10 text-center text-gray-400"><Loader2 className="animate-spin mx-auto" /></div>
+      ) : (
+        <div className="space-y-4">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <input type="checkbox" checked={!!form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="accent-teal-500" />
+            Método ativo (aparece no checkout do usuário)
+          </label>
+
+          <label className="block text-xs text-gray-400">Nome exibido
+            <input value={form.displayName || ''} onChange={(e) => setForm({ ...form, displayName: e.target.value })} className={`${inputClass} mt-1`} placeholder="PIX Manual" />
+          </label>
+
+          <label className="block text-xs text-gray-400">Chave PIX recebedora
+            <input value={form.pixKey || ''} onChange={(e) => setForm({ ...form, pixKey: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="chave PIX (exibida ao usuário)" />
+          </label>
+
+          <label className="block text-xs text-gray-400">PIX Copia e Cola (opcional)
+            <textarea value={form.pixCopiaECola || ''} onChange={(e) => setForm({ ...form, pixCopiaECola: e.target.value })} rows={2} className={`${inputClass} mt-1 font-mono resize-y`} placeholder="código copia-e-cola (00020126...)" />
+          </label>
+
+          {/* QR Code */}
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-300 mb-2"><QrCode size={13} /> Imagem do QR Code</div>
+            <div className="flex items-center gap-3">
+              {cfg?.qrImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={cfg.qrImage} alt="QR atual" className="h-24 w-24 object-contain bg-white rounded-lg p-1.5" />
+              ) : (
+                <div className="h-24 w-24 grid place-items-center rounded-lg border border-dashed border-white/15 text-gray-500"><QrCode size={28} /></div>
+              )}
+              <div className="flex flex-col gap-2">
+                <input ref={qrRef} type="file" accept="image/*" className="hidden" onChange={(e) => uploadQr(e.target.files?.[0])} />
+                <button type="button" onClick={() => qrRef.current?.click()} disabled={uploadingQr} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-50 text-white text-xs font-medium transition">
+                  {uploadingQr ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} {cfg?.qrImage ? 'Trocar QR' : 'Enviar QR'}
+                </button>
+                {cfg?.qrImage && (
+                  <button type="button" onClick={removeQr} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-medium transition">
+                    <Trash2 size={14} /> Remover
+                  </button>
+                )}
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-2">Imagem PNG/JPG/WEBP até 2MB. O usuário escaneia ou usa o copia-e-cola.</p>
+          </div>
+
+          <label className="block text-xs text-gray-400">Instruções ao usuário
+            <textarea value={form.instructions || ''} onChange={(e) => setForm({ ...form, instructions: e.target.value })} rows={2} className={`${inputClass} mt-1 resize-y`} placeholder="Ex.: Após pagar, anexe o comprovante. A liberação ocorre após a confirmação." />
+          </label>
+
+          <div className="flex items-center gap-2 text-[11px] text-amber-200/80 bg-amber-500/5 rounded-lg px-3 py-2">
+            <FileCheck2 size={13} className="shrink-0" /> As aprovações de comprovante ficam em <span className="font-semibold">Admin → Aprovações</span>.
+          </div>
+
+          <button onClick={save} disabled={saving} className="text-sm px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-slate-900 font-semibold inline-flex items-center gap-1.5">
+            {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Salvar config manual
+          </button>
+        </div>
       )}
     </div>
   );
@@ -266,6 +416,8 @@ const AdminPaymentConfigPage = () => {
           </div>
         )}
       </div>
+
+      <ManualProviderCard onMsg={setMsg} />
     </div>
   );
 };

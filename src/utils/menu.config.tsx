@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { GiHomeGarage, GiWallet, GiCoins, GiSoccerBall } from 'react-icons/gi';
-import { Gift, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags, CreditCard, Receipt, ServerCog, Flag, Wallet, ListChecks, Gem, LineChart, SlidersHorizontal } from 'lucide-react';
+import { Gift, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags, CreditCard, Receipt, ServerCog, Flag, Wallet, ListChecks, Gem, LineChart, SlidersHorizontal, Handshake, Ticket, ClipboardCheck } from 'lucide-react';
 import { useMemo } from 'react';
 import { ReactNode } from 'react';
 import { useUserContext } from '@/context/UserContext';
@@ -23,6 +23,7 @@ export interface MenuItem {
   onClick?: () => void;
   requiresAuth?: boolean;
   adminOnly?: boolean;
+  affiliateOnly?: boolean; // só aparece para quem é afiliado
   button?: boolean;
   header?: boolean; // rótulo de seção (não clicável), ex.: "PLATAFORMA"
   subItems?: MenuSubItem[];
@@ -32,6 +33,7 @@ export const useMenuItems = (): MenuItem[] => {
   const router = useRouter();
   const { isAuthenticated, user } = useUserContext();
   const isAdmin = user?.role === 'admin';
+  const isAffiliate = !!user?.isAffiliate;
 
   return useMemo(() => {
     const allItems: MenuItem[] = [
@@ -147,6 +149,15 @@ export const useMenuItems = (): MenuItem[] => {
           }
         ]
       },
+      {
+        id: 'affiliate',
+        name: 'Afiliados',
+        path: '/affiliate',
+        icon: <Handshake size={22} />,
+        requiresAuth: true,
+        affiliateOnly: true,
+        onClick: () => router.push('/affiliate')
+      },
 
       // ===================== OPORTUNIDADES =====================
       {
@@ -244,6 +255,15 @@ export const useMenuItems = (): MenuItem[] => {
         onClick: () => router.push('/admin/transactions')
       },
       {
+        id: 'admin-payment-approvals',
+        name: 'Aprovações',
+        path: '/admin/payment-approvals',
+        icon: <ClipboardCheck size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/payment-approvals')
+      },
+      {
         id: 'admin-reports',
         name: 'Reclamações',
         path: '/admin/reports',
@@ -251,6 +271,33 @@ export const useMenuItems = (): MenuItem[] => {
         requiresAuth: true,
         adminOnly: true,
         onClick: () => router.push('/admin/reports')
+      },
+      {
+        id: 'admin-affiliates',
+        name: 'Afiliados',
+        icon: <Handshake size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        subItems: [
+          {
+            id: 'admin-affiliates-list',
+            name: 'Afiliados',
+            path: '/admin/affiliates',
+            icon: <Handshake size={18} />,
+            requiresAuth: true,
+            adminOnly: true,
+            onClick: () => router.push('/admin/affiliates')
+          },
+          {
+            id: 'admin-coupons',
+            name: 'Cupons',
+            path: '/admin/coupons',
+            icon: <Ticket size={18} />,
+            requiresAuth: true,
+            adminOnly: true,
+            onClick: () => router.push('/admin/coupons')
+          }
+        ]
       },
       // ===================== ADMIN: SISTEMA =====================
       {
@@ -346,7 +393,7 @@ export const useMenuItems = (): MenuItem[] => {
     ];
 
     return allItems
-      .filter(item => (!item.requiresAuth || isAuthenticated) && (!item.adminOnly || isAdmin))
+      .filter(item => (!item.requiresAuth || isAuthenticated) && (!item.adminOnly || isAdmin) && (!item.affiliateOnly || isAffiliate))
       .map(item => {
         if (item.subItems) {
           const filteredSubItems = item.subItems.filter(
@@ -357,5 +404,5 @@ export const useMenuItems = (): MenuItem[] => {
         return item;
       });
 
-  }, [isAuthenticated, isAdmin, router]);
+  }, [isAuthenticated, isAdmin, isAffiliate, router]);
 };

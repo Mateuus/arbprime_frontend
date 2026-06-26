@@ -12,7 +12,8 @@ export interface User {
   role: string,
   level: number,
   referralCode: string,
-  profile: string
+  profile: string,
+  isAffiliate?: boolean
 }
 
 interface UserContextType {

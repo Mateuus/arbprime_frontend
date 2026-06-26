@@ -776,9 +776,41 @@ export interface CheckoutDTO {
   txid: string;
   status: string;
   amountCents: number;
+  originalAmountCents?: number;
+  discountCents?: number;
+  couponCode?: string | null;
   pixCopiaECola: string;
   pixQrCodeImage: string | null;
   expiresAt: string | null;
+}
+
+export interface CouponValidationDTO {
+  valid: boolean;
+  originalAmountCents: number;
+  discountCents: number;
+  finalAmountCents: number;
+  couponCode: string | null;
+  isAffiliate: boolean;
+}
+
+// Métodos de pagamento disponíveis no checkout (Efí automático / PIX manual).
+export interface PaymentMethodsDTO {
+  efibank: { active: boolean };
+  manual: { active: boolean; displayName: string; hasQr: boolean; hasCopyPaste: boolean };
+}
+
+// Resultado do checkout manual (PIX estático + comprovante).
+export interface ManualCheckoutDTO {
+  txid: string;
+  status: string; // pending | in_review | completed | rejected
+  amountCents: number;
+  pixKey: string | null;
+  pixCopiaECola: string | null;
+  qrImage: string | null;
+  instructions: string | null;
+  displayName: string;
+  proofUploadedAt?: string | null;
+  reviewNote?: string | null;
 }
 
 // Público
@@ -791,9 +823,15 @@ const deletePlan = async (id: string) => apiClient.delete(`/plans/${id}`);
 
 // Assinatura (usuário logado)
 const getMySubscription = async () => apiClient.get('/subscription/me');
-const createCheckout = async (planId: string) => apiClient.post('/subscription/checkout', { planId });
+const createCheckout = async (planId: string, couponCode?: string) => apiClient.post('/subscription/checkout', { planId, couponCode });
 const getCheckoutStatus = async (txid: string) => apiClient.get(`/subscription/checkout/${txid}`);
 const activateTrial = async () => apiClient.post('/subscription/trial');
+const validateCoupon = async (code: string, planId: string) => apiClient.post('/coupons/validate', { code, planId });
+// Pagamento manual (usuário)
+const getPaymentMethods = async () => apiClient.get('/subscription/payment-methods');
+const createManualCheckout = async (planId: string) => apiClient.post('/subscription/checkout/manual', { planId });
+const submitManualProof = async (txid: string, data: { dataBase64: string; mime: string }) =>
+  apiClient.post(`/subscription/checkout/manual/${txid}/proof`, data);
 
 // ==================== PAGAMENTOS (admin) ====================
 
@@ -890,6 +928,187 @@ const getAdminUser = async (id: string) => apiClient.get(`/admin/users/${id}`);
 const updateAdminUser = async (id: string, data: { role?: string; level?: number; fullname?: string; phone?: string }) => apiClient.put(`/admin/users/${id}`, data);
 const grantUserPlan = async (id: string, planId: string, isTrial?: boolean) => apiClient.post(`/admin/users/${id}/grant`, { planId, isTrial });
 const revokeUserPlan = async (id: string) => apiClient.post(`/admin/users/${id}/revoke`);
+
+// ==================== AFILIADOS / CUPONS ====================
+
+export interface AffiliateBalancesDTO {
+  pendingCents: number;
+  availableCents: number;
+  paidCents: number;
+  lifetimeCents: number;
+}
+
+export interface AffiliateDTO {
+  id: string;
+  code: string;
+  isActive: boolean;
+  commissionType: 'percent' | 'fixed';
+  commissionValue: number;
+  holdDays: number;
+  pixKey: string | null;
+  totalReferrals: number;
+  totalEarningsCents: number;
+  lastCommissionAt: string | null;
+  createdAt: string;
+  notes?: string | null;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  user?: { id: string; fullname: string; email: string } | null;
+  balances?: AffiliateBalancesDTO;
+}
+
+export interface CouponDTO {
+  id: string;
+  code: string;
+  description: string | null;
+  affiliateId: string | null;
+  affiliate: { id: string; code: string; user: { id: string; fullname: string; email: string } | null } | null;
+  discountType: 'percent' | 'fixed';
+  discountValue: number;
+  isActive: boolean;
+  maxRedemptions: number;
+  timesRedeemed: number;
+  maxPerUser: number;
+  minAmountCents: number;
+  maxDiscountCents: number;
+  firstPurchaseOnly: boolean;
+  validFrom: string | null;
+  validUntil: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertCouponDTO {
+  code?: string;
+  description?: string | null;
+  affiliateId?: string | null;
+  discountType?: 'percent' | 'fixed';
+  discountValue?: number;
+  isActive?: boolean;
+  maxRedemptions?: number;
+  maxPerUser?: number;
+  minAmountCents?: number;
+  maxDiscountCents?: number;
+  firstPurchaseOnly?: boolean;
+  validFrom?: string | null;
+  validUntil?: string | null;
+}
+
+export interface AffiliateRedemptionDTO {
+  id: string;
+  couponCode: string;
+  customer: string;
+  originalAmountCents: number;
+  discountAmountCents: number;
+  finalAmountCents: number;
+  createdAt: string;
+}
+
+export interface AffiliateCommissionDTO {
+  id: string;
+  customer: string;
+  couponCode: string | null;
+  baseAmountCents: number;
+  amountCents: number;
+  status: 'pending' | 'available' | 'paid' | 'cancelled';
+  availableAt: string | null;
+  createdAt: string;
+}
+
+export interface AffiliatePayoutDTO {
+  id: string;
+  amountCents: number;
+  commissionsCount: number;
+  method: string;
+  pixKey: string | null;
+  reference: string | null;
+  note: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export interface AffiliateDashboardDTO {
+  affiliate: AffiliateDTO;
+  balances: AffiliateBalancesDTO;
+  totals: {
+    lifetimeCommissionCents: number;
+    totalReferrals: number;
+    totalRedemptions: number;
+    periodCommissionCents: number;
+    periodSalesCents: number;
+    periodSalesCount: number;
+  };
+  daily: Array<{ date: string; sales: number; salesCents: number; commissionCents: number }>;
+}
+
+export interface ActivateAffiliateDTO {
+  userId: string;
+  code?: string;
+  commissionType?: 'percent' | 'fixed';
+  commissionValue?: number;
+  holdDays?: number;
+  pixKey?: string | null;
+  notes?: string | null;
+  discountType?: 'percent' | 'fixed';
+  discountValue?: number;
+}
+
+// --- Afiliado (usuario logado) ---
+const getAffiliateMe = async () => apiClient.get('/affiliate/me');
+const getAffiliateDashboard = async (period: 'week' | 'month' | 'year' | 'all' = 'month') => apiClient.get(`/affiliate/dashboard?period=${period}`);
+const getAffiliateCoupons = async () => apiClient.get('/affiliate/coupons');
+const getAffiliateRedemptions = async (params: { page?: number; limit?: number; search?: string } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.page) qp.append('page', String(params.page));
+  if (params.limit) qp.append('limit', String(params.limit));
+  if (params.search) qp.append('search', params.search);
+  const qs = qp.toString();
+  return apiClient.get(`/affiliate/redemptions${qs ? `?${qs}` : ''}`);
+};
+const getAffiliateCommissions = async (params: { page?: number; limit?: number; status?: string } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.page) qp.append('page', String(params.page));
+  if (params.limit) qp.append('limit', String(params.limit));
+  if (params.status) qp.append('status', params.status);
+  const qs = qp.toString();
+  return apiClient.get(`/affiliate/commissions${qs ? `?${qs}` : ''}`);
+};
+const getAffiliatePayouts = async (params: { page?: number; limit?: number } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.page) qp.append('page', String(params.page));
+  if (params.limit) qp.append('limit', String(params.limit));
+  const qs = qp.toString();
+  return apiClient.get(`/affiliate/payouts${qs ? `?${qs}` : ''}`);
+};
+
+// --- Admin: afiliados ---
+const getAdminAffiliates = async (params: { search?: string; page?: number; limit?: number } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.search) qp.append('search', params.search);
+  if (params.page) qp.append('page', String(params.page));
+  if (params.limit) qp.append('limit', String(params.limit));
+  const qs = qp.toString();
+  return apiClient.get(`/admin/affiliates${qs ? `?${qs}` : ''}`);
+};
+const getAdminAffiliate = async (id: string) => apiClient.get(`/admin/affiliates/${id}`);
+const activateAffiliate = async (data: ActivateAffiliateDTO) => apiClient.post('/admin/affiliates/activate', data);
+const updateAffiliate = async (id: string, data: Partial<Pick<AffiliateDTO, 'isActive' | 'commissionType' | 'commissionValue' | 'holdDays' | 'pixKey' | 'notes'>>) => apiClient.put(`/admin/affiliates/${id}`, data);
+const createAffiliatePayout = async (id: string, data: { note?: string; pixKey?: string; reference?: string } = {}) => apiClient.post(`/admin/affiliates/${id}/payout`, data);
+
+// --- Admin: cupons ---
+const getAdminCoupons = async (params: { type?: 'system' | 'affiliate' | 'all'; affiliateId?: string; search?: string; page?: number; limit?: number } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.type) qp.append('type', params.type);
+  if (params.affiliateId) qp.append('affiliateId', params.affiliateId);
+  if (params.search) qp.append('search', params.search);
+  if (params.page) qp.append('page', String(params.page));
+  if (params.limit) qp.append('limit', String(params.limit));
+  const qs = qp.toString();
+  return apiClient.get(`/admin/coupons${qs ? `?${qs}` : ''}`);
+};
+const createCoupon = async (data: UpsertCouponDTO) => apiClient.post('/admin/coupons', data);
+const updateCoupon = async (id: string, data: UpsertCouponDTO) => apiClient.put(`/admin/coupons/${id}`, data);
+const deleteCoupon = async (id: string) => apiClient.delete(`/admin/coupons/${id}`);
 
 // ==================== REPORTS / OCULTAR / EXCLUSÕES ====================
 
@@ -1000,6 +1219,57 @@ const uploadProviderCert = async (data: { environment: 'sandbox' | 'production';
   apiClient.post('/payment/config/cert', data);
 const registerPaymentWebhook = async () => apiClient.post('/payment/config/register-webhook');
 const getPaymentWebhookInfo = async () => apiClient.get('/payment/config/webhook-info');
+
+// ---------- Provider manual (admin) ----------
+export interface ManualConfigDTO {
+  id: string;
+  provider: string;
+  isActive: boolean;
+  displayName: string;
+  pixKey: string | null;
+  pixCopiaECola: string | null;
+  hasQr: boolean;
+  qrImage: string | null;
+  instructions: string | null;
+  updatedAt: string;
+}
+export interface UpdateManualConfigDTO {
+  isActive?: boolean;
+  displayName?: string;
+  pixKey?: string;
+  pixCopiaECola?: string;
+  instructions?: string;
+}
+export interface ManualReviewItemDTO {
+  id: string;
+  txid: string;
+  amountCents: number;
+  status: string;
+  hasProof: boolean;
+  proofMime: string | null;
+  proofUploadedAt: string | null;
+  reviewNote: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  user: { id: string; fullname: string; email: string } | null;
+  plan: { id: string; name: string } | null;
+}
+
+const getManualConfig = async () => apiClient.get('/payment/manual/config');
+const updateManualConfig = async (data: UpdateManualConfigDTO) => apiClient.put('/payment/manual/config', data);
+const uploadManualQr = async (data: { dataBase64: string; mime: string }) => apiClient.post('/payment/manual/config/qr', data);
+const deleteManualQr = async () => apiClient.delete('/payment/manual/config/qr');
+const getManualReviewQueue = async (params: { status?: string; page?: number; limit?: number } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.status) qp.append('status', params.status);
+  if (params.page) qp.append('page', String(params.page));
+  if (params.limit) qp.append('limit', String(params.limit));
+  const qs = qp.toString();
+  return apiClient.get(`/payment/manual/review${qs ? `?${qs}` : ''}`);
+};
+const getManualProof = async (txid: string) => apiClient.get(`/payment/manual/review/${txid}/proof`);
+const approveManualPayment = async (txid: string, note?: string) => apiClient.post(`/payment/manual/review/${txid}/approve`, { note });
+const rejectManualPayment = async (txid: string, note: string) => apiClient.post(`/payment/manual/review/${txid}/reject`, { note });
 
 // ==================== ANALYTIX (rastreador de apostas + banca) ====================
 
@@ -1517,6 +1787,11 @@ export const apiGateway = {
     createCheckout,
     getCheckoutStatus,
     activateTrial,
+    validateCoupon,
+    // Pagamento manual (usuário)
+    getPaymentMethods,
+    createManualCheckout,
+    submitManualProof,
     // Pagamentos (admin)
     getPaymentDashboard,
     getPaymentTransactions,
@@ -1525,12 +1800,37 @@ export const apiGateway = {
     uploadProviderCert,
     registerPaymentWebhook,
     getPaymentWebhookInfo,
+    // Provider manual (admin)
+    getManualConfig,
+    updateManualConfig,
+    uploadManualQr,
+    deleteManualQr,
+    getManualReviewQueue,
+    getManualProof,
+    approveManualPayment,
+    rejectManualPayment,
     // Usuários (admin)
     getAdminUsers,
     getAdminUser,
     updateAdminUser,
     grantUserPlan,
     revokeUserPlan,
+    // Afiliados / cupons
+    getAffiliateMe,
+    getAffiliateDashboard,
+    getAffiliateCoupons,
+    getAffiliateRedemptions,
+    getAffiliateCommissions,
+    getAffiliatePayouts,
+    getAdminAffiliates,
+    getAdminAffiliate,
+    activateAffiliate,
+    updateAffiliate,
+    createAffiliatePayout,
+    getAdminCoupons,
+    createCoupon,
+    updateCoupon,
+    deleteCoupon,
     // Reports / ocultar / exclusões
     createReport,
     getMyReports,
