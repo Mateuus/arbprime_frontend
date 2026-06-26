@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import {
-  Calculator, RefreshCcw, Search, ExternalLink, X, Zap, Trophy, TrendingUp, Clock, Layers, HelpCircle, Filter, ChevronDown, Settings, Bell, BellRing, Tag
+  Calculator, RefreshCcw, Search, X, Zap, Trophy, TrendingUp, Clock, Layers, HelpCircle, Filter, ChevronDown, Settings, Bell, BellRing, Tag, Check, EyeOff, Rocket
 } from 'lucide-react';
 import { useSurebets } from '@/hooks/useSurebets';
 import { useUserContext } from '@/context/UserContext';
@@ -14,13 +14,17 @@ import { Select } from '@/components/ui/Select';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { BookmakerTag, BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
 import { NotificationBell } from '@/components/arbbets/NotificationBell';
+import SurebetActionsMenu from '@/components/arbbets/SurebetActionsMenu';
+import HiddenItemsModal from '@/components/arbbets/HiddenItemsModal';
+import { useHiddenSet, HideType } from '@/hooks/useHiddenSet';
 import { SurebetData, Surebet, SurebetOdd } from '@/interfaces/arbitragem.interface';
 import { FilterDTO } from '@/interfaces';
-import { getBookmakerEventLink } from '@/utils/functions';
-import { detectExtension, isExtensionKnownInstalled, openGameInHouse } from '@/utils/arbExtension';
+import { detectExtension } from '@/utils/arbExtension';
+import { OpenInHouse } from '@/components/arbbets/OpenInHouse';
 import { marketLabel, marketCategory, optionLabel, profitTone } from '@/utils/surebet';
 import { surebetKey } from '@/utils/surebetKey';
 import { explainMarket } from '@/utils/marketExplain';
+import RecordBetModal, { RecordBetDraft } from '@/components/analytix/RecordBetModal';
 
 // Base SEM largura (para campos de largura fixa, evita conflito com w-full).
 const fieldBase =
@@ -204,6 +208,22 @@ const WatchButton = ({ on, onClick }: { on: boolean; onClick: (e: React.MouseEve
   </Tooltip>
 );
 
+// Botão p/ ocultar o evento INTEIRO (some da lista com todas as suas surebets;
+// reexibível no painel de ocultos). Mesma ação do "Ocultar este evento" do menu
+// (⋮) da perna, mas direto no cabeçalho do evento.
+const HideEventButton = ({ hidden, onClick }: { hidden: boolean; onClick: (e: React.MouseEvent) => void }) => (
+  <Tooltip label={hidden ? 'Evento oculto' : 'Ocultar evento (remover da lista)'} className="shrink-0">
+    <button
+      onClick={onClick}
+      disabled={hidden}
+      className="grid place-items-center h-6 w-6 rounded-md text-gray-500 transition hover:text-rose-400 hover:bg-white/10 disabled:opacity-40"
+      aria-label="Ocultar evento"
+    >
+      <EyeOff size={13} />
+    </button>
+  </Tooltip>
+);
+
 // Selo "Novo" no canto do card (inclinado, sobrepondo a borda superior-esquerda).
 const NewCorner = () => (
   <span className="pointer-events-none absolute -top-2 -left-2 z-10 -rotate-12 select-none rounded bg-teal-400 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-slate-900 shadow-lg ring-1 ring-teal-300/50">
@@ -211,8 +231,9 @@ const NewCorner = () => (
   </span>
 );
 
-const SurebetCompact = ({ event, sb, counts, onCalc, onExplain, onOdd }: {
+const SurebetCompact = ({ event, sb, counts, onCalc, onExplain, onOdd, onHide, isHidden, notify }: {
   event: SurebetData; sb: Surebet; counts?: Map<string, number>; onCalc: () => void; onExplain: () => void; onOdd: (leg: SurebetOdd) => void;
+  onHide?: (type: HideType, itemKey: string, label?: string) => void; isHidden?: (type: HideType, itemKey: string) => boolean; notify?: (text: string) => void;
 }) => {
   const multiMarket = new Set(sb.surebet.map((l) => l.market)).size > 1;
   const hot = hotLeg(sb, counts); // perna com a odd "suspeita" (presente em mais surebets)
@@ -286,31 +307,10 @@ const SurebetCompact = ({ event, sb, counts, onCalc, onExplain, onOdd }: {
                 {Number(leg.price).toFixed(2)}
               </button>
             </Tooltip>
-            {(() => {
-              // majovip → deep-link montado do eventId (ignora leg.link, que vai virar /esportes/futebol sem id);
-              // demais casas → leg.link normal
-              const href = getBookmakerEventLink(leg.bookmaker, leg.eventId, event.sport, event.date) || leg.link;
-              return href ? (
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Extensão instalada → ela abre/dirige a casa (e no futuro preenche a cédula).
-                  // Sem extensão → deixa o <a> abrir o deep-link nativamente (sem bloqueio de popup).
-                  if (isExtensionKnownInstalled()) {
-                    e.preventDefault();
-                    void openGameInHouse(leg, event);
-                  }
-                }}
-                className="text-gray-500 hover:text-teal-300 shrink-0"
-                title="Abrir na casa"
-              >
-                <ExternalLink size={11} />
-              </a>
-              ) : null;
-            })()}
+            <OpenInHouse leg={leg} event={event} notify={notify} iconSize={11} />
+            {onHide && isHidden && (
+              <SurebetActionsMenu event={event} sb={sb} leg={leg} onHide={onHide} isHidden={isHidden} notify={notify} />
+            )}
           </div>
           );
         })}
@@ -370,6 +370,17 @@ export default function ArbBetsPage() {
   const openExplain = (event: SurebetData, sb: Surebet) => setExplain({ marketIds: sb.marketTypes, home: event.home, away: event.away });
   // Modal de uma odd: outras casas + histórico (aberto ao clicar na odd).
   const [oddModal, setOddModal] = useState<{ event: SurebetData; leg: SurebetOdd } | null>(null);
+
+  // Itens ocultados pelo usuário (report/ocultar) + toast de feedback.
+  const hidden = useHiddenSet();
+  const [hiddenModalOpen, setHiddenModalOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notify = useCallback((text: string) => {
+    setToast(text);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2600);
+  }, []);
 
   const sports = useMemo(() => Array.from(new Set(data.map((e) => e.sport).filter(Boolean))), [data]);
   const houses = useMemo(
@@ -454,6 +465,8 @@ export default function ArbBetsPage() {
       .map((e) => ({
         event: e,
         surebets: e.surebets.filter((sb) => {
+          // Oculta itens marcados pelo usuário (evento/casa/seleção).
+          if (!hidden.isSurebetVisible(e.id, sb.surebet)) return false;
           if (sb.profitMargin < min) return false;
           if (selectedMarkets.size && !sb.marketTypes.some((m) => selectedMarkets.has(m))) return false;
           if (bookmaker && !sb.surebet.some((l) => l.bookmaker === bookmaker)) return false;
@@ -478,7 +491,7 @@ export default function ArbBetsPage() {
         })
       }))
       .filter((x) => x.surebets.length > 0);
-  }, [data, sport, search, profitMin, selectedMarkets, bookmaker, legCounts, activeFilter]);
+  }, [data, sport, search, profitMin, selectedMarkets, bookmaker, legCounts, activeFilter, hidden.isSurebetVisible]);
 
   // Visão "por surebet": achata e ordena por lucro OU por tempo (mais recente).
   const flat = useMemo(
@@ -590,6 +603,16 @@ export default function ArbBetsPage() {
             <div className="text-2xl font-bold text-white tabular-nums">{totalSurebets}</div>
             <div className="text-[11px] uppercase tracking-wider text-gray-400">surebets</div>
           </div>
+          {hidden.count > 0 && (
+            <button
+              onClick={() => setHiddenModalOpen(true)}
+              className="relative grid place-items-center h-9 w-9 rounded-lg border bg-white/5 border-white/10 text-gray-400 hover:text-teal-200 hover:border-teal-500/40 transition"
+              title={`${hidden.count} item(ns) ocultado(s) — clique para reexibir`}
+            >
+              <EyeOff size={16} />
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 grid place-items-center rounded-full bg-teal-500 text-slate-900 text-[10px] font-bold">{hidden.count}</span>
+            </button>
+          )}
           <NotificationBell notif={notif} watchCount={watchCount} onOpenAlert={openAlertFromNotification} />
           <button
             onClick={() => setAutoUpdate((v) => !v)}
@@ -762,7 +785,7 @@ export default function ArbBetsPage() {
                   <WatchButton on={watchSb.has(key)} onClick={(e) => { e.stopPropagation(); watchSb.toggle(key); }} />
                 </div>
               </div>
-              <SurebetCompact event={event} sb={sb} counts={surebetCounts} onCalc={() => setCalc({ event, sb })} onExplain={() => openExplain(event, sb)} onOdd={(leg) => setOddModal({ event, leg })} />
+              <SurebetCompact event={event} sb={sb} counts={surebetCounts} onCalc={() => setCalc({ event, sb })} onExplain={() => openExplain(event, sb)} onOdd={(leg) => setOddModal({ event, leg })} onHide={hidden.hide} isHidden={hidden.isHidden} notify={notify} />
             </div>
             );
           })}
@@ -825,16 +848,20 @@ export default function ArbBetsPage() {
                       );
                     })()}
                     <WatchButton on={watchEv.has(event.id)} onClick={(e) => { e.stopPropagation(); watchEv.toggle(event.id); }} />
+                    <HideEventButton
+                      hidden={hidden.isEventHidden(event.id)}
+                      onClick={(e) => { e.stopPropagation(); hidden.hide('event', event.id, `${event.home} x ${event.away}`); notify('Evento ocultado — reexiba no painel de ocultos (ícone de olho no topo).'); }}
+                    />
                   </div>
                 </div>
-                <SurebetCompact event={event} sb={best} counts={surebetCounts} onCalc={() => setCalc({ event, sb: best })} onExplain={() => openExplain(event, best)} onOdd={(leg) => setOddModal({ event, leg })} />
+                <SurebetCompact event={event} sb={best} counts={surebetCounts} onCalc={() => setCalc({ event, sb: best })} onExplain={() => openExplain(event, best)} onOdd={(leg) => setOddModal({ event, leg })} onHide={hidden.hide} isHidden={hidden.isHidden} notify={notify} />
               </div>
               );
             })}
         </div>
       )}
 
-      {calc && <CalcModal event={calc.event} sb={calc.sb} onClose={() => setCalc(null)} defaultStake={activeFilter?.stake} />}
+      {calc && <CalcModal event={calc.event} sb={calc.sb} onClose={() => setCalc(null)} defaultStake={activeFilter?.stake} notify={notify} />}
       {eventModal && (
         <EventModal
           event={eventModal.event}
@@ -846,6 +873,9 @@ export default function ArbBetsPage() {
           onCalc={(sb) => { setEventModal(null); setCalc({ event: eventModal.event, sb }); }}
           onExplain={(sb) => openExplain(eventModal.event, sb)}
           onOdd={(leg) => setOddModal({ event: eventModal.event, leg })}
+          onHide={hidden.hide}
+          isHidden={hidden.isHidden}
+          notify={notify}
         />
       )}
       {explain && <ExplainModal marketIds={explain.marketIds} home={explain.home} away={explain.away} onClose={() => setExplain(null)} />}
@@ -861,7 +891,26 @@ export default function ArbBetsPage() {
           onCalc={() => setCalc({ event: alertModal.event, sb: alertModal.sb })}
           onExplain={() => openExplain(alertModal.event, alertModal.sb)}
           onOdd={(leg) => setOddModal({ event: alertModal.event, leg })}
+          onHide={hidden.hide}
+          isHidden={hidden.isHidden}
+          notify={notify}
         />
+      )}
+
+      {hiddenModalOpen && (
+        <HiddenItemsModal
+          items={hidden.items}
+          onUnhide={(type, key) => hidden.unhide(type, key)}
+          onClearAll={() => { hidden.clearAll(); setHiddenModalOpen(false); }}
+          onClose={() => setHiddenModalOpen(false)}
+        />
+      )}
+
+      {/* Toast de feedback (ocultar / reclamar) */}
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[10001] rounded-xl bg-brand-dark border border-white/10 shadow-2xl px-4 py-2.5 text-sm text-gray-100 flex items-center gap-2">
+          <Check size={15} className="text-emerald-300" /> {toast}
+        </div>
       )}
     </div>
   );
@@ -1100,9 +1149,10 @@ function OddModal({ event, leg, onClose }: { event: SurebetData; leg: SurebetOdd
 }
 
 // ---- Modal com TODAS as surebets de um evento ----
-function EventModal({ event, surebets, counts, newKeys, ledEffect, onClose, onCalc, onExplain, onOdd }: {
+function EventModal({ event, surebets, counts, newKeys, ledEffect, onClose, onCalc, onExplain, onOdd, onHide, isHidden, notify }: {
   event: SurebetData; surebets: Surebet[]; counts?: Map<string, number>; newKeys: Map<string, number>; ledEffect: boolean;
   onClose: () => void; onCalc: (sb: Surebet) => void; onExplain: (sb: Surebet) => void; onOdd: (leg: SurebetOdd) => void;
+  onHide?: (type: HideType, itemKey: string, label?: string) => void; isHidden?: (type: HideType, itemKey: string) => boolean; notify?: (text: string) => void;
 }) {
   const newCount = surebets.filter((sb) => newKeys.has(surebetKey(event, sb))).length;
   return (
@@ -1115,6 +1165,15 @@ function EventModal({ event, surebets, counts, newKeys, ledEffect, onClose, onCa
             {event.league || event.sport} · {fmtDate(event.date)} · {surebets.length} surebets
             {newCount > 0 && <span className="text-teal-300"> · {newCount} nova{newCount > 1 ? 's' : ''}</span>}
           </p>
+          {onHide && (
+            <button
+              onClick={() => { onHide('event', event.id, `${event.home} x ${event.away}`); notify?.('Evento ocultado — reexiba no painel de ocultos.'); onClose(); }}
+              disabled={isHidden?.('event', event.id)}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-300 ring-1 ring-rose-500/30 transition hover:bg-rose-500/20 disabled:opacity-40"
+            >
+              <EyeOff size={13} /> Ocultar evento inteiro
+            </button>
+          )}
         </div>
         <div className="space-y-2">
           {surebets.map((sb, i) => {
@@ -1129,7 +1188,7 @@ function EventModal({ event, surebets, counts, newKeys, ledEffect, onClose, onCa
                 <div className="mb-1.5 flex justify-end">
                   <SurebetTime createAt={sb.create_at} eventDate={event.date} />
                 </div>
-                <SurebetCompact event={event} sb={sb} counts={counts} onCalc={() => onCalc(sb)} onExplain={() => onExplain(sb)} onOdd={onOdd} />
+                <SurebetCompact event={event} sb={sb} counts={counts} onCalc={() => onCalc(sb)} onExplain={() => onExplain(sb)} onOdd={onOdd} onHide={onHide} isHidden={isHidden} notify={notify} />
               </div>
             );
           })}
@@ -1140,9 +1199,10 @@ function EventModal({ event, surebets, counts, newKeys, ledEffect, onClose, onCa
 }
 
 // ---- Modal focado numa única surebet (aberto ao clicar numa notificação) ----
-function AlertSurebetModal({ event, sb, counts, watched, onToggleWatch, onClose, onCalc, onExplain, onOdd }: {
+function AlertSurebetModal({ event, sb, counts, watched, onToggleWatch, onClose, onCalc, onExplain, onOdd, onHide, isHidden, notify }: {
   event: SurebetData; sb: Surebet; counts?: Map<string, number>; watched: boolean; onToggleWatch: () => void;
   onClose: () => void; onCalc: () => void; onExplain: () => void; onOdd: (leg: SurebetOdd) => void;
+  onHide?: (type: HideType, itemKey: string, label?: string) => void; isHidden?: (type: HideType, itemKey: string) => boolean; notify?: (text: string) => void;
 }) {
   return (
     <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4" onClick={onClose}>
@@ -1172,7 +1232,7 @@ function AlertSurebetModal({ event, sb, counts, watched, onToggleWatch, onClose,
           </button>
         </div>
 
-        <SurebetCompact event={event} sb={sb} counts={counts} onCalc={onCalc} onExplain={onExplain} onOdd={onOdd} />
+        <SurebetCompact event={event} sb={sb} counts={counts} onCalc={onCalc} onExplain={onExplain} onOdd={onOdd} onHide={onHide} isHidden={isHidden} notify={notify} />
       </div>
     </div>
   );
@@ -1246,7 +1306,7 @@ const fmt = (n: number) => n.toFixed(2);
 // Odd efetiva com comissão (modelo de exchange: comissão incide sobre o lucro).
 const effOdd = (odd: number, commFrac: number) => (odd > 0 ? 1 + (odd - 1) * (1 - commFrac) : 0);
 
-function CalcModal({ event, sb, onClose, defaultStake }: { event: SurebetData; sb: Surebet; onClose: () => void; defaultStake?: number }) {
+function CalcModal({ event, sb, onClose, defaultStake, notify }: { event: SurebetData; sb: Surebet; onClose: () => void; defaultStake?: number; notify?: (text: string) => void }) {
   const { getBookmaker } = useBookmakers();
   const base0 = defaultStake && defaultStake > 0 ? defaultStake : 1000;
   const [oddsStr, setOddsStr] = useState<string[]>(sb.surebet.map((l) => String(l.price)));
@@ -1258,6 +1318,8 @@ function CalcModal({ event, sb, onClose, defaultStake }: { event: SurebetData; s
   const [roundStr, setRoundStr] = useState('1');
   // Casa escolhida por perna (permite trocar a casa daquela seleção).
   const [houseStr, setHouseStr] = useState<string[]>(sb.surebet.map((l) => l.bookmaker));
+  // Modal de lançamento no Analytix.
+  const [showRecord, setShowRecord] = useState(false);
 
   // Inicializa/reseta ao trocar de surebet.
   useEffect(() => {
@@ -1337,7 +1399,52 @@ function CalcModal({ event, sb, onClose, defaultStake }: { event: SurebetData; s
     setStakesStr(r.map(fmt));
   };
 
+  // Perna "efetiva" para abrir o jogo na casa: segue a CASA escolhida no seletor
+  // (usa o eventId daquela casa, vindo de otherOdds) e leva o stake calculado pra
+  // a extensão poder auto-preencher a cédula. Casa original → mantém o leg.link.
+  const effLeg = (i: number): SurebetOdd => {
+    const leg = sb.surebet[i];
+    const size = stakes[i] || undefined;
+    const slug = (houseStr[i] ?? leg.bookmaker).toLowerCase();
+    if (slug === leg.bookmaker.toLowerCase()) return { ...leg, size };
+    const alt = (leg.otherOdds || []).find((o) => (o.bookmaker || '').toLowerCase() === slug);
+    // Casa trocada → link da casa original não serve; deixa o builder montar pelo eventId.
+    return alt ? { ...leg, bookmaker: alt.bookmaker, eventId: alt.eventId, price: alt.price, link: undefined, size } : { ...leg, size };
+  };
+
+  // Monta o rascunho para o RecordBetModal a partir do estado atual da calculadora.
+  const makeDraft = (): RecordBetDraft => ({
+    betType: sb.surebet.length > 1 ? 'arb' : 'single',
+    source: 'calculator',
+    eventId: event.id,
+    home: event.home,
+    away: event.away,
+    sport: event.sport,
+    league: event.league,
+    eventStart: event.date,
+    surebetKey: surebetKey(event, sb),
+    totalStake: total,
+    expectedProfitPct: sb.profitMargin,
+    expectedProfit: profit,
+    legs: sb.surebet.map((leg, i) => {
+      const el = effLeg(i);
+      return {
+        bookmakerSlug: el.bookmaker,
+        houseEventId: el.eventId,
+        market: leg.market,
+        rawMarket: leg.rawMarket ?? null,
+        selection: leg.option,
+        handicap: leg.handicap != null ? String(leg.handicap) : null,
+        side: (showComm && num(commStr[i]) > 0) ? 'lay' : 'back',
+        odd: odds[i],
+        stake: stakes[i],
+        commissionPct: showComm ? num(commStr[i]) : null,
+      };
+    }),
+  });
+
   return (
+    <>
     <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4" onClick={onClose}>
       <div className="relative w-full sm:max-w-3xl bg-brand-dark border border-white/10 rounded-t-2xl sm:rounded-2xl p-4 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         {/* alça do bottom-sheet (mobile) */}
@@ -1403,7 +1510,11 @@ function CalcModal({ event, sb, onClose, defaultStake }: { event: SurebetData; s
                   {houseOpts.length > 1
                     ? <Select value={houseStr[i] ?? leg.bookmaker} onChange={(v) => setHouse(i, v)} options={houseOpts} buttonClassName="py-1 px-2 text-xs" />
                     : <BookmakerTag slug={houseStr[i] ?? leg.bookmaker} size={14} nameClassName="text-[11px]" />}
-                  <div className="text-[10px] text-gray-500 truncate mt-0.5">{optionLabel(leg.option, event.home, event.away, leg.handicap)}</div>
+                  <div className="flex items-center gap-1 mt-0.5 min-w-0">
+                    <span className="text-[10px] text-gray-500 truncate">{optionLabel(leg.option, event.home, event.away, leg.handicap)}</span>
+                    {/* Abre o jogo na casa escolhida (effLeg traz a casa/stake do cálculo) */}
+                    <OpenInHouse leg={effLeg(i)} event={event} notify={notify} iconSize={11} title="Abrir o jogo na casa" />
+                  </div>
                 </div>
                 <input value={oddsStr[i] ?? ''} onChange={(e) => setOdd(i, e.target.value)} inputMode="decimal" aria-label="Odd"
                   className={`${fieldBase} w-14 sm:w-20 shrink-0 text-center py-1.5 px-1`} />
@@ -1447,6 +1558,14 @@ function CalcModal({ event, sb, onClose, defaultStake }: { event: SurebetData; s
           {!isSure && <div className="mt-2 text-center text-[11px] text-rose-300">Com estas odds (e comissões) não há lucro garantido.</div>}
         </div>
 
+        {/* Lançar aposta no Analytix */}
+        <button
+          onClick={() => setShowRecord(true)}
+          className="mt-3 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold text-sm transition"
+        >
+          <Rocket size={17} /> Lançar aposta
+        </button>
+
         {/* Explicação da comissão por seleção */}
         {hasComm && (
           <div className="mt-3 rounded-xl bg-white/5 ring-1 ring-white/10 p-3 text-[11px] text-gray-400 leading-relaxed">
@@ -1459,5 +1578,13 @@ function CalcModal({ event, sb, onClose, defaultStake }: { event: SurebetData; s
         )}
       </div>
     </div>
+    {showRecord && (
+      <RecordBetModal
+        draft={makeDraft()}
+        onClose={() => setShowRecord(false)}
+        onSaved={() => { setShowRecord(false); notify?.('Aposta lançada no Analytix!'); }}
+      />
+    )}
+    </>
   );
 }

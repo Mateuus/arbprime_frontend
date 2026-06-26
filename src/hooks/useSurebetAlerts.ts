@@ -5,6 +5,10 @@ import { marketLabel } from '@/utils/surebet';
 import type { NotifSettings, NotifyInput } from './useNotifications';
 
 const NEW_TTL = 45_000; // ms que o badge "Novo" permanece no card
+// Teto do conjunto "seen". Sem isto ele cresce monotonicamente por toda a sessão
+// (cada surebet nova de cada jogo entra e nunca sai) → vazamento de memória numa
+// aba aberta por muito tempo. Ao estourar, reconstrói a partir do snapshot atual.
+const SEEN_CAP = 5000;
 
 interface FlatItem { event: SurebetData; sb: Surebet }
 
@@ -152,6 +156,14 @@ export function useSurebetAlerts(data: SurebetData[], flat: FlatItem[], opts: Op
     const nextFp = new Map<string, string>();
     for (const [k, { sb }] of cur) nextFp.set(k, surebetFingerprint(sb));
     fpRef.current = nextFp;
+
+    // Bound do "seen": quando passa do teto, reconstrói só com as keys do snapshot
+    // atual (esquece surebets já encerradas há tempo). Evita crescimento ilimitado
+    // numa aba aberta por horas; o pior caso é uma re-notificação de algo que sumiu
+    // e voltou muito depois — aceitável e raro.
+    if (seenRef.current.size > SEEN_CAP) {
+      seenRef.current = new Set(cur.keys());
+    }
 
     // Marca as novas para o badge (com timestamp para expirar).
     if (newlyNew.length) {

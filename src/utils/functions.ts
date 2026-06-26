@@ -179,6 +179,18 @@ export function getBookmakerEventLink(
       const day = majovipDay(dateISO);
       return `https://majovip.net/esportes/futebol${day ? `?data=${day}` : ''}`;
     }
+    // Família "sabets" (betsbola_vip + clones): SPA de página única, sem URL por
+    // evento. A extensão acha o jogo (via camp_id) e seleciona a odd
+    // (CheckOdd2Local) usando a API /futebolapi same-origin. Sem extensão, abre a
+    // lista de jogos. Ver arbprime_extension/content-betsbola.js.
+    case 'betsbola_vip':
+      return 'https://betsbolavip.com/?id=todos';
+    case 'betsbola_pro':
+      return 'https://betsbola.pro/?id=todos';
+    case 'esportenet_show':
+      return 'https://www.esportenet.show/?id=todos';
+    case 'esportepe':
+      return 'https://esportepe.com.br/?id=todos';
     default:
       return null; // casa sem template conhecido
   }

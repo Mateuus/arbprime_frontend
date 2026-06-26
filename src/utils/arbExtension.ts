@@ -12,6 +12,16 @@ import type { SurebetOdd, SurebetData } from '@/interfaces/arbitragem.interface'
 let cached: boolean | null = null;
 let cachedVersion: string | null = null;
 
+// Casas que a extensão sabe DIRIGIR (abrir o jogo + selecionar a odd na cédula).
+// Mantém em sincronia com os content scripts da extensão (content-majovip.js /
+// content-betsbola.js) e com getBookmakerEventLink. Demais casas: só "abrir link".
+export const AUTOFILL_HOUSES = ['majovip', 'betsbola_vip', 'betsbola_pro', 'esportenet_show', 'esportepe'];
+
+/** A casa tem integração de seleção automática de odd (precisa da extensão p/ valer). */
+export function houseSupportsAutofill(bookmaker?: string): boolean {
+  return !!bookmaker && AUTOFILL_HOUSES.includes(bookmaker.toLowerCase());
+}
+
 function isExtMessage(d: unknown): d is { __arbprimeExt: 1; type: string; version?: string } {
   return !!d && typeof d === 'object' && (d as { __arbprimeExt?: number }).__arbprimeExt === 1;
 }

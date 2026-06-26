@@ -330,6 +330,11 @@ const getBookmakers = async () => {
   return apiClient.get('/bookmaker');
 };
 
+// Estatísticas agregadas da landing (público, só números — sem dados gated).
+const getHomeStats = async () => {
+  return apiClient.get('/stats');
+};
+
 const addBookmaker = async (data: UpsertBookmakerDTO) => {
   return apiClient.post('/bookmaker', data);
 };
@@ -692,6 +697,719 @@ const bulkUpsertMarketNames = async (data: { marketId: string; displayName: stri
 const updateMarketName = async (id: string, data: { displayName?: string; bookmaker?: string }) => apiClient.put(`/markets/${id}`, data);
 const deleteMarketName = async (id: string) => apiClient.delete(`/markets/${id}`);
 
+// ==================== PLANOS & ASSINATURA ====================
+
+export interface PlanDTO {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;            // preço cheio
+  promotionType: 'none' | 'percent' | 'fixed';
+  promotionValue: number;
+  finalPrice: number;       // preço cobrado (com promoção)
+  discount: number;         // desconto em R$
+  hasPromotion: boolean;
+  durationInDays: number;
+  level: number;
+  isTrial: boolean;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertPlanDTO {
+  name?: string;
+  description?: string;
+  price?: number;
+  promotionType?: 'none' | 'percent' | 'fixed';
+  promotionValue?: number;
+  durationInDays?: number;
+  level?: number;
+  isTrial?: boolean;
+  isActive?: boolean;
+  sortOrder?: number;
+}
+
+export interface UserPlanDTO {
+  id: string;
+  status: 'pending' | 'active' | 'expired' | 'cancelled';
+  level: number;
+  isTrial: boolean;
+  startDate: string | null;
+  expirationDate: string | null;
+  createdAt: string;
+  plan: PlanDTO | null;
+}
+
+export interface SubscriptionInfoDTO {
+  level: number;
+  hasActivePlan: boolean;
+  expiresAt: string | null;
+  subscription: UserPlanDTO | null;
+  history: UserPlanDTO[];
+  trial: { available: boolean; plan: PlanDTO | null; usedAt: string | null };
+}
+
+export interface CheckoutDTO {
+  txid: string;
+  status: string;
+  amountCents: number;
+  pixCopiaECola: string;
+  pixQrCodeImage: string | null;
+  expiresAt: string | null;
+}
+
+// Público
+const getPlans = async () => apiClient.get('/plans');
+// Admin
+const getAllPlans = async () => apiClient.get('/plans/all');
+const createPlan = async (data: UpsertPlanDTO) => apiClient.post('/plans', data);
+const updatePlan = async (id: string, data: UpsertPlanDTO) => apiClient.put(`/plans/${id}`, data);
+const deletePlan = async (id: string) => apiClient.delete(`/plans/${id}`);
+
+// Assinatura (usuário logado)
+const getMySubscription = async () => apiClient.get('/subscription/me');
+const createCheckout = async (planId: string) => apiClient.post('/subscription/checkout', { planId });
+const getCheckoutStatus = async (txid: string) => apiClient.get(`/subscription/checkout/${txid}`);
+const activateTrial = async () => apiClient.post('/subscription/trial');
+
+// ==================== PAGAMENTOS (admin) ====================
+
+export interface ProviderConfigDTO {
+  id: string;
+  provider: string;
+  isActive: boolean;
+  isDefault: boolean;
+  environment: 'sandbox' | 'production';
+  sandboxClientId: string;
+  sandboxClientSecret: string;
+  sandboxCertPath: string | null;
+  sandboxPixKey: string | null;
+  prodClientId: string;
+  prodClientSecret: string;
+  prodCertPath: string | null;
+  prodPixKey: string | null;
+  webhookSecret: string;
+  webhookBaseUrl: string | null;
+  updatedAt: string;
+}
+
+export interface UpdateProviderConfigDTO {
+  isActive?: boolean;
+  environment?: 'sandbox' | 'production';
+  sandboxClientId?: string;
+  sandboxClientSecret?: string;
+  sandboxCertPath?: string;
+  sandboxPixKey?: string;
+  prodClientId?: string;
+  prodClientSecret?: string;
+  prodCertPath?: string;
+  prodPixKey?: string;
+  webhookSecret?: string;
+  webhookBaseUrl?: string;
+}
+
+export interface PaymentTxDTO {
+  id: string;
+  txid: string;
+  provider: string;
+  amountCents: number;
+  status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'refunded';
+  paidAt: string | null;
+  createdAt: string;
+  user: { id: string; fullname: string; email: string } | null;
+  plan: { id: string; name: string } | null;
+}
+
+export interface AdminDashboardDTO {
+  totalUsers: number;
+  activeSubscriptions: number;
+  revenueTotalCents: number;
+  revenueMonthCents: number;
+  paidCount: number;
+  pendingCount: number;
+  recentTransactions: Array<{
+    id: string; txid: string; amountCents: number; status: string; createdAt: string;
+    user: { fullname: string; email: string } | null; plan: { name: string } | null;
+  }>;
+}
+
+// ==================== USUÁRIOS (admin) ====================
+
+export interface AdminUserDTO {
+  id: string;
+  fullname: string;
+  email: string;
+  cpf: string;
+  phone: string;
+  role: string;
+  level: number;
+  profile: string;
+  trialUsedAt: string | null;
+  activeSubscription: UserPlanDTO | null;
+}
+
+export interface AdminUserDetailDTO {
+  user: Omit<AdminUserDTO, 'activeSubscription'>;
+  history: UserPlanDTO[];
+  transactions: Array<{ id: string; txid: string; amountCents: number; status: string; paidAt: string | null; createdAt: string; plan: { id: string; name: string } | null }>;
+}
+
+const getAdminUsers = async (params: { search?: string; role?: string; page?: number; limit?: number } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.search) qp.append('search', params.search);
+  if (params.role) qp.append('role', params.role);
+  if (params.page) qp.append('page', String(params.page));
+  if (params.limit) qp.append('limit', String(params.limit));
+  const qs = qp.toString();
+  return apiClient.get(`/admin/users${qs ? `?${qs}` : ''}`);
+};
+const getAdminUser = async (id: string) => apiClient.get(`/admin/users/${id}`);
+const updateAdminUser = async (id: string, data: { role?: string; level?: number; fullname?: string; phone?: string }) => apiClient.put(`/admin/users/${id}`, data);
+const grantUserPlan = async (id: string, planId: string, isTrial?: boolean) => apiClient.post(`/admin/users/${id}/grant`, { planId, isTrial });
+const revokeUserPlan = async (id: string) => apiClient.post(`/admin/users/${id}/revoke`);
+
+// ==================== REPORTS / OCULTAR / EXCLUSÕES ====================
+
+export type ReportReason = 'different_teams' | 'event_not_found' | 'wrong_markets' | 'different_odds' | 'closed_market' | 'other';
+
+export interface CreateReportDTO {
+  reason: ReportReason;
+  scope: 'event' | 'leg';
+  eventId: string;
+  sport?: string;
+  league?: string;
+  home?: string;
+  away?: string;
+  bookmaker?: string;
+  houseEventId?: string;
+  market?: string;
+  selection?: string;
+  handicap?: string;
+  price?: number;
+  surebetKey?: string;
+  note?: string;
+}
+
+export interface ReportDTO {
+  id: string;
+  reason: ReportReason;
+  scope: 'event' | 'leg';
+  eventId: string;
+  sport: string;
+  league: string | null;
+  home: string | null;
+  away: string | null;
+  bookmaker: string | null;
+  houseEventId: string | null;
+  market: string | null;
+  selection: string | null;
+  handicap: string | null;
+  price: number | null;
+  surebetKey: string | null;
+  note: string | null;
+  status: 'open' | 'reviewing' | 'resolved' | 'dismissed';
+  adminNote: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  user: { id: string; fullname: string; email: string } | null;
+}
+
+export interface HiddenItemDTO {
+  id: string;
+  type: 'event' | 'house' | 'selection';
+  itemKey: string;
+  label: string | null;
+  createdAt: string;
+}
+
+export interface ExclusionDTO {
+  id: string;
+  scope: 'house' | 'event';
+  bookmaker: string | null;
+  houseEventId: string | null;
+  groupId: string | null;
+  label: string | null;
+  reason: string | null;
+  createdBy: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+// Reports (usuário)
+const createReport = async (data: CreateReportDTO) => apiClient.post('/reports', data);
+const getMyReports = async () => apiClient.get('/reports/mine');
+// Reports (admin)
+const getReports = async (params: { status?: string; reason?: string; page?: number; limit?: number } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.status) qp.append('status', params.status);
+  if (params.reason) qp.append('reason', params.reason);
+  if (params.page) qp.append('page', String(params.page));
+  if (params.limit) qp.append('limit', String(params.limit));
+  const qs = qp.toString();
+  return apiClient.get(`/reports${qs ? `?${qs}` : ''}`);
+};
+const updateReport = async (id: string, data: { status?: string; adminNote?: string }) => apiClient.put(`/reports/${id}`, data);
+
+// Ocultar (usuário)
+const getHidden = async () => apiClient.get('/hidden');
+const addHidden = async (type: 'event' | 'house' | 'selection', itemKey: string, label?: string) => apiClient.post('/hidden', { type, itemKey, label });
+const removeHidden = async (type: 'event' | 'house' | 'selection', itemKey: string) => apiClient.delete('/hidden', { data: { type, itemKey } });
+const clearHidden = async () => apiClient.delete('/hidden/clear');
+
+// Exclusões (admin)
+const getExclusions = async () => apiClient.get('/exclusions');
+const createExclusion = async (data: { scope: 'house' | 'event'; bookmaker?: string; houseEventId?: string; groupId?: string; label?: string; reason?: string }) => apiClient.post('/exclusions', data);
+const deleteExclusion = async (id: string) => apiClient.delete(`/exclusions/${id}`);
+
+const getPaymentDashboard = async () => apiClient.get('/payment/dashboard');
+const getPaymentTransactions = async (params: { status?: string; page?: number; limit?: number } = {}) => {
+  const qp = new URLSearchParams();
+  if (params.status) qp.append('status', params.status);
+  if (params.page) qp.append('page', String(params.page));
+  if (params.limit) qp.append('limit', String(params.limit));
+  const qs = qp.toString();
+  return apiClient.get(`/payment/transactions${qs ? `?${qs}` : ''}`);
+};
+const getProviderConfig = async () => apiClient.get('/payment/config');
+const updateProviderConfig = async (data: UpdateProviderConfigDTO) => apiClient.put('/payment/config', data);
+const registerPaymentWebhook = async () => apiClient.post('/payment/config/register-webhook');
+const getPaymentWebhookInfo = async () => apiClient.get('/payment/config/webhook-info');
+
+// ==================== ANALYTIX (rastreador de apostas + banca) ====================
+
+export type LegStatusValue = 'pending' | 'won' | 'lost' | 'void' | 'half_won' | 'half_lost' | 'cashout';
+export type BetStatusValue = 'open' | 'partially_settled' | 'settled' | 'void';
+export type TxTypeValue = 'deposit' | 'withdrawal' | 'adjustment' | 'bonus' | 'partner_payout' | 'bet_result';
+export type CostModelValue = 'rent' | 'profit_share' | 'hybrid';
+
+export interface PartnerReportDTO {
+  accountCount: number;
+  profit: number;
+  profitSharePct: number;
+  owedFromShare: number;
+  rentAmount: number;
+  totalPaid: number;
+  balanceDue: number;
+}
+
+export interface PartnerDTO {
+  id: string;
+  name: string;
+  cpf: string | null;
+  phone: string | null;
+  email: string | null;
+  pixKey: string | null;
+  costModel: CostModelValue;
+  rentAmount: number | null;
+  rentPeriod: 'week' | 'month';
+  profitSharePct: number | null;
+  notes: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  report?: PartnerReportDTO;
+}
+
+export interface CreatePartnerDTO {
+  name: string;
+  cpf?: string;
+  phone?: string;
+  email?: string;
+  pixKey?: string;
+  costModel?: CostModelValue;
+  rentAmount?: number;
+  rentPeriod?: 'week' | 'month';
+  profitSharePct?: number;
+  notes?: string;
+}
+
+export interface ValuebetConfigDTO {
+  referenceBookmaker: string;
+  allowedHouses: string[];
+  edgeFloor: number;
+  edgeCeil: number;
+  edgeMax: number;
+  cMin: number;
+  oddMin: number;
+  oddMax: number;
+  kellyFraction: number;
+  tierWeights: Record<string, number>;
+  consensus: { enabled: boolean; minSources: number; dispersionMax: number };
+}
+
+export interface ClvSummaryDTO {
+  settledCount: number;
+  clvAvgPct: number | null;
+  edgeAvgPct: number | null;
+  clvPositivePct: number | null;
+  pendingCount: number;
+  windowDays: number;
+}
+
+export interface ClvBreakdownRowDTO {
+  key: string;
+  n: number;
+  clvAvgPct: number | null;
+  edgeAvgPct: number | null;
+  clvPositivePct: number | null;
+}
+
+// Ranking de juice/margem por casa ou mercado (doc 11 §6.1) — sobre TODAS as
+// emissões com house_vig (independente de settled), menor juice primeiro.
+export interface JuiceRowDTO {
+  key: string;
+  n: number;
+  juiceAvgPct: number | null; // house_vig × 100
+}
+
+export interface ClvPendingDTO {
+  emissionId: string;
+  bookmaker: string;
+  market: string;
+  selection: string;
+  handicap: string | null;
+  tier: number | null;
+  ref: string | null;
+  oddTaken: number;
+  edgeTakenPct: number;
+  confidence: number;
+  houseVig: number | null; // juice/margem da casa (fração) — doc 11
+  eventDate: string | null;
+  takenAt: string;
+}
+
+export interface BankrollDTO {
+  id: string;
+  name: string;
+  currency: string;
+  kind?: 'general' | 'valuebet';
+  initialCapital: number;
+  unitValue: number;
+  commissionPct: number | null;
+  isDefault: boolean;
+  isActive: boolean;
+  visibility: 'private' | 'followers' | 'public';
+  showCurrency: boolean;
+  isPublic: boolean;
+  currentBalance: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AccountDTO {
+  id: string;
+  slug: string;
+  label: string | null;
+  isCustom: boolean;
+  customName: string | null;
+  customLogoUrl: string | null;
+  customColor: string | null;
+  partnerId: string | null;
+  partnerName: string | null;
+  bankrollId: string | null;
+  bankrollName: string | null;
+  initialBalance: number;
+  username: string | null;
+  scope: string | null;
+  limited: boolean;
+  isActive: boolean;
+  notes: string | null;
+  balance: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BetLegDTO {
+  id: string;
+  bookmakerSlug: string;
+  accountId: string | null;
+  houseEventId: string | null;
+  market: string | null;
+  rawMarket: string | null;
+  selection: string | null;
+  handicap: string | null;
+  side: 'back' | 'lay';
+  isFreebet: boolean;
+  odd: number;
+  stake: number;
+  commissionPct: number | null;
+  closingOdd: number | null;
+  status: LegStatusValue;
+  settledReturn: number | null;
+  legProfit: number | null;
+  potentialReturn: number;
+  settledAt: string | null;
+}
+
+export interface BetDTO {
+  id: string;
+  bankrollId: string;
+  betType: 'arb' | 'single';
+  status: BetStatusValue;
+  eventId: string | null;
+  home: string | null;
+  away: string | null;
+  sport: string | null;
+  league: string | null;
+  eventStart: string | null;
+  surebetKey: string | null;
+  totalStake: number;
+  expectedProfitPct: number | null;
+  expectedProfit: number | null;
+  realizedProfit: number | null;
+  turnover: number;
+  roiPct: number | null;
+  tags: string[];
+  notes: string | null;
+  source: string;
+  hidden: boolean;
+  legs: BetLegDTO[];
+  settledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BetsPageDTO {
+  items: BetDTO[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface TransactionDTO {
+  id: string;
+  bankrollId: string;
+  accountId: string | null;
+  partnerId: string | null;
+  type: TxTypeValue;
+  amount: number;
+  betId: string | null;
+  description: string | null;
+  createdAt: string;
+}
+
+export interface AnalytixSummaryDTO {
+  totalProfit: number;
+  turnover: number;
+  roi: number;
+  yield: number;
+  winRate: number;
+  avgOdd: number;
+  betsCount: number;
+  openCount: number;
+  settledCount: number;
+  currentBankroll: number;
+  roiBase: number;
+}
+
+export interface TimeseriesPointDTO {
+  date: string;
+  profit: number;
+  netFlow: number;
+  cumulativeProfit: number;
+  bankroll: number;
+}
+
+export interface BreakdownRowDTO {
+  key: string;
+  betsCount: number;
+  turnover: number;
+  profit: number;
+  yield: number;
+  winRate: number;
+  avgOdd: number;
+}
+
+export interface CreateBetLegDTO {
+  bookmakerSlug: string;
+  accountId?: string | null;
+  houseEventId?: string | null;
+  market?: string | null;
+  rawMarket?: string | null;
+  selection?: string | null;
+  handicap?: string | null;
+  side?: 'back' | 'lay';
+  isFreebet?: boolean;
+  odd: number;
+  stake: number;
+  commissionPct?: number | null;
+}
+
+export interface CreateBetDTO {
+  bankrollId?: string;
+  betType: 'arb' | 'single';
+  eventId?: string | null;
+  home?: string | null;
+  away?: string | null;
+  sport?: string | null;
+  league?: string | null;
+  eventStart?: string | null;
+  surebetKey?: string | null;
+  totalStake: number;
+  expectedProfitPct?: number | null;
+  expectedProfit?: number | null;
+  source: 'calculator' | 'manual';
+  tags?: string[];
+  notes?: string | null;
+  legs: CreateBetLegDTO[];
+}
+
+export interface CreateAccountDTO {
+  slug?: string;
+  label?: string;
+  initialBalance?: number;
+  username?: string;
+  scope?: string;
+  notes?: string;
+  isCustom?: boolean;
+  customName?: string;
+  customLogoUrl?: string;
+  customColor?: string;
+  partnerId?: string | null;
+  bankrollId?: string | null;
+}
+
+export interface SettleLegInput { legId: string; status: LegStatusValue; settledReturn?: number; legProfit?: number }
+
+const analytixQp = (params: Record<string, string | number | boolean | undefined | null>) => {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') q.append(k, String(v)); });
+  const s = q.toString();
+  return s ? `?${s}` : '';
+};
+
+// Bancas
+const getBankrolls = async () => apiClient.get('/analytix/bankrolls');
+const createBankroll = async (data: { name: string; initialCapital?: number; currency?: string; unitValue?: number; commissionPct?: number }) => apiClient.post('/analytix/bankrolls', data);
+// Garante (e retorna) a banca dedicada de value bet do usuário.
+const ensureValuebetBankroll = async () => apiClient.post('/analytix/bankrolls/ensure-valuebet', {});
+
+// ===================== VALUE BETS — config (admin) + CLV =====================
+const getValuebetConfig = async () => apiClient.get('/valuebet/config');
+const updateValuebetConfig = async (data: Partial<ValuebetConfigDTO>) => apiClient.put('/valuebet/config', data);
+const getClvSummary = async (days = 30) => apiClient.get(`/valuebet/clv/summary?days=${days}`);
+const getClvBreakdown = async (dimension: 'bookmaker' | 'market' | 'tier', days = 30) => apiClient.get(`/valuebet/clv/breakdown?dimension=${dimension}&days=${days}`);
+const getJuiceBreakdown = async (dimension: 'bookmaker' | 'market', days = 30) => apiClient.get(`/valuebet/clv/juice?dimension=${dimension}&days=${days}`);
+const getClvTimeseries = async (days = 30) => apiClient.get(`/valuebet/clv/timeseries?days=${days}`);
+const getClvPending = async (limit = 100) => apiClient.get(`/valuebet/clv/pending?limit=${limit}`);
+const updateBankroll = async (id: string, data: Partial<{ name: string; initialCapital: number; currency: string; unitValue: number; commissionPct: number; isDefault: boolean; isActive: boolean }>) => apiClient.put(`/analytix/bankrolls/${id}`, data);
+const deleteBankroll = async (id: string) => apiClient.delete(`/analytix/bankrolls/${id}`);
+
+// Casas do usuário
+const getMyAccounts = async () => apiClient.get('/analytix/accounts');
+const createAccount = async (data: CreateAccountDTO) => apiClient.post('/analytix/accounts', data);
+const updateAccount = async (id: string, data: Partial<{ label: string; initialBalance: number; username: string; scope: string; notes: string; limited: boolean; isActive: boolean; customName: string; customLogoUrl: string; customColor: string; partnerId: string | null; bankrollId: string | null }>) => apiClient.put(`/analytix/accounts/${id}`, data);
+const deleteAccount = async (id: string) => apiClient.delete(`/analytix/accounts/${id}`);
+
+// Parceiros (donos de conta)
+const getPartners = async () => apiClient.get('/analytix/partners');
+const createPartner = async (data: CreatePartnerDTO) => apiClient.post('/analytix/partners', data);
+const updatePartner = async (id: string, data: Partial<CreatePartnerDTO & { isActive: boolean }>) => apiClient.put(`/analytix/partners/${id}`, data);
+const deletePartner = async (id: string) => apiClient.delete(`/analytix/partners/${id}`);
+
+// Apostas
+const getBets = async (params: { status?: string; bookmaker?: string; sport?: string; betType?: string; bankrollId?: string; from?: string; to?: string; page?: number; limit?: number } = {}) => apiClient.get(`/analytix/bets${analytixQp(params)}`);
+const getBetById = async (id: string) => apiClient.get(`/analytix/bets/${id}`);
+const createBet = async (data: CreateBetDTO) => apiClient.post('/analytix/bets', data);
+const updateBet = async (id: string, data: Partial<{ tags: string[]; notes: string; hidden: boolean; home: string; away: string; sport: string; league: string }>) => apiClient.put(`/analytix/bets/${id}`, data);
+const settleBet = async (id: string, legs: SettleLegInput[]) => apiClient.post(`/analytix/bets/${id}/settle`, { legs });
+const deleteBet = async (id: string) => apiClient.delete(`/analytix/bets/${id}`);
+
+// Transações
+const getAnalytixTransactions = async (params: { bankrollId?: string; accountId?: string; type?: string; from?: string; to?: string } = {}) => apiClient.get(`/analytix/transactions${analytixQp(params)}`);
+const createAnalytixTransaction = async (data: { bankrollId: string; type: TxTypeValue; amount: number; accountId?: string; partnerId?: string; description?: string }) => apiClient.post('/analytix/transactions', data);
+const deleteAnalytixTransaction = async (id: string) => apiClient.delete(`/analytix/transactions/${id}`);
+
+// Analytics
+const getAnalytixSummary = async (params: { bankrollId?: string; from?: string; to?: string } = {}) => apiClient.get(`/analytix/summary${analytixQp(params)}`);
+const getAnalytixTimeseries = async (params: { bankrollId?: string; from?: string; to?: string; bucket?: 'day' | 'week' | 'month' } = {}) => apiClient.get(`/analytix/timeseries${analytixQp(params)}`);
+const getAnalytixBreakdown = async (params: { by?: 'bookmaker' | 'sport' | 'league' | 'market' | 'month'; bankrollId?: string; from?: string; to?: string } = {}) => apiClient.get(`/analytix/breakdown${analytixQp(params)}`);
+
+// ==================== COMUNIDADE ====================
+
+export type VisibilityValue = 'private' | 'followers' | 'public';
+
+export interface PublicStatsDTO {
+  roi: number; yield: number; winRate: number; avgOdd: number;
+  betsCount: number; settledCount: number; openCount: number; verifiedCount: number;
+  profitUnits: number | null; totalProfit?: number; currentBankroll?: number;
+}
+export interface PublicProfileDTO {
+  handle: string; displayName: string; avatar: string | null; bio: string | null;
+  isVerifiedTipster: boolean; followersCount: number; followingCount: number;
+  realName: string | null; since: string; showCurrency: boolean; unit: number;
+  stats: PublicStatsDTO;
+  isFollowing?: boolean; isSelf?: boolean;
+}
+export interface PublicBetLegDTO {
+  houseLabel: string; market: string | null; selection: string | null; handicap: string | null;
+  side: 'back' | 'lay'; isFreebet: boolean; odd: number; status: LegStatusValue;
+  stake?: number; stakeUnits?: number | null;
+}
+export interface PublicBetDTO {
+  id: string; home: string | null; away: string | null; sport: string | null; league: string | null;
+  eventStart: string | null; createdAt: string; settledAt: string | null;
+  betType: 'arb' | 'single'; status: BetStatusValue; verified: 'verified' | 'unverified';
+  expectedProfitPct: number | null; roiPct: number | null; profitUnits: number | null; stakeUnits: number | null;
+  realizedProfit?: number | null; totalStake?: number; legs: PublicBetLegDTO[];
+}
+export interface PublicCurvePointDTO { date: string; index: number; profitUnits: number | null }
+export interface ProfileCardDTO {
+  handle: string; displayName: string; avatar: string | null; bio: string | null;
+  isVerifiedTipster: boolean; followersCount: number; roi: number; yield: number; betsCount: number; winRate: number;
+  isFollowing?: boolean; isSelf?: boolean;
+}
+
+export interface LeaderboardEntryDTO {
+  rank: number; handle: string; displayName: string; avatar: string | null; isVerifiedTipster: boolean;
+  betsCount: number; yield: number; roi: number; winRate: number; avgOdd: number; profitUnits: number;
+  lowSample: boolean; isFollowing?: boolean; isSelf?: boolean;
+}
+export interface LeaderboardDTO { items: LeaderboardEntryDTO[]; communityYield: number; minSample: number }
+
+export interface BreakdownPublicRowDTO { key: string; betsCount: number; yield: number }
+export interface CommunityAnalyticsDTO {
+  kpis: { activeUsers: number; totalBets: number; settledBets: number; yield: number; avgOdd: number };
+  bySport: BreakdownPublicRowDTO[];
+  byMarket: BreakdownPublicRowDTO[];
+  byHouse: { slug: string; count: number }[];
+  trending: { home: string | null; away: string | null; sport: string | null; count: number }[];
+}
+
+export interface FeedAuthorDTO { handle: string; displayName: string; avatar: string | null; isVerifiedTipster: boolean }
+export interface FeedItemDTO { author: FeedAuthorDTO; bet: PublicBetDTO }
+export interface NotificationDTO {
+  id: string; kind: string; actorHandle: string | null; actorName: string | null; actorAvatar: string | null;
+  targetId: string | null; title: string | null; readAt: string | null; createdAt: string;
+}
+export interface MyCommunityProfileDTO {
+  id: string; handle: string; displayName: string | null; avatar: string | null; bio: string | null;
+  visibility: VisibilityValue; showRealName: boolean; isVerifiedTipster: boolean;
+  followersCount: number; followingCount: number; createdAt: string; updatedAt: string;
+}
+export interface CommunityConsentDTO { id: string; type: string; granted: boolean; termsVersion: string; createdAt: string }
+export interface SaveProfileDTO { handle?: string; displayName?: string; avatar?: string; bio?: string; visibility?: VisibilityValue; showRealName?: boolean }
+
+const getCommunityProfiles = async () => apiClient.get('/community/profiles');
+const getPublicProfile = async (handle: string) => apiClient.get(`/community/u/${encodeURIComponent(handle)}`);
+const getPublicTrackRecord = async (handle: string, params: { page?: number; limit?: number } = {}) => apiClient.get(`/community/u/${encodeURIComponent(handle)}/track-record${analytixQp(params)}`);
+const getPublicCurve = async (handle: string, params: { bucket?: 'day' | 'week' | 'month' } = {}) => apiClient.get(`/community/u/${encodeURIComponent(handle)}/curve${analytixQp(params)}`);
+const getMyCommunityProfile = async () => apiClient.get('/community/profile/me');
+const saveCommunityProfile = async (data: SaveProfileDTO) => apiClient.post('/community/profile', data);
+const recordCommunityConsent = async (data: { type: string; granted: boolean }) => apiClient.post('/community/profile/consent', data);
+const setBankrollVisibility = async (id: string, data: { visibility: VisibilityValue; showCurrency?: boolean }) => apiClient.put(`/community/bankrolls/${id}/visibility`, data);
+const setBetVisibility = async (id: string, data: { visibility: 'inherit' | VisibilityValue }) => apiClient.put(`/community/bets/${id}/visibility`, data);
+const followUser = async (handle: string) => apiClient.post(`/community/follow/${encodeURIComponent(handle)}`);
+const unfollowUser = async (handle: string) => apiClient.delete(`/community/follow/${encodeURIComponent(handle)}`);
+const getCommunityFeed = async (params: { page?: number; limit?: number } = {}) => apiClient.get(`/community/feed${analytixQp(params)}`);
+const getLeaderboard = async (params: { window?: string; metric?: string; sport?: string; minSample?: number } = {}) => apiClient.get(`/community/leaderboard${analytixQp(params)}`);
+const getCommunityAnalytics = async (params: { window?: string } = {}) => apiClient.get(`/community/analytics${analytixQp(params)}`);
+const getCommunityNotifications = async () => apiClient.get('/community/notifications');
+const markCommunityNotificationsRead = async () => apiClient.put('/community/notifications/read');
+
 export const apiGateway = {
     register,
     login,
@@ -736,6 +1454,7 @@ export const apiGateway = {
     deleteResidentList,
     // Bookmakers
     getBookmakers,
+    getHomeStats,
     addBookmaker,
     updateBookmaker,
     toggleBookmaker,
@@ -764,7 +1483,92 @@ export const apiGateway = {
     upsertMarketName,
     bulkUpsertMarketNames,
     updateMarketName,
-    deleteMarketName
+    deleteMarketName,
+    // Planos & assinatura
+    getPlans,
+    getAllPlans,
+    createPlan,
+    updatePlan,
+    deletePlan,
+    getMySubscription,
+    createCheckout,
+    getCheckoutStatus,
+    activateTrial,
+    // Pagamentos (admin)
+    getPaymentDashboard,
+    getPaymentTransactions,
+    getProviderConfig,
+    updateProviderConfig,
+    registerPaymentWebhook,
+    getPaymentWebhookInfo,
+    // Usuários (admin)
+    getAdminUsers,
+    getAdminUser,
+    updateAdminUser,
+    grantUserPlan,
+    revokeUserPlan,
+    // Reports / ocultar / exclusões
+    createReport,
+    getMyReports,
+    getReports,
+    updateReport,
+    getHidden,
+    addHidden,
+    removeHidden,
+    clearHidden,
+    getExclusions,
+    createExclusion,
+    deleteExclusion,
+    // Analytix
+    getBankrolls,
+    createBankroll,
+    ensureValuebetBankroll,
+    getValuebetConfig,
+    updateValuebetConfig,
+    getClvSummary,
+    getClvBreakdown,
+    getJuiceBreakdown,
+    getClvTimeseries,
+    getClvPending,
+    updateBankroll,
+    deleteBankroll,
+    getMyAccounts,
+    createAccount,
+    updateAccount,
+    deleteAccount,
+    getPartners,
+    createPartner,
+    updatePartner,
+    deletePartner,
+    getBets,
+    getBetById,
+    createBet,
+    updateBet,
+    settleBet,
+    deleteBet,
+    getAnalytixTransactions,
+    createAnalytixTransaction,
+    deleteAnalytixTransaction,
+    getAnalytixSummary,
+    getAnalytixTimeseries,
+    getAnalytixBreakdown,
+    // Comunidade
+    getCommunityProfiles,
+    getPublicProfile,
+    getPublicTrackRecord,
+    getPublicCurve,
+    getMyCommunityProfile,
+    saveCommunityProfile,
+    recordCommunityConsent,
+    setBankrollVisibility,
+    setBetVisibility,
+    followUser,
+    unfollowUser,
+    getCommunityFeed,
+    getLeaderboard,
+    getCommunityAnalytics,
+    getCommunityNotifications,
+    markCommunityNotificationsRead
 };
     
 export default apiGateway;

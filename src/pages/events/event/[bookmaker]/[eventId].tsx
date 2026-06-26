@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
 import {
-  ArrowLeft, Calendar, MapPin, ExternalLink, Search, Loader2, BarChart3, Trophy, X, TrendingUp, TrendingDown, Star, Zap
+  ArrowLeft, Calendar, MapPin, Search, Loader2, BarChart3, Trophy, X, TrendingUp, TrendingDown, Star, Zap
 } from 'lucide-react';
 import { apiGateway, EventGroupDetail, EventGroupSelection } from '@/gateways/api.gateway';
 import { Select } from '@/components/ui/Select';
 import { BookmakerTag, BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
+import { EventHousesPanel } from '@/components/event/EventHousesPanel';
 import { useBookmakers } from '@/hooks/useBookmakers';
 
 interface HistoryRow {
@@ -439,26 +440,12 @@ export default function EventDetailPage() {
             </h1>
             <p className="text-sm text-gray-400 mt-1">{detail.event.league || '—'}</p>
 
-            {/* Casas do grupo */}
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <span className="text-[11px] uppercase tracking-wider text-gray-500 mr-1">Casas:</span>
-              {detail.houses.map((h) => (
-                <span key={`${h.bookmaker}-${h.eventId}`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs bg-white/5 ring-1 ring-white/10">
-                  <BookmakerTag slug={h.bookmaker} size={16} />
-                  {h.inverted && <span className="text-[9px] uppercase text-gray-500" title="Mandante/visitante invertido nesta casa">inv</span>}
-                  {h.link && (
-                    <a href={h.link} target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-teal-300" title="Abrir na casa">
-                      <ExternalLink size={10} />
-                    </a>
-                  )}
-                </span>
-              ))}
-            </div>
-
-            <div className="mt-4 flex items-center gap-4 text-[11px] text-gray-500">
-              <span className="inline-flex items-center gap-1"><BarChart3 size={12} /> {detail.markets.length} mercados</span>
-              <span>{detail.houses.length} casas</span>
-            </div>
+            {/* Casas do grupo — preview clicável que abre o modal de casas */}
+            <EventHousesPanel
+              houses={detail.houses}
+              marketCount={detail.markets.length}
+              eventLabel={`${detail.event.home} vs ${detail.event.away}`}
+            />
           </div>
 
           {/* Controles: busca + seletor de casa */}

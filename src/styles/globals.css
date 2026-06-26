@@ -6,6 +6,7 @@ html, body {
   height: 100%;
   min-height: 100%;
   background-color: #09090b; /* ou bg-zinc-900 se for a cor usada */
+  color-scheme: dark; /* dropdowns/inputs nativos renderizam no tema escuro */
 }
 
 #__next {
@@ -187,30 +188,21 @@ input:-webkit-autofill {
 
 /* -------------------------------------------------------------------------
    Borda "fita de LED" RGB que percorre a borda do card (surebets novas).
-   Usa um conic-gradient cuja origem (--led-angle) é animada via @property,
-   mascarado para aparecer SÓ na espessura da borda. Cobre os cantos porque
-   o conic-gradient preenche a caixa toda. Degrada para borda estática se o
-   browser não suportar @property.
+   IMPORTANTE (memória): NÃO usar @property --led-angle animado no conic-gradient.
+   Animar uma custom property registrada força o Chromium a REPINTAR a imagem do
+   gradiente (e a máscara) a cada frame, e o churn de @property quando o elemento
+   monta/desmonta a cada surebet nova vaza memória numa aba aberta por muito tempo.
+   Em vez disso, pintamos UM conic-gradient estático (uma vez) e o giramos via
+   `transform: rotate` — animação só de compositor (sem repaint, sem vazamento).
+   O ::before é um quadrado bem maior que o card (cobre os cantos ao girar),
+   recortado pela máscara para aparecer só na espessura da borda.
    ------------------------------------------------------------------------- */
-@property --led-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
-@keyframes led-rotate {
-  to { --led-angle: 360deg; }
-}
-
 .led-border {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   padding: 2px; /* espessura da fita */
-  background: conic-gradient(
-    from var(--led-angle),
-    #f43f5e, #f59e0b, #fde047, #4ade80, #22d3ee, #3b82f6, #a855f7, #f43f5e
-  );
+  overflow: hidden;
   /* mantém só o anel (exclui o miolo) */
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -220,11 +212,30 @@ input:-webkit-autofill {
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
-  animation: led-rotate 2.4s linear infinite;
   pointer-events: none;
   z-index: 1;
 }
 
+.led-border::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* quadrado maior que a diagonal do card (cobre os cantos em qualquer ângulo) */
+  width: 250%;
+  aspect-ratio: 1;
+  background: conic-gradient(
+    #f43f5e, #f59e0b, #fde047, #4ade80, #22d3ee, #3b82f6, #a855f7, #f43f5e
+  );
+  animation: led-rotate 2.4s linear infinite;
+  will-change: transform;
+}
+
+@keyframes led-rotate {
+  from { transform: translate(-50%, -50%) rotate(0); }
+  to   { transform: translate(-50%, -50%) rotate(1turn); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .led-border { animation: none; }
+  .led-border::before { animation: none; }
 }
