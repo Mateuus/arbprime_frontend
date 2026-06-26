@@ -4,7 +4,9 @@ import {
   Lock,
   Mail,
   Building2,
-  ListChecks
+  ListChecks,
+  Settings as IconSettings,
+  Server as IconServer
 } from "lucide-react";
 import { GiSoccerBall } from "react-icons/gi";
 import { RiShieldUserLine } from "react-icons/ri";
@@ -48,6 +50,14 @@ export const userMenus = [
     children: [
       { id: 'historico', label: 'Histórico de Apostas', description: 'description.', icon: <BiBookContent size={16} /> },
       { id: 'criador', label: 'Histórico do Criador', description: 'description.', icon: <ListChecks size={16} /> }
+    ]
+  },
+  {
+    id: 'config',
+    label: 'CONFIGURAÇÕES',
+    icon: <IconSettings size={20} />,
+    children: [
+      { id: 'server', label: 'Servidor', description: 'Escolha o servidor (Principal/Secundário) e acompanhe a latência.', icon: <IconServer size={16} /> }
     ]
   }
 ];

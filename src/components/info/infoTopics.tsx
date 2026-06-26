@@ -2,6 +2,7 @@
 import { ReactNode } from 'react';
 import {
   Gem, Scale, Percent, Gauge, ShieldCheck, Wallet, LineChart, Brain, AlertTriangle, ArrowRight,
+  TrendingUp, Hourglass, Building2, Eye, BarChart3, Target,
 } from 'lucide-react';
 import { InfoModal } from '@/components/ui/InfoModal';
 
@@ -97,11 +98,11 @@ export const INFO_TOPICS: Record<string, InfoTopic> = {
         </Section>
 
         <Section icon={<ShieldCheck size={15} />} title="Confiança & Tier (qualidade)">
-          <p>O selo mostra de onde vem a estimativa — quanto mais alto o tier e a confiança, mais sólida ela é:</p>
+          <p>O selo de <strong className="text-white">tier</strong> indica o quão sólida é a estimativa — quanto menor o número (e maior a confiança), mais forte o sinal:</p>
           <ul className="space-y-1.5">
-            <Field name="Tier 1 · Pinnacle">núcleo do mercado (1X2, total de gols). Confiança tipicamente alta.</Field>
-            <Field name="Tier 2 · Pinnacle (sec.)">mercados secundários (escanteios, cartões, gols por time).</Field>
-            <Field name="Tier 3 · Consenso">sem Pinnacle no mercado — estimativa pelo consenso das casas. Mais conservador.</Field>
+            <Field name="Tier 1">núcleo do mercado (1X2, total de gols). Confiança tipicamente alta.</Field>
+            <Field name="Tier 2">mercados secundários (escanteios, cartões, gols por time). Confiança média.</Field>
+            <Field name="Tier 3">estimativa mais conservadora. Confiança menor — pondere o risco.</Field>
           </ul>
         </Section>
 
@@ -151,6 +152,142 @@ export const INFO_TOPICS: Record<string, InfoTopic> = {
             <li className="flex gap-2"><ArrowRight size={13} className="mt-0.5 shrink-0" /> Casas podem limitar contas vencedoras. Aposte com responsabilidade.</li>
           </ul>
         </div>
+      </div>
+    ),
+  },
+
+  // CLV (Closing Line Value) — a prova de edge (doc 10 §1, §4, §6.5, §8).
+  clv: {
+    title: 'O que é o CLV (Closing Line Value)?',
+    subtitle: 'A prova de que suas apostas têm edge real — antes do lucro aparecer.',
+    icon: violetIcon(<LineChart size={20} />),
+    footerNote: 'CLV positivo sustentado = edge real. Ele aparece muito antes do lucro cru.',
+    body: (
+      <div className="divide-y divide-white/5">
+        <Section icon={<LineChart size={15} />} title="O problema: o lucro engana no curto prazo">
+          <p>
+            Apostas de valor têm <strong className="text-white">variância alta</strong>: você pode acertar o edge e ainda assim perder várias seguidas por azar. Olhar só o lucro nas primeiras dezenas/centenas de apostas <strong className="text-white">não diz</strong> se a sua estratégia presta — pode ser sorte ou azar.
+          </p>
+          <p>
+            O <strong className="text-white">CLV</strong> resolve isso: é uma métrica que mede o edge <strong className="text-white">independente do resultado</strong> da aposta, e por isso converge <strong className="text-white">muito mais rápido</strong> que o lucro.
+          </p>
+        </Section>
+
+        <Section icon={<Scale size={15} />} title="O que o CLV mede">
+          <p>
+            CLV compara a <strong className="text-white">odd que você pegou</strong> com a <strong className="text-white">odd justa no fechamento</strong> do jogo — o último instante antes da bola rolar, quando o mercado já absorveu todas as informações (escalações, lesões, dinheiro dos apostadores sharp). É o momento mais <strong className="text-white">preciso</strong> do mercado.
+          </p>
+          <p className="rounded-lg bg-black/30 p-2.5 text-center font-mono text-[12px] text-violet-200 ring-1 ring-violet-500/20">
+            CLV % = (odd que você pegou ÷ odd justa de fechamento) − 1
+          </p>
+          <p>
+            <strong className="text-white">Exemplo:</strong> você pegou <strong className="text-white">2.10</strong>; no fechamento a odd justa estava <strong className="text-white">1.95</strong> → CLV <strong className="text-emerald-300">+7,7%</strong>. Você travou um preço melhor do que o mercado fechou — pegou valor de verdade.
+          </p>
+        </Section>
+
+        <Section icon={<TrendingUp size={15} />} title="Por que isso importa">
+          <p>
+            Pegar <strong className="text-white">consistentemente</strong> odds melhores que o fechamento é o que os apostadores profissionais usam como <strong className="text-white">termômetro nº 1</strong>. Se o seu CLV médio é positivo de forma sustentada — já em <strong className="text-white">~50–200 apostas</strong> —, é prova estatística de que você tem <strong className="text-emerald-300">edge real</strong>, mesmo que o lucro ainda não tenha aparecido.
+          </p>
+          <p className="rounded-lg bg-white/[0.04] p-2.5 ring-1 ring-white/10">
+            <strong className="text-white">Em uma frase:</strong> o lucro diz se você <em>ganhou</em>; o CLV diz se você <em>jogou certo</em>. No longo prazo, jogar certo vira lucro.
+          </p>
+        </Section>
+
+        <Section icon={<Hourglass size={15} />} title="Por que o CLV fica “pendente”">
+          <p>
+            O fechamento só existe <strong className="text-white">quando o jogo começa</strong>. Por isso o CLV de uma aposta só é calculado <strong className="text-white">depois do apito inicial</strong> (liquidação ~10 min após o início). Antes disso, a aposta aparece como <strong className="text-white">“pendente”</strong> — é esperado, não é erro.
+          </p>
+          <p>
+            Em alguns casos o jogo liquida mas <strong className="text-white">não há fechamento resolvível</strong> (faltou a âncora de referência naquele mercado). Essas apostas ficam de fora das médias de CLV — não dá pra medir o que não tem régua.
+          </p>
+        </Section>
+
+        <Section icon={<BarChart3 size={15} />} title="Como ler o painel de Desempenho">
+          <ul className="space-y-1.5">
+            <Field name="CLV médio">a média do seu CLV na janela. Positivo e estável = bom sinal.</Field>
+            <Field name="% CLV positivo">quantas apostas fecharam com CLV &gt; 0. Acima de 50% é um norte saudável.</Field>
+            <Field name="Apostas liquidadas">quantas já têm CLV calculado (base da estatística).</Field>
+            <Field name="Edge médio (tomado)">o valor que estimamos na hora da captura — compare com o CLV realizado.</Field>
+            <Field name="CLV médio por dia">a série temporal: é o sinal de saúde do motor ao longo do tempo.</Field>
+            <Field name="Quebra por casa / mercado / tier">onde você está pegando (ou perdendo) valor.</Field>
+          </ul>
+        </Section>
+
+        <Section icon={<ShieldCheck size={15} />} title="Transparência (como prometemos não enganar)">
+          <ul className="space-y-1.5">
+            <Field name="Odd imutável">gravamos a odd no 1º instante em que o value foi visto — ela nunca é “melhorada” depois.</Field>
+            <Field name="Sem cereja">o CLV é calculado para TODAS as emissões liquidadas, não só as que deram certo.</Field>
+            <Field name="Tier 3 segregado">o CLV de Tier 3 usa uma referência mais conservadora (que pode incluir a própria casa), gerando viés — por isso mostramos por tier e não somamos T3 com T1/T2 no mesmo número.</Field>
+          </ul>
+        </Section>
+
+        <div className="mt-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3">
+          <div className="mb-1 flex items-center gap-2 text-amber-300">
+            <AlertTriangle size={15} /> <span className="text-sm font-semibold">Importante</span>
+          </div>
+          <ul className="space-y-1 text-[12px] leading-relaxed text-amber-100/80">
+            <li className="flex gap-2"><ArrowRight size={13} className="mt-0.5 shrink-0" /> O CLV não é garantia de lucro em nenhuma aposta individual — é um indicador estatístico de longo prazo.</li>
+            <li className="flex gap-2"><ArrowRight size={13} className="mt-0.5 shrink-0" /> Precisa de volume: julgue com dezenas/centenas de apostas, não com 5 ou 10.</li>
+            <li className="flex gap-2"><ArrowRight size={13} className="mt-0.5 shrink-0" /> CLV positivo + disciplina de banca = o caminho. CLV negativo sustentado = revisar a estratégia.</li>
+          </ul>
+        </div>
+      </div>
+    ),
+  },
+
+  // Juice / margem da casa (doc 11).
+  juice: {
+    title: 'O que é o “juice” (margem da casa)?',
+    subtitle: 'O lucro que a casa embute em cada mercado — e por que você ainda tem valor.',
+    icon: violetIcon(<Percent size={20} />),
+    footerNote: 'Mostramos a margem com “~” porque é uma estimativa — use para comparar, não como número oficial.',
+    body: (
+      <div className="divide-y divide-white/5">
+        <Section icon={<Percent size={15} />} title="O que é">
+          <p>
+            <strong className="text-white">Juice</strong> (também: <em>vig</em>, <em>overround</em> ou margem) é o <strong className="text-white">lucro embutido</strong> que a casa cobra num mercado. Toda casa precifica de forma que a soma das probabilidades implícitas passe de 100% — esse excesso é a margem dela.
+          </p>
+          <p className="rounded-lg bg-black/30 p-2.5 text-center font-mono text-[12px] text-violet-200 ring-1 ring-violet-500/20">
+            juice = Σ (1 ÷ odd de cada seleção) − 1
+          </p>
+          <p>
+            <strong className="text-white">Exemplo (1X2):</strong> Casa 2.10 · Empate 3.40 · Fora 3.50 → 0,476 + 0,294 + 0,286 = 1,056 → juice <strong className="text-white">5,6%</strong>. É o que a casa ganha no agregado daquele mercado.
+          </p>
+        </Section>
+
+        <Section icon={<Target size={15} />} title="Por que existe valor mesmo com juice">
+          <p>
+            O juice é a margem <strong className="text-white">geral</strong> do mercado; o <strong className="text-white">valor (edge)</strong> é numa <strong className="text-white">seleção específica</strong>. Você pode ter value (<span className="rounded bg-emerald-500/15 px-1 text-emerald-300">+edge%</span>) num mercado de juice alto: a casa carregou a mão no conjunto, mas <strong className="text-white">errou para mais</strong> justamente na seleção que você vai apostar. São coisas diferentes — não confunda margem com lucro esperado.
+          </p>
+        </Section>
+
+        <Section icon={<Building2 size={15} />} title="Dois juices: a casa e a referência">
+          <ul className="space-y-1.5">
+            <Field name="Margem da casa">o juice da casa onde você aposta (betano / bet365 / superbet). É o que importa pra você — quanto ela está te cobrando naquele mercado.</Field>
+            <Field name="Margem da referência (Pinnacle/consenso)">o juice da fonte da “odd justa”. Serve só como termômetro de qualidade da estimativa.</Field>
+          </ul>
+          <p className="rounded-lg bg-white/[0.04] p-2.5 ring-1 ring-white/10">
+            <strong className="text-white">Padrão esperado:</strong> casas soft cobram <strong className="text-white">6–13%</strong>; a Pinnacle, <strong className="text-white">5–7%</strong>. Mostrar os dois lado a lado deixa claro por que o value existe — e quanto menor a margem da casa, mais “honesto” é aquele mercado.
+          </p>
+        </Section>
+
+        <Section icon={<Eye size={15} />} title="Transparência: é uma estimativa">
+          <p>
+            Calculamos o juice a partir das odds das <strong className="text-white">duas pontas</strong> daquele mercado <strong className="text-white">no instante da captura</strong>. Por isso o número é <strong className="text-white">aproximado</strong> (mostramos com <span className="font-mono">~</span>) e <strong className="text-white">não</strong> é necessariamente a margem exata que a casa usa internamente. Use para <em>comparar</em> mercados e casas — não como número oficial.
+          </p>
+          <p>
+            Quando a casa não tem as <strong className="text-white">duas pontas</strong> da partição (ex.: só o “Mais de 2.5”, sem o “Menos de 2.5”), o juice fica <strong className="text-white">não medível</strong> e nós simplesmente <strong className="text-white">não exibimos</strong> — em vez de chutar um valor.
+          </p>
+        </Section>
+
+        <Section icon={<Gauge size={15} />} title="Como usamos na tela">
+          <ul className="space-y-1.5">
+            <Field name="Badge no card">“margem da casa ~6,7%”, com cor por faixa (menor = melhor).</Field>
+            <Field name="Filtro">“só mercados com margem abaixo de X%” — evita mercados muito carregados.</Field>
+            <Field name="Ranking de casas">no painel de Desempenho, a margem média por casa/mercado — qual cobra menos.</Field>
+          </ul>
+        </Section>
       </div>
     ),
   },

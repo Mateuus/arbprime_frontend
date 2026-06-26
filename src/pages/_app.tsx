@@ -9,6 +9,7 @@ import { UserProvider } from "@/context/UserContext";
 import Sidebar from "@/components/SideBar";
 //import MobileMenu from '@/components/MobileMenu';
 import { useWebSocketClient } from '@/hooks/useWebSocketClient';
+import { serverManager } from '@/services/serverManager';
 import Navbar from "@/components/NavBar";
 import AuthModal from "@/components/modals/AuthModal";
 import MobileTabMenu from "@/components/Mobile/MobileTabMenu";
@@ -18,7 +19,10 @@ const inter = Inter({ subsets: ["latin"] });
 
 export default function ArbCrypto({ Component, pageProps }: AppProps) {
   const router = useRouter();
-  useWebSocketClient(); 
+  // Resolve o melhor servidor (ping) e liga o monitor de failover já no boot,
+  // antes das primeiras requisições REST/WS.
+  serverManager.init();
+  useWebSocketClient();
 
   useEffect(() => {
     const { referralCode } = router.query;

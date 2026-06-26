@@ -1,3 +1,5 @@
+import { serverManager } from '@/services/serverManager';
+
 type WSCallback = (data: unknown) => void;
 
 /**
@@ -12,8 +14,24 @@ type WSCallback = (data: unknown) => void;
 class WSManager {
   private ws: WebSocket | null = null;
   private listeners: WSCallback[] = [];
-  private urlBase = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:8080';
   private token = 'anonymous';
+  private activeUnsub: (() => void) | null = null;
+
+  /** Base do WS é resolvida pelo servidor ativo (failover/seleção). */
+  private get urlBase() {
+    return serverManager.getWsBase() || process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:8080';
+  }
+
+  /**
+   * Reconecta no novo servidor mantendo token e assinaturas (sticky). Chamado
+   * quando o serverManager troca o servidor ativo (escolha do usuário ou
+   * failover automático).
+   */
+  private switchServer = () => {
+    if (!this.ws) return; // ainda não conectou: nada a fazer
+    this.closeSocket();
+    this.connect(this.token);
+  };
 
   // Assinaturas por método (reenviadas em toda reconexão).
   private sticky = new Map<string, string>();
@@ -25,6 +43,12 @@ class WSManager {
   }
 
   public connect(token: string = 'anonymous') {
+    // Liga o monitor de servidores e escuta trocas de servidor ativo (1x).
+    serverManager.init();
+    if (!this.activeUnsub) {
+      this.activeUnsub = serverManager.onActiveChange(this.switchServer);
+    }
+
     // Já conectado/conectando com o MESMO token → não recria.
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       if (token === this.token) return;

@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { Gem, RefreshCcw, Search, Zap, Filter, ChevronDown, LineChart, HelpCircle } from 'lucide-react';
 import { useValuebets } from '@/hooks/useValuebets';
 import { InfoTopicModal } from '@/components/info/infoTopics';
+import { InfoButton } from '@/components/info/InfoButton';
 import { useUserContext } from '@/context/UserContext';
 import { Select } from '@/components/ui/Select';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -258,7 +259,8 @@ export default function ValuebetsPage() {
           <label className="text-[11px] text-gray-400">Odd máx.
             <input value={oddMax} onChange={(e) => setOddMax(e.target.value)} inputMode="decimal" placeholder="5.00" className={`${inputClass} mt-1`} />
           </label>
-          <label className="text-[11px] text-gray-400">Juice casa máx (%)
+          <label className="text-[11px] text-gray-400">
+            <span className="inline-flex items-center gap-1">Juice casa máx (%) <InfoButton topic="juice" size={12} label="O que é o juice (margem da casa)?" /></span>
             <input value={vigMax} onChange={(e) => setVigMax(e.target.value)} inputMode="decimal" placeholder="9" className={`${inputClass} mt-1`} />
           </label>
         </div>

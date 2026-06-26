@@ -13,6 +13,7 @@ const UserPages: Record<string, any> = {
   "abfilter-edit": dynamic(() => import("@/pages/_user/abfilter/edit/index")),
   "ab-bookmakers": dynamic(() => import("@/pages/_user/ab-bookmakers/index")),
   "change-password": dynamic(() => import("@/pages/_user/change-password")),
+  "server": dynamic(() => import("@/pages/_user/server")),
 };
 
 const UserModalDesktop = () => {

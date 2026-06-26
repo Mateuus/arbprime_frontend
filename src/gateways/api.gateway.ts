@@ -1,8 +1,7 @@
 import axios from "axios";
 
 import { CreateOrUpdateFilterDTO } from '@/interfaces/FilterDTO';
-
-const ApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL;
+import { serverManager } from '@/services/serverManager';
 
 const getPreferredLanguage = () => {
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -11,9 +10,11 @@ const getPreferredLanguage = () => {
     return 'pt-BR'; // Valor padrão caso esteja no servidor
 };
 
-// Configurações básicas do Axios
+// Configurações básicas do Axios.
+// IMPORTANTE: a baseURL NÃO é fixada aqui — ela é resolvida por requisição pelo
+// serverManager (Principal/Secundário + failover). Assim, trocar de servidor ou
+// cair e fazer failover passa a valer imediatamente, sem recriar o client.
 const apiClient = axios.create({
-    baseURL: `${ApiUrl}`,
     headers: {
       'Content-Type': 'application/json',
       'accept-language': getPreferredLanguage(), // Define o idioma inicial
@@ -21,13 +22,34 @@ const apiClient = axios.create({
     withCredentials: true, // Garante que os cookies HttpOnly sejam enviados com as requisições
 });
 
-// Interceptor para atualizar o header de idioma
+// Interceptor de request: define a baseURL ativa e atualiza o idioma.
 apiClient.interceptors.request.use((config) => {
+    // Garante o monitor de servidores ligado e usa o servidor ativo no momento.
+    serverManager.init();
+    if (!config.baseURL) config.baseURL = serverManager.getApiBase();
     const language = getPreferredLanguage();
     if (config.headers) {
       config.headers['accept-language'] = language; // Atualiza o idioma
     }
     return config;
+});
+
+// Interceptor de failover: se uma requisição falhar por REDE (servidor fora do
+// ar — sem `error.response`), marca o ativo como down, troca de servidor e
+// repete a requisição UMA vez na nova baseURL. Erros HTTP (4xx/5xx com resposta)
+// não disparam failover, pois o servidor está de pé.
+apiClient.interceptors.response.use(undefined, (error) => {
+    const config = error?.config;
+    const isNetworkError = !!config && !error?.response && error?.code !== 'ERR_CANCELED';
+    if (isNetworkError && !config.__failoverRetried) {
+      const switched = serverManager.markActiveDown();
+      if (switched) {
+        config.__failoverRetried = true;
+        config.baseURL = serverManager.getApiBase();
+        return apiClient(config);
+      }
+    }
+    return Promise.reject(error);
 });
 
 

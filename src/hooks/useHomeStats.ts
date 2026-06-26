@@ -10,6 +10,8 @@ export interface HomeStats {
   bestProfit: number;
   /** Oportunidades de arbitragem cripto com lucro líquido positivo. */
   cryptoOps: number;
+  /** Eventos próximos no catálogo /events (grupos deduplicados entre casas). */
+  events: number;
   /** Casas de apostas monitoradas (registro). */
   bookmakers: number;
   /** Já chegou ao menos uma resposta do servidor? */
@@ -21,6 +23,7 @@ const EMPTY: HomeStats = {
   surebetsAbove1: 0,
   bestProfit: 0,
   cryptoOps: 0,
+  events: 0,
   bookmakers: 0,
   live: false,
 };
@@ -47,6 +50,7 @@ export function useHomeStats(intervalMs = 20000): HomeStats {
             surebetsAbove1: d.surebetsAbove1 ?? 0,
             bestProfit: d.bestProfit ?? 0,
             cryptoOps: d.cryptoOps ?? 0,
+            events: d.events ?? 0,
             bookmakers: d.bookmakers ?? 0,
             live: true,
           });

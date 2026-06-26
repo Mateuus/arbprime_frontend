@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Bot,
   Building2,
+  CalendarDays,
   CheckCircle2,
   CircleDot,
   Coins,
@@ -209,13 +210,14 @@ export default function Home() {
             decimals={2}
             accent="bg-emerald-400"
           />
-          <StatCard
-            icon={<Coins size={16} />}
-            label="Oportunidades cripto"
-            value={stats.cryptoOps}
-            accent="bg-cyan-400"
-            soon
-          />
+          <Link href="/events" className="block">
+            <StatCard
+              icon={<CalendarDays size={16} />}
+              label="Eventos monitorados"
+              value={stats.events}
+              accent="bg-cyan-400"
+            />
+          </Link>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">

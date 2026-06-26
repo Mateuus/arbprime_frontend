@@ -2,12 +2,15 @@ import React from 'react';
 import Link from 'next/link';
 import { Users2, LayoutDashboard, User, Rss, Trophy } from 'lucide-react';
 import NotificationsBell from './NotificationsBell';
+import { useUserContext } from '@/context/UserContext';
 
+// `authOnly` esconde a aba enquanto o usuário não estiver logado (Feed e Meu perfil
+// dependem de conta). Descobrir e Ranking são públicos.
 const TABS = [
-  { id: 'descobrir', name: 'Descobrir', path: '/comunidade', icon: LayoutDashboard },
-  { id: 'ranking', name: 'Ranking', path: '/comunidade/ranking', icon: Trophy },
-  { id: 'feed', name: 'Feed', path: '/comunidade/feed', icon: Rss },
-  { id: 'perfil', name: 'Meu perfil', path: '/comunidade/perfil', icon: User },
+  { id: 'descobrir', name: 'Descobrir', path: '/comunidade', icon: LayoutDashboard, authOnly: false },
+  { id: 'ranking', name: 'Ranking', path: '/comunidade/ranking', icon: Trophy, authOnly: false },
+  { id: 'feed', name: 'Feed', path: '/comunidade/feed', icon: Rss, authOnly: true },
+  { id: 'perfil', name: 'Meu perfil', path: '/comunidade/perfil', icon: User, authOnly: true },
 ];
 
 interface Props {
@@ -23,6 +26,8 @@ interface Props {
  * nas ações (publicar/seguir), tratadas nas próprias páginas.
  */
 export default function ComunidadeShell({ active = '', title, subtitle, actions, children }: Props) {
+  const { isAuthenticated } = useUserContext();
+  const tabs = TABS.filter((t) => !t.authOnly || isAuthenticated);
   return (
     <div className="w-full px-3 sm:px-6 py-6">
       <header className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -42,7 +47,7 @@ export default function ComunidadeShell({ active = '', title, subtitle, actions,
       </header>
 
       <nav className="mb-5 flex items-center gap-1.5 overflow-x-auto py-1.5 px-1 -mx-1">
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const Icon = t.icon;
           const isActive = t.id === active;
           return (

@@ -13,11 +13,12 @@ export const edgeTone = (pct: number): string => {
   return 'text-gray-300 bg-white/5 ring-white/10';
 };
 
-// Selo de origem da "verdade" (doc §6.1): T1 Pinnacle, T2 Pinnacle·sec., T3 Consenso.
+// Selo de qualidade por tier. Mantemos só "Tier 1/2/3" na UI (a origem da
+// referência — Pinnacle/consenso — fica como detalhe interno, não no selo).
 export const tierMeta = (tier: number, _ref?: string): { label: string; className: string } => {
-  if (tier === 1) return { label: 'Pinnacle', className: 'text-emerald-300 bg-emerald-500/12 ring-emerald-500/30' };
-  if (tier === 2) return { label: 'Pinnacle · sec.', className: 'text-sky-300 bg-sky-500/12 ring-sky-500/30' };
-  return { label: 'Consenso', className: 'text-gray-300 bg-white/5 ring-white/15' };
+  if (tier === 1) return { label: 'Tier 1', className: 'text-emerald-300 bg-emerald-500/12 ring-emerald-500/30' };
+  if (tier === 2) return { label: 'Tier 2', className: 'text-sky-300 bg-sky-500/12 ring-sky-500/30' };
+  return { label: 'Tier 3', className: 'text-gray-300 bg-white/5 ring-white/15' };
 };
 
 // Cor do juice/margem da casa (doc 11 §6.1). ATENÇÃO: escala INVERTIDA do edge —

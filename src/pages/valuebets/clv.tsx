@@ -1,23 +1,27 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useRouter } from 'next/router';
-import { LineChart, RefreshCcw, ArrowLeft, Gem, Info } from 'lucide-react';
+import { LineChart, RefreshCcw, ArrowLeft, Gem, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useUserContext } from '@/context/UserContext';
 import { Select } from '@/components/ui/Select';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { apiGateway, ClvSummaryDTO, ClvBreakdownRowDTO, ClvPendingDTO, JuiceRowDTO } from '@/gateways/api.gateway';
 import { marketLabel } from '@/utils/surebet';
 import { houseVigTone, fmtVigPct } from '@/utils/valuebet';
+import { InfoButton } from '@/components/info/InfoButton';
+import HelpLabel from '@/components/analytix/HelpLabel';
 
 interface TsPoint { day: string; tier: number | null; n: number; clvAvgPct: number | null }
 
 const fmtPct = (v: number | null | undefined, digits = 2) => (v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(digits)}%`);
 const clvColor = (v: number | null | undefined) => (v == null ? 'text-gray-400' : v > 0 ? 'text-emerald-300' : v < 0 ? 'text-rose-300' : 'text-gray-300');
 
-// KPI card.
-function Kpi({ label, value, tone = 'text-white', sub }: { label: string; value: string; tone?: string; sub?: string }) {
+// KPI card. `tip` adiciona um "?" ao lado do rótulo explicando a métrica.
+function Kpi({ label, value, tone = 'text-white', sub, tip }: { label: string; value: string; tone?: string; sub?: string; tip?: ReactNode }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-      <div className="text-[11px] uppercase tracking-wider text-gray-500">{label}</div>
+      <div className="text-[11px] uppercase tracking-wider text-gray-500">
+        {tip ? <HelpLabel help={tip}>{label}</HelpLabel> : label}
+      </div>
       <div className={`mt-1 text-2xl font-bold tabular-nums ${tone}`}>{value}</div>
       {sub && <div className="text-[11px] text-gray-500">{sub}</div>}
     </div>
@@ -59,7 +63,10 @@ export default function ValuebetClvPage() {
   const [juiceRows, setJuiceRows] = useState<JuiceRowDTO[]>([]);
   const [ts, setTs] = useState<TsPoint[]>([]);
   const [pending, setPending] = useState<ClvPendingDTO[]>([]);
+  const [pendingPage, setPendingPage] = useState(1);
   const [unavailable, setUnavailable] = useState<string | null>(null);
+
+  const PENDING_PAGE_SIZE = 10;
 
   const load = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -78,7 +85,7 @@ export default function ValuebetClvPage() {
       if (b.data?.result === 1) setRows((b.data.data?.rows || []) as ClvBreakdownRowDTO[]);
       if (j.data?.result === 1) setJuiceRows((j.data.data?.rows || []) as JuiceRowDTO[]);
       if (t.data?.result === 1) setTs((t.data.data?.points || []) as TsPoint[]);
-      if (p.data?.result === 1) setPending((p.data.data || []) as ClvPendingDTO[]);
+      if (p.data?.result === 1) { setPending((p.data.data || []) as ClvPendingDTO[]); setPendingPage(1); }
     } catch (e: unknown) {
       const resp = (e as { response?: { data?: { message?: string } } })?.response;
       setUnavailable(resp?.data?.message || 'Não foi possível carregar o CLV.');
@@ -103,6 +110,14 @@ export default function ValuebetClvPage() {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([day, v]) => ({ x: day, y: v.n ? v.wsum / v.n : 0 }));
   }, [ts]);
+
+  // Paginação dos pendentes (a lista pode ter dezenas de itens).
+  const pendingPageCount = Math.max(1, Math.ceil(pending.length / PENDING_PAGE_SIZE));
+  const pendingPageSafe = Math.min(pendingPage, pendingPageCount);
+  const pagedPending = useMemo(
+    () => pending.slice((pendingPageSafe - 1) * PENDING_PAGE_SIZE, pendingPageSafe * PENDING_PAGE_SIZE),
+    [pending, pendingPageSafe],
+  );
 
   if (!isAuthenticated) {
     return (
@@ -143,6 +158,10 @@ export default function ValuebetClvPage() {
         <div className="flex items-center gap-2">
           <Select className="w-32" value={String(days)} onChange={(v) => setDays(parseInt(v, 10))}
             options={[{ value: '7', label: '7 dias' }, { value: '30', label: '30 dias' }, { value: '90', label: '90 dias' }]} />
+          <Tooltip label="O que é o CLV?">
+            <InfoButton topic="clv" size={16} label="O que é o CLV?"
+              className="h-9 w-9 rounded-lg border bg-white/5 border-white/10 hover:border-violet-500/40 hover:text-violet-200" />
+          </Tooltip>
           <Tooltip label="Recarregar">
             <button onClick={load} className="grid place-items-center h-9 w-9 rounded-lg border bg-white/5 border-white/10 text-gray-400 hover:text-violet-200 transition" aria-label="Recarregar">
               <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
@@ -157,11 +176,16 @@ export default function ValuebetClvPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
-        <Kpi label="CLV médio" value={fmtPct(summary?.clvAvgPct)} tone={clvColor(summary?.clvAvgPct)} sub={`${summary?.windowDays ?? days}d`} />
-        <Kpi label="% CLV positivo" value={summary?.clvPositivePct == null ? '—' : `${summary.clvPositivePct.toFixed(1)}%`} />
-        <Kpi label="Apostas liquidadas" value={summary ? String(summary.settledCount) : '—'} />
-        <Kpi label="Edge médio (tomado)" value={fmtPct(summary?.edgeAvgPct)} />
-        <Kpi label="Pendentes" value={summary ? String(summary.pendingCount) : '—'} sub="aguardando jogo" />
+        <Kpi label="CLV médio" value={fmtPct(summary?.clvAvgPct)} tone={clvColor(summary?.clvAvgPct)} sub={`${summary?.windowDays ?? days}d`}
+          tip="Média do CLV das apostas liquidadas na janela. Compara a odd que você pegou com a odd justa no fechamento do jogo. Positivo e estável = você trava preços melhores que o mercado = edge real." />
+        <Kpi label="% CLV positivo" value={summary?.clvPositivePct == null ? '—' : `${summary.clvPositivePct.toFixed(1)}%`}
+          tip="Percentual das apostas liquidadas que fecharam com CLV acima de zero. Acima de 50% de forma sustentada indica que você costuma pegar odds melhores que o fechamento." />
+        <Kpi label="Apostas liquidadas" value={summary ? String(summary.settledCount) : '—'}
+          tip="Quantas apostas já tiveram o CLV calculado (o jogo já começou). É a base estatística do painel — quanto maior o número, mais confiável a leitura." />
+        <Kpi label="Edge médio (tomado)" value={fmtPct(summary?.edgeAvgPct)}
+          tip="O valor médio que estimamos no momento da captura (antes do jogo). Compare com o CLV realizado: se baterem, a estimativa de odd justa está bem calibrada." />
+        <Kpi label="Pendentes" value={summary ? String(summary.pendingCount) : '—'} sub="aguardando jogo"
+          tip="Value bets lançados cujo jogo ainda não começou. O CLV só é calculado após o apito inicial (liquidação ~10 min depois), então eles ainda não entram nas médias." />
       </div>
 
       {/* Série temporal */}
@@ -187,7 +211,7 @@ export default function ValuebetClvPage() {
           </div>
         </div>
         {dimension === 'tier' && (
-          <p className="mb-2 inline-flex items-center gap-1 text-[11px] text-amber-300/80"><Info size={11} /> Tier 3 mede contra consenso (que inclui a própria casa) — viés conservador. Não compare 1:1 com T1/T2.</p>
+          <p className="mb-2 inline-flex items-center gap-1 text-[11px] text-amber-300/80"><Info size={11} /> Tier 3 usa uma referência mais conservadora (que pode incluir a própria casa) — viés. Não compare 1:1 com T1/T2.</p>
         )}
         {rows.length === 0 ? (
           <div className="py-8 text-center text-sm text-gray-500">Sem apostas liquidadas com CLV nesta janela.</div>
@@ -222,7 +246,10 @@ export default function ValuebetClvPage() {
       {/* Margem média das casas (juice) — estrutural, sobre TODAS as emissões (não só liquidadas) */}
       <section className="rounded-xl border border-white/10 bg-white/[0.03] p-4 mb-4">
         <div className="flex items-center justify-between gap-2 mb-1">
-          <h2 className="text-sm font-semibold text-white">Margem média das casas (juice)</h2>
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-white">
+            Margem média das casas (juice)
+            <InfoButton topic="juice" size={14} label="O que é o juice (margem da casa)?" />
+          </h2>
           <div className="inline-flex rounded-lg border border-white/10 bg-white/5 p-1">
             {([['bookmaker', 'Por casa'], ['market', 'Por mercado']] as const).map(([v, label]) => (
               <button key={v} onClick={() => setJuiceDim(v)}
@@ -264,7 +291,10 @@ export default function ValuebetClvPage() {
 
       {/* Pendentes */}
       <section className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-        <h2 className="text-sm font-semibold text-white mb-3">Pendentes (aguardando o jogo)</h2>
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-white mb-3">
+          Pendentes (aguardando o jogo)
+          {pending.length > 0 && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium text-gray-300">{pending.length}</span>}
+        </h2>
         {pending.length === 0 ? (
           <div className="py-6 text-center text-sm text-gray-500">Nenhum value bet pendente.</div>
         ) : (
@@ -281,7 +311,7 @@ export default function ValuebetClvPage() {
                 </tr>
               </thead>
               <tbody>
-                {pending.map((p) => (
+                {pagedPending.map((p) => (
                   <tr key={p.emissionId} className="border-b border-white/5">
                     <td className="py-2 pr-3 text-white">{p.bookmaker}</td>
                     <td className="py-2 px-3 text-gray-300">{marketLabel(p.market)}</td>
@@ -296,6 +326,33 @@ export default function ValuebetClvPage() {
                 ))}
               </tbody>
             </table>
+
+            {pendingPageCount > 1 && (
+              <div className="mt-3 flex items-center justify-between gap-2 text-xs text-gray-400">
+                <span>
+                  Mostrando {(pendingPageSafe - 1) * PENDING_PAGE_SIZE + 1}–{Math.min(pendingPageSafe * PENDING_PAGE_SIZE, pending.length)} de {pending.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPendingPage((p) => Math.max(1, p - 1))}
+                    disabled={pendingPageSafe <= 1}
+                    className="grid place-items-center h-7 w-7 rounded-md border border-white/10 bg-white/5 text-gray-300 transition enabled:hover:text-violet-200 disabled:opacity-40"
+                    aria-label="Página anterior"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <span className="px-1 tabular-nums">{pendingPageSafe} / {pendingPageCount}</span>
+                  <button
+                    onClick={() => setPendingPage((p) => Math.min(pendingPageCount, p + 1))}
+                    disabled={pendingPageSafe >= pendingPageCount}
+                    className="grid place-items-center h-7 w-7 rounded-md border border-white/10 bg-white/5 text-gray-300 transition enabled:hover:text-violet-200 disabled:opacity-40"
+                    aria-label="Próxima página"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>

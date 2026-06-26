@@ -35,12 +35,8 @@ const AuthModal: React.FC = () => {
           <X size={22} />
         </button>
 
-        <h2 className="text-white text-xl font-bold mb-6 text-center uppercase">
-          {activePage === "login" && "Entrar"}
-          {activePage === "register" && "Criar Conta"}
-          {activePage === "recover" && "Recuperar Senha"}
-        </h2>
-
+        {/* Todas as páginas de auth (login/register/recover) trazem cabeçalho
+            próprio com a marca, então o wrapper não renderiza título. */}
         <Suspense fallback={<div className="text-white">Carregando...</div>}>
           <PageComponent onClose={closeModal} />
         </Suspense>

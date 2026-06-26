@@ -1,11 +1,14 @@
 import { Arbitrage } from '@/interfaces';
+import { serverManager } from '@/services/serverManager';
 
-const ApiWsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://localhost:8080";
+const getApiWsUrl = () =>
+  serverManager.getWsBase() || process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://localhost:8080";
 let ws: WebSocket;
 let arbitrageCallback: (data: Arbitrage[]) => void;
 
 const connectWebSocket = () => {
-  ws = new WebSocket(ApiWsUrl);
+  serverManager.init();
+  ws = new WebSocket(getApiWsUrl());
 
   ws.onopen = () => {
     console.log("Conectado ao WebSocket");

@@ -70,7 +70,11 @@ export function ValuebetCard({ group, vb, onBet, notify }: Props) {
             {vb.create_at && <span className="shrink-0 text-gray-500">· visto há {seenAgo(vb.create_at)}</span>}
           </div>
         </div>
-        <Tooltip label={vb.ref === 'pinnacle' ? 'Referência: Pinnacle (de-vigada)' : 'Referência: consenso de casas'}>
+        <Tooltip label={vb.tier === 1
+          ? 'Tier 1 — núcleo do mercado (1X2, total de gols). Maior confiança na estimativa.'
+          : vb.tier === 2
+            ? 'Tier 2 — mercados secundários (escanteios, cartões, gols por time). Confiança média.'
+            : 'Tier 3 — estimativa mais conservadora. Confiança menor — pondere o risco.'}>
           <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold ring-1 ${tier.className}`}>
             {tier.label}
           </span>
@@ -109,8 +113,8 @@ export function ValuebetCard({ group, vb, onBet, notify }: Props) {
           </Tooltip>
           <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ${houseVigTone(vb.houseVig)}`}>{fmtVigPct(vb.houseVig)}</span>
           {vb.refVig != null && (
-            <Tooltip label={`Margem estimada da referência (${vb.ref === 'pinnacle' ? 'Pinnacle' : 'consenso'}) — quão "sharp" é a odd justa. A Pinnacle costuma ter margem bem menor que as casas soft, por isso é a régua. Também é estimativa, não o valor exato cobrado.`}>
-              <span className="text-[10px] text-gray-500">· {vb.ref === 'pinnacle' ? 'Pinnacle' : 'consenso'} {fmtVigPct(vb.refVig)}</span>
+            <Tooltip label={`Margem estimada da referência usada para a odd justa — quão "sharp" é a estimativa. A referência costuma ter margem bem menor que as casas soft, por isso é a régua. Também é estimativa, não o valor exato cobrado.`}>
+              <span className="text-[10px] text-gray-500">· referência {fmtVigPct(vb.refVig)}</span>
             </Tooltip>
           )}
         </div>
