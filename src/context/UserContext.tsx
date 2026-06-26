@@ -55,7 +55,14 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       checkAuthStatus();
       // Adiciona verificação periódica
       const interval = setInterval(checkAuthStatus, 5 * 60 * 1000); // A cada 5 minutos
-      return () => clearInterval(interval);
+      // Revalida ao voltar o foco para a aba: pega mudança de papel/plano (ex.:
+      // usuário promovido a admin no banco) sem precisar recarregar a página.
+      const onVisible = () => { if (document.visibilityState === 'visible') checkAuthStatus(); };
+      document.addEventListener('visibilitychange', onVisible);
+      return () => {
+        clearInterval(interval);
+        document.removeEventListener('visibilitychange', onVisible);
+      };
   }, []);
 
   return (
