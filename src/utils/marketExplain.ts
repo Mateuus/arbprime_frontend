@@ -18,6 +18,7 @@ export interface MarketExplain {
 }
 
 const familyOf = (slug: string): string => {
+  if (slug.startsWith('match-winner-so')) return '1x2-so'; // SuperOdd (antes do match-winner genérico)
   if (slug.startsWith('match-winner')) return '1x2';
   if (slug === 'double-chance-and-btts') return 'dc-btts';
   if (slug.startsWith('double-chance')) return 'dc';
@@ -60,6 +61,19 @@ export function explainMarket(marketId: string, home = 'Casa', away = 'Fora'): M
           { selection: `2 — ${A}`, condition: `${A} > ${H}`, examples: '0-1, 1-2' }
         ],
         coverage: 'Cobertura completa: todo placar é vitória da casa, empate ou vitória do visitante.'
+      };
+    case '1x2-so':
+      // SO = SuperOdd: mesmo Resultado Final, mas com a cotação turbinada (mais
+      // alta que o mercado comum). O critério de quem ganha é idêntico ao 1x2.
+      return {
+        title: name,
+        summary: 'Resultado Final em versão SuperOdd (SO): as mesmas 3 opções do Resultado Final comum (1/X/2), mas com a odd turbinada — mais alta que a do mercado de Resultado Final padrão. O critério de quem ganha é idêntico; só a cotação é maior.',
+        rows: [
+          { selection: `1 — ${H}`, condition: `${H} > ${A}`, examples: '2-0, 1-0, 3-1' },
+          { selection: 'X — Empate', condition: `${H} = ${A}`, examples: '0-0, 1-1, 2-2' },
+          { selection: `2 — ${A}`, condition: `${A} > ${H}`, examples: '0-1, 1-2' }
+        ],
+        coverage: 'Cobertura completa (vitória da casa, empate ou vitória do visitante). Por ser SuperOdd, a cotação costuma sair mais alta que a do Resultado Final comum — confira limites e regras da casa para SuperOdds.'
       };
     case 'dc':
       return {

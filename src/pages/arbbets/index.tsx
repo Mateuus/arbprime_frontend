@@ -1159,22 +1159,21 @@ function EventModal({ event, surebets, counts, newKeys, ledEffect, onClose, onCa
   return (
     <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
       <div className="relative w-full max-w-2xl bg-brand-dark border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-rose-400"><X size={20} /></button>
-        <div className="mb-4 pr-8">
+        <div className="absolute top-4 right-4 flex items-center gap-1">
+          {onHide && (
+            <HideEventButton
+              hidden={!!isHidden?.('event', event.id)}
+              onClick={() => { onHide('event', event.id, `${event.home} x ${event.away}`, event.date || null); notify?.('Evento ocultado — reexiba no painel de ocultos.'); onClose(); }}
+            />
+          )}
+          <button onClick={onClose} className="grid place-items-center h-6 w-6 rounded-md text-gray-400 transition hover:text-rose-400 hover:bg-white/10" aria-label="Fechar"><X size={18} /></button>
+        </div>
+        <div className="mb-4 pr-16">
           <h2 className="text-base font-bold text-white truncate">{event.home} <span className="text-gray-500 font-normal">x</span> {event.away}</h2>
           <p className="text-xs text-gray-400">
             {event.league || event.sport} · {fmtDate(event.date)} · {surebets.length} surebets
             {newCount > 0 && <span className="text-teal-300"> · {newCount} nova{newCount > 1 ? 's' : ''}</span>}
           </p>
-          {onHide && (
-            <button
-              onClick={() => { onHide('event', event.id, `${event.home} x ${event.away}`, event.date || null); notify?.('Evento ocultado — reexiba no painel de ocultos.'); onClose(); }}
-              disabled={isHidden?.('event', event.id)}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-300 ring-1 ring-rose-500/30 transition hover:bg-rose-500/20 disabled:opacity-40"
-            >
-              <EyeOff size={13} /> Ocultar evento inteiro
-            </button>
-          )}
         </div>
         <div className="space-y-2">
           {surebets.map((sb, i) => {

@@ -804,6 +804,9 @@ export interface ManualCheckoutDTO {
   txid: string;
   status: string; // pending | in_review | completed | rejected
   amountCents: number;
+  originalAmountCents?: number;
+  discountCents?: number;
+  couponCode?: string | null;
   pixKey: string | null;
   pixCopiaECola: string | null;
   qrImage: string | null;
@@ -829,7 +832,7 @@ const activateTrial = async () => apiClient.post('/subscription/trial');
 const validateCoupon = async (code: string, planId: string) => apiClient.post('/coupons/validate', { code, planId });
 // Pagamento manual (usuário)
 const getPaymentMethods = async () => apiClient.get('/subscription/payment-methods');
-const createManualCheckout = async (planId: string) => apiClient.post('/subscription/checkout/manual', { planId });
+const createManualCheckout = async (planId: string, couponCode?: string) => apiClient.post('/subscription/checkout/manual', { planId, couponCode });
 const submitManualProof = async (txid: string, data: { dataBase64: string; mime: string }) =>
   apiClient.post(`/subscription/checkout/manual/${txid}/proof`, data);
 
@@ -1122,6 +1125,7 @@ export interface CreateReportDTO {
   league?: string;
   home?: string;
   away?: string;
+  eventStartAt?: string | null;
   bookmaker?: string;
   houseEventId?: string;
   market?: string;
@@ -1141,6 +1145,7 @@ export interface ReportDTO {
   league: string | null;
   home: string | null;
   away: string | null;
+  eventStartAt: string | null;
   bookmaker: string | null;
   houseEventId: string | null;
   market: string | null;
@@ -1167,9 +1172,10 @@ export interface HiddenItemDTO {
 
 export interface ExclusionDTO {
   id: string;
-  scope: 'house' | 'event';
+  scope: 'house' | 'event' | 'market';
   bookmaker: string | null;
   houseEventId: string | null;
+  market: string | null;
   groupId: string | null;
   label: string | null;
   reason: string | null;
@@ -1201,7 +1207,7 @@ const clearHidden = async () => apiClient.delete('/hidden/clear');
 
 // Exclusões (admin)
 const getExclusions = async () => apiClient.get('/exclusions');
-const createExclusion = async (data: { scope: 'house' | 'event'; bookmaker?: string; houseEventId?: string; groupId?: string; label?: string; reason?: string }) => apiClient.post('/exclusions', data);
+const createExclusion = async (data: { scope: 'house' | 'event' | 'market'; bookmaker?: string; houseEventId?: string; market?: string; groupId?: string; label?: string; reason?: string; eventStartAt?: string | null }) => apiClient.post('/exclusions', data);
 const deleteExclusion = async (id: string) => apiClient.delete(`/exclusions/${id}`);
 
 const getPaymentDashboard = async () => apiClient.get('/payment/dashboard');

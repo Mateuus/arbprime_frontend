@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreVertical, Flag, EyeOff, Check, Loader2, Users, SearchX, Tag, TrendingUp, Lock, MessageSquare } from 'lucide-react';
+import { MoreVertical, Flag, EyeOff, Check, Loader2, Users, SearchX, Tag, TrendingUp, Lock, MessageSquare, ShieldAlert, Store, CalendarX } from 'lucide-react';
 import { apiGateway, CreateReportDTO, ReportReason } from '@/gateways/api.gateway';
 import { SurebetData, Surebet, SurebetOdd } from '@/interfaces/arbitragem.interface';
 import { HideType, houseKey, selectionKey } from '@/hooks/useHiddenSet';
 import { surebetKey } from '@/utils/surebetKey';
+import { useUserContext } from '@/context/UserContext';
 
 const REASONS: { key: ReportReason; label: string; scope: 'event' | 'leg'; icon: React.ReactNode }[] = [
   { key: 'different_teams', label: 'Times diferentes', scope: 'event', icon: <Users size={13} /> },
@@ -31,10 +32,15 @@ interface Props {
  * 'event' (afeta o grupo todo); as demais — inclusive "evento não encontrado" —
  * vão com scope 'leg', carregando a casa da seleção (admin remove só aquela casa).
  */
+type AdminScope = 'market' | 'house' | 'event';
+
 const SurebetActionsMenu = ({ event, sb, leg, onHide, isHidden, notify }: Props) => {
+  const { user } = useUserContext();
+  const isAdmin = user?.role === 'admin';
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [sending, setSending] = useState<ReportReason | null>(null);
+  const [excluding, setExcluding] = useState<AdminScope | null>(null);
   const [sent, setSent] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -78,6 +84,7 @@ const SurebetActionsMenu = ({ event, sb, leg, onHide, isHidden, notify }: Props)
       league: event.league,
       home: event.home,
       away: event.away,
+      eventStartAt: event.date || null,
       surebetKey: surebetKey(event, sb),
     };
     if (scope === 'leg') {
@@ -104,6 +111,44 @@ const SurebetActionsMenu = ({ event, sb, leg, onHide, isHidden, notify }: Props)
     }
   };
 
+  // Exclusão GLOBAL (admin): tira do cálculo de surebets para TODOS os usuários.
+  // market = só este mercado da casa; house = a casa inteira; event = o evento todo.
+  const adminExclude = async (scope: AdminScope) => {
+    const mkt = leg.rawMarket || leg.market;
+    const confirmMsg =
+      scope === 'event' ? `Remover o EVENTO inteiro "${event.home} x ${event.away}" do cálculo (todas as casas)?`
+      : scope === 'house' ? `Remover a casa ${leg.bookmaker} (TODOS os mercados) de "${event.home} x ${event.away}"?`
+      : `Remover o mercado "${mkt}" da casa ${leg.bookmaker} em "${event.home} x ${event.away}"?`;
+    if (!window.confirm(confirmMsg)) return;
+    setExcluding(scope);
+    try {
+      const payload: { scope: AdminScope; bookmaker?: string; houseEventId?: string; market?: string; groupId?: string; label?: string; reason?: string; eventStartAt?: string | null } = {
+        scope,
+        label: `${event.home} x ${event.away}`,
+        reason: 'admin',
+        eventStartAt: event.date || null,
+      };
+      if (scope === 'event') {
+        payload.groupId = event.id;
+      } else {
+        payload.bookmaker = leg.bookmaker;
+        payload.houseEventId = leg.eventId;
+        if (scope === 'market') {
+          payload.market = leg.market;
+          payload.label = `${event.home} x ${event.away} · ${mkt}`;
+          payload.reason = `admin:${mkt}`;
+        }
+      }
+      const res = await apiGateway.createExclusion(payload);
+      notify?.(res.data?.message || (res.data?.result === 1 ? 'Removido do cálculo.' : 'Erro ao remover.'));
+      if (res.data?.result === 1) close();
+    } catch {
+      notify?.('Erro ao remover do cálculo.');
+    } finally {
+      setExcluding(null);
+    }
+  };
+
   const hKey = houseKey(leg.bookmaker, leg.eventId);
   const sKey = selectionKey(leg);
   const evHidden = isHidden('event', event.id);
@@ -116,6 +161,7 @@ const SurebetActionsMenu = ({ event, sb, leg, onHide, isHidden, notify }: Props)
   };
 
   const itemCls = 'w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-left text-gray-200 hover:bg-white/10 transition disabled:opacity-50';
+  const adminItemCls = 'w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-left text-rose-200 hover:bg-rose-500/15 transition disabled:opacity-50';
 
   return (
     <>
@@ -161,6 +207,25 @@ const SurebetActionsMenu = ({ event, sb, leg, onHide, isHidden, notify }: Props)
               <button onClick={() => doHide('event', event.id, `${event.home} x ${event.away}`)} className={itemCls} disabled={evHidden}>
                 <EyeOff size={13} className="text-gray-400" /> Ocultar este evento
               </button>
+
+              {isAdmin && (
+                <>
+                  <div className="my-1 border-t border-white/10" />
+                  <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-rose-400/80 flex items-center gap-1"><ShieldAlert size={11} /> Admin · remover do cálculo</div>
+                  <button onClick={() => adminExclude('market')} disabled={!!excluding} className={adminItemCls}>
+                    {excluding === 'market' ? <Loader2 size={13} className="animate-spin" /> : <Tag size={13} className="text-rose-300/80" />}
+                    <span className="truncate">Remover mercado · {leg.rawMarket || leg.market}</span>
+                  </button>
+                  <button onClick={() => adminExclude('house')} disabled={!!excluding} className={adminItemCls}>
+                    {excluding === 'house' ? <Loader2 size={13} className="animate-spin" /> : <Store size={13} className="text-rose-300/80" />}
+                    <span className="truncate">Remover casa {leg.bookmaker} (todos os mercados)</span>
+                  </button>
+                  <button onClick={() => adminExclude('event')} disabled={!!excluding} className={adminItemCls}>
+                    {excluding === 'event' ? <Loader2 size={13} className="animate-spin" /> : <CalendarX size={13} className="text-rose-300/80" />}
+                    <span className="truncate">Remover evento (todas as casas)</span>
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>,

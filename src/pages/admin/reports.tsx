@@ -86,7 +86,7 @@ const AdminReportsPage = () => {
     if (!window.confirm(`Remover ${r.bookmaker} (${r.home} x ${r.away}) do cálculo de surebets?`)) return;
     setBusyId(r.id);
     try {
-      await apiGateway.createExclusion({ scope: 'house', bookmaker: r.bookmaker, houseEventId: r.houseEventId, label: `${r.home} x ${r.away}`, reason: `report:${r.reason}` });
+      await apiGateway.createExclusion({ scope: 'house', bookmaker: r.bookmaker, houseEventId: r.houseEventId, label: `${r.home} x ${r.away}`, reason: `report:${r.reason}`, eventStartAt: r.eventStartAt });
       await apiGateway.updateReport(r.id, { status: 'resolved' });
       setMsg({ type: 'ok', text: `${r.bookmaker} removida do evento.` });
       await load();
@@ -102,7 +102,7 @@ const AdminReportsPage = () => {
     if (!window.confirm(`Remover o evento inteiro "${r.home} x ${r.away}" do cálculo de surebets?`)) return;
     setBusyId(r.id);
     try {
-      await apiGateway.createExclusion({ scope: 'event', groupId: r.eventId, label: `${r.home} x ${r.away}`, reason: `report:${r.reason}` });
+      await apiGateway.createExclusion({ scope: 'event', groupId: r.eventId, label: `${r.home} x ${r.away}`, reason: `report:${r.reason}`, eventStartAt: r.eventStartAt });
       await apiGateway.updateReport(r.id, { status: 'resolved' });
       setMsg({ type: 'ok', text: 'Evento removido do cálculo.' });
       await load();
@@ -248,13 +248,21 @@ const AdminReportsPage = () => {
           <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden divide-y divide-white/5">
             {exclusions.map((ex) => (
               <div key={ex.id} className="flex items-center gap-3 px-4 py-3">
-                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ring-1 ${ex.scope === 'event' ? 'bg-rose-500/15 text-rose-300 ring-rose-500/30' : 'bg-amber-500/15 text-amber-300 ring-amber-500/30'}`}>
-                  {ex.scope === 'event' ? <CalendarX size={12} /> : <Store size={12} />} {ex.scope === 'event' ? 'evento' : 'casa'}
+                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ring-1 ${
+                  ex.scope === 'event' ? 'bg-rose-500/15 text-rose-300 ring-rose-500/30'
+                  : ex.scope === 'market' ? 'bg-violet-500/15 text-violet-300 ring-violet-500/30'
+                  : 'bg-amber-500/15 text-amber-300 ring-amber-500/30'}`}>
+                  {ex.scope === 'event' ? <CalendarX size={12} /> : ex.scope === 'market' ? <Tag size={12} /> : <Store size={12} />} {ex.scope === 'event' ? 'evento' : ex.scope === 'market' ? 'mercado' : 'casa'}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm text-white truncate">{ex.label || (ex.scope === 'event' ? `grupo ${ex.groupId}` : `${ex.bookmaker}`)}</div>
+                  <div className="text-sm text-white truncate">{ex.label || (
+                    ex.scope === 'event' ? `grupo ${ex.groupId}`
+                    : ex.scope === 'market' ? `${ex.bookmaker} · ${ex.market}`
+                    : `${ex.bookmaker}`)}</div>
                   <div className="text-[11px] text-gray-500 font-mono truncate">
-                    {ex.scope === 'event' ? `groupId ${ex.groupId}` : `${ex.bookmaker} · ${ex.houseEventId}`}{ex.reason ? ` · ${ex.reason}` : ''}
+                    {ex.scope === 'event' ? `groupId ${ex.groupId}`
+                     : ex.scope === 'market' ? `${ex.bookmaker} · ${ex.houseEventId} · ${ex.market}`
+                     : `${ex.bookmaker} · ${ex.houseEventId}`}{ex.reason ? ` · ${ex.reason}` : ''}
                   </div>
                 </div>
                 <button onClick={() => removeExclusion(ex)} className="text-xs px-3 py-1.5 rounded-lg bg-white/5 ring-1 ring-white/10 text-gray-200 hover:bg-white/10 inline-flex items-center gap-1.5" title="Reativar no cálculo">
