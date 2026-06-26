@@ -8,7 +8,6 @@ import {
   CalendarDays,
   CheckCircle2,
   CircleDot,
-  Coins,
   Gauge,
   LineChart,
   MessageCircle,
@@ -151,8 +150,8 @@ export default function Home() {
 
           <p className="mx-auto mt-5 max-w-2xl text-base text-gray-300 sm:text-lg">
             A plataforma brasileira de arbitragem que encontra{" "}
-            <strong className="text-white">surebets</strong> em casas de apostas e{" "}
-            <strong className="text-white">oportunidades cripto</strong> em mercados perpétuos —
+            <strong className="text-white">surebets</strong> e{" "}
+            <strong className="text-white">value bets</strong> em casas de apostas brasileiras —
             tudo processado pelos nossos próprios servidores, sem APIs de terceiros.
           </p>
 
@@ -165,13 +164,14 @@ export default function Home() {
               Ver surebets agora
               <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
             </Link>
-            <span className="inline-flex items-center gap-2 rounded-xl border border-brand-border bg-white/[0.02] px-6 py-3 text-sm font-semibold text-gray-400">
-              <Coins size={18} className="text-teal-300/70" />
-              Arbitragem cripto
-              <span className="rounded-full bg-blue-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-blue-300">
-                Em breve
-              </span>
-            </span>
+            <Link
+              href="/valuebets"
+              className="group inline-flex items-center gap-2 rounded-xl border border-brand-border bg-white/[0.02] px-6 py-3 text-sm font-semibold text-gray-300 transition-all hover:border-green-500/40 hover:bg-white/[0.04]"
+            >
+              <Sparkles size={18} className="text-teal-300" />
+              Ver value bets
+              <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+            </Link>
           </div>
         </div>
       </section>
@@ -262,13 +262,13 @@ export default function Home() {
             por lucro, esporte e bookmaker. Em breve, apostas ao vivo (live).
           </FeatureCard>
           <FeatureCard
-            icon={<Coins size={22} />}
-            title="ArbCrypto"
-            badge="Em breve"
-            badgeColor="bg-blue-400/15 text-blue-300"
+            icon={<Sparkles size={22} />}
+            title="Value Bets"
+            badge="Ao vivo"
+            badgeColor="bg-green-500/15 text-green-300"
           >
-            Arbitragem em <strong className="text-gray-200">mercados perpétuos</strong> entre exchanges,
-            com cálculo de lucro líquido já considerando taxas.
+            Apostas de <strong className="text-gray-200">valor</strong>: odds acima do preço justo
+            (vs. consenso do mercado), com edge, nível de confiança, stake sugerida e acompanhamento de CLV.
           </FeatureCard>
           <FeatureCard
             icon={<LineChart size={22} />}
@@ -316,21 +316,21 @@ export default function Home() {
               phase: "Fase 1",
               icon: <CheckCircle2 size={18} />,
               title: "Monitoramento + calculadora",
-              desc: "Crypto e apostas com calculadora integrada.",
+              desc: "Surebets e value bets em tempo real, com calculadora integrada.",
               done: true,
             },
             {
               phase: "Fase 2",
-              icon: <Sparkles size={18} />,
+              icon: <CheckCircle2 size={18} />,
               title: "Área do usuário",
-              desc: "Favoritos e alertas personalizados.",
-              done: false,
+              desc: "Favoritos, alertas personalizados e gestão de banca (Analytix) — já disponível.",
+              done: true,
             },
             {
               phase: "Fase 3",
               icon: <Bot size={18} />,
-              title: "Execução assistida",
-              desc: "Ordens automatizadas (cripto) e entrada assistida (apostas).",
+              title: "Valuebet Automática",
+              desc: "Apostas automáticas com parâmetros pré-determinados (stake, odd mínima e mercados), executadas pela extensão direto na casa.",
               done: false,
             },
           ].map((r) => (
