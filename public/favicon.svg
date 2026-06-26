@@ -1,0 +1,25 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#012b2c"/>
+      <stop offset="1" stop-color="#00141a"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="120" y1="400" x2="392" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#48fff3"/>
+    </linearGradient>
+  </defs>
+
+  <!-- rounded background -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="6" y="6" width="500" height="500" rx="106" fill="none" stroke="#013f38" stroke-width="6"/>
+
+  <!-- stylized A / upward arbitrage mark -->
+  <path d="M256 96 L392 416 H330 L303 350 H209 L182 416 H120 L256 96 Z M256 196 L228 296 H284 L256 196 Z"
+        fill="url(#mark)"/>
+
+  <!-- ascending arbitrage arrow accent -->
+  <path d="M150 372 L222 300 L268 346 L360 254"
+        fill="none" stroke="#48fff3" stroke-width="22"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.0"/>
+</svg>
