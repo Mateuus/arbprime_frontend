@@ -40,7 +40,7 @@ export function Tooltip({ label, children, className = '' }: { label: ReactNode;
         <span
           ref={tipRef}
           style={{ left: pos.left, top: pos.top }}
-          className="pointer-events-none fixed z-[10000] w-max max-w-[260px] whitespace-normal break-words rounded-xl bg-zinc-900/95 px-3 py-2 text-[12px] font-normal leading-relaxed text-gray-100 ring-1 ring-white/15 shadow-2xl backdrop-blur-sm"
+          className="pointer-events-none fixed z-[10000] w-max max-w-[260px] whitespace-normal break-words rounded-xl bg-zinc-900/95 px-3 py-2 text-[12px] font-normal normal-case tracking-normal leading-relaxed text-gray-100 ring-1 ring-white/15 shadow-2xl backdrop-blur-sm"
         >
           {label}
         </span>

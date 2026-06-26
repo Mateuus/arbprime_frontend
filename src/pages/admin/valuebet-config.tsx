@@ -110,7 +110,7 @@ const AdminValuebetConfigPage = () => {
           {/* Universo de casas */}
           <section className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
             <h2 className="text-sm font-semibold text-white">Casas do universo</h2>
-            <p className="text-[11px] text-gray-500 mb-3">A referência (Pinnacle) é obrigatória e nunca é alvo. Só há value bet nas demais.</p>
+            <p className="text-[11px] text-gray-500 mb-3">A casa de referência é obrigatória e nunca é alvo. Só há value bet nas demais.</p>
             <div className="flex flex-wrap gap-2">
               {Array.from(new Set([...KNOWN_HOUSES, ...cfg.allowedHouses.map((h) => h.toLowerCase())])).map((h) => {
                 const on = cfg.allowedHouses.map((x) => x.toLowerCase()).includes(h);
@@ -156,9 +156,9 @@ const AdminValuebetConfigPage = () => {
           <section className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
             <h2 className="text-sm font-semibold text-white mb-3">Pesos por tier</h2>
             <div className="grid grid-cols-3 gap-3">
-              <NumField label="T1 · Pinnacle núcleo" step="0.05" value={cfg.tierWeights['1'] ?? 1} onChange={(v) => setTierWeight('1', v)} />
-              <NumField label="T2 · Pinnacle sec." step="0.05" value={cfg.tierWeights['2'] ?? 0.75} onChange={(v) => setTierWeight('2', v)} />
-              <NumField label="T3 · Consenso" step="0.05" value={cfg.tierWeights['3'] ?? 0.55} onChange={(v) => setTierWeight('3', v)} />
+              <NumField label="Tier 1" step="0.05" value={cfg.tierWeights['1'] ?? 1} onChange={(v) => setTierWeight('1', v)} />
+              <NumField label="Tier 2" step="0.05" value={cfg.tierWeights['2'] ?? 0.75} onChange={(v) => setTierWeight('2', v)} />
+              <NumField label="Tier 3" step="0.05" value={cfg.tierWeights['3'] ?? 0.55} onChange={(v) => setTierWeight('3', v)} />
             </div>
           </section>
 

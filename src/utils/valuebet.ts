@@ -13,8 +13,8 @@ export const edgeTone = (pct: number): string => {
   return 'text-gray-300 bg-white/5 ring-white/10';
 };
 
-// Selo de qualidade por tier. Mantemos só "Tier 1/2/3" na UI (a origem da
-// referência — Pinnacle/consenso — fica como detalhe interno, não no selo).
+// Selo de qualidade por tier. Mantemos só "Tier 1/2/3" na UI (a origem exata
+// da referência fica como detalhe interno, fora do selo).
 export const tierMeta = (tier: number, _ref?: string): { label: string; className: string } => {
   if (tier === 1) return { label: 'Tier 1', className: 'text-emerald-300 bg-emerald-500/12 ring-emerald-500/30' };
   if (tier === 2) return { label: 'Tier 2', className: 'text-sky-300 bg-sky-500/12 ring-sky-500/30' };

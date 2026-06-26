@@ -67,7 +67,7 @@ export const INFO_TOPICS: Record<string, InfoTopic> = {
 
         <Section icon={<Scale size={15} />} title="De onde vem a “odd justa”">
           <p>
-            Usamos uma referência <strong className="text-white">confiável e sharp</strong> para estimar a probabilidade real: a <strong className="text-white">Pinnacle</strong> (a casa com a menor margem do mercado, ~2–3%) ou, quando ela não cobre o mercado, um <strong className="text-white">consenso</strong> de várias casas.
+            Usamos uma referência <strong className="text-white">confiável e sharp</strong> para estimar a probabilidade real: uma fonte com a <strong className="text-white">menor margem do mercado</strong> (~2–3%) ou, quando ela não cobre aquele mercado, uma <strong className="text-white">estimativa combinada</strong> de várias casas.
           </p>
           <p>
             Removemos a margem dessa referência (processo de <em>de-vig</em>) para obter a <strong className="text-white">probabilidade justa</strong> e, dela, a <strong className="text-white">odd justa</strong> (1 ÷ probabilidade). Se uma casa soft (betano, bet365, superbet) te paga <strong className="text-white">mais</strong> que essa odd justa, existe valor.
@@ -108,7 +108,7 @@ export const INFO_TOPICS: Record<string, InfoTopic> = {
 
         <Section icon={<Percent size={15} />} title="Margem da casa (juice)">
           <p>
-            O <strong className="text-white">juice</strong> é a margem que a casa embute naquele mercado. Você ainda tem valor porque a casa <strong className="text-white">errou esta seleção específica</strong>, apesar da margem geral. <strong className="text-white">Menor juice = mercado mais honesto</strong>. Mostramos a margem da casa ao lado da referência (Pinnacle) para você comparar.
+            O <strong className="text-white">juice</strong> é a margem que a casa embute naquele mercado. Você ainda tem valor porque a casa <strong className="text-white">errou esta seleção específica</strong>, apesar da margem geral. <strong className="text-white">Menor juice = mercado mais honesto</strong>. Mostramos a margem da casa ao lado da margem da referência para você comparar.
           </p>
           <p className="rounded-lg bg-white/[0.04] p-2.5 ring-1 ring-white/10">
             <strong className="text-white">É uma estimativa.</strong> Calculamos o juice a partir das odds das <strong className="text-white">duas pontas</strong> daquele mercado no instante da captura — por isso o valor é <strong className="text-white">aproximado</strong> (mostramos com <span className="font-mono">~</span>) e <strong className="text-white">não</strong> é necessariamente a margem exata que a casa cobra internamente. Use-o para <em>comparar</em> mercados e casas, não como número oficial.
@@ -147,7 +147,7 @@ export const INFO_TOPICS: Record<string, InfoTopic> = {
             <AlertTriangle size={15} /> <span className="text-sm font-semibold">Importante</span>
           </div>
           <ul className="space-y-1 text-[12px] leading-relaxed text-amber-100/80">
-            <li className="flex gap-2"><ArrowRight size={13} className="mt-0.5 shrink-0" /> Só geramos value bets em <strong>betano, bet365 e superbet</strong> (a Pinnacle é referência, nunca alvo).</li>
+            <li className="flex gap-2"><ArrowRight size={13} className="mt-0.5 shrink-0" /> Só geramos value bets em <strong>betano, bet365 e superbet</strong> (a fonte de referência nunca é alvo de aposta).</li>
             <li className="flex gap-2"><ArrowRight size={13} className="mt-0.5 shrink-0" /> Não há garantia de resultado em nenhum período — é estatística de longo prazo.</li>
             <li className="flex gap-2"><ArrowRight size={13} className="mt-0.5 shrink-0" /> Casas podem limitar contas vencedoras. Aposte com responsabilidade.</li>
           </ul>
@@ -265,10 +265,10 @@ export const INFO_TOPICS: Record<string, InfoTopic> = {
         <Section icon={<Building2 size={15} />} title="Dois juices: a casa e a referência">
           <ul className="space-y-1.5">
             <Field name="Margem da casa">o juice da casa onde você aposta (betano / bet365 / superbet). É o que importa pra você — quanto ela está te cobrando naquele mercado.</Field>
-            <Field name="Margem da referência (Pinnacle/consenso)">o juice da fonte da “odd justa”. Serve só como termômetro de qualidade da estimativa.</Field>
+            <Field name="Margem da referência">o juice da fonte da “odd justa”. Serve só como termômetro de qualidade da estimativa.</Field>
           </ul>
           <p className="rounded-lg bg-white/[0.04] p-2.5 ring-1 ring-white/10">
-            <strong className="text-white">Padrão esperado:</strong> casas soft cobram <strong className="text-white">6–13%</strong>; a Pinnacle, <strong className="text-white">5–7%</strong>. Mostrar os dois lado a lado deixa claro por que o value existe — e quanto menor a margem da casa, mais “honesto” é aquele mercado.
+            <strong className="text-white">Padrão esperado:</strong> casas soft cobram <strong className="text-white">6–13%</strong>; a referência sharp, <strong className="text-white">5–7%</strong>. Mostrar os dois lado a lado deixa claro por que o value existe — e quanto menor a margem da casa, mais “honesto” é aquele mercado.
           </p>
         </Section>
 

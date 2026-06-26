@@ -166,7 +166,7 @@ export default function ValuebetsPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white">Value Bets</h1>
-            <p className="text-sm text-gray-400">Apostas de valor vs. odd justa (Pinnacle / consenso)</p>
+            <p className="text-sm text-gray-400">Apostas de valor vs. odd justa de referência</p>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
@@ -248,7 +248,7 @@ export default function ValuebetsPage() {
           </label>
           <label className="text-[11px] text-gray-400">Tier
             <Select className="mt-1" value={tier} onChange={setTier}
-              options={[{ value: '', label: 'Todos' }, { value: '1', label: 'T1 · Pinnacle' }, { value: '2', label: 'T2 · sec.' }, { value: '3', label: 'T3 · Consenso' }]} />
+              options={[{ value: '', label: 'Todos' }, { value: '1', label: 'Tier 1' }, { value: '2', label: 'Tier 2' }, { value: '3', label: 'Tier 3' }]} />
           </label>
           <label className="text-[11px] text-gray-400">Valor mín. (%)
             <input value={edgeMin} onChange={(e) => setEdgeMin(e.target.value)} inputMode="decimal" className={`${inputClass} mt-1`} />
