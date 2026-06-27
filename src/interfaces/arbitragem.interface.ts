@@ -42,6 +42,8 @@ export interface SurebetData {
     id: string;
     sport: string;
     league: string;
+    country?: string | null;     // país/contexto canônico (Duplo Green) — agrupa o menu de campeonatos
+    countryKey?: string | null;  // chave do país (ex.: 'br', 'int')
     home: string;
     away: string;
     date: string;

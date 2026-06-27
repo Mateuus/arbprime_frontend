@@ -421,13 +421,22 @@ const DuploGreenCard = ({ event, sb, onCalc, onExplain, onOdd, onHide, isHidden,
   );
 };
 
-// Sidebar de campeonatos (sempre visível) — estilo do painel de esportes/ligas.
-// Lista derivada do feed (com contagem); selecionar filtra os eventos daquele campeonato.
-function LeagueSidebar({ counts, total, value, onChange }: {
-  counts: { league: string; count: number }[]; total: number; value: string; onChange: (v: string) => void;
+type LeagueTree = { country: string; count: number; leagues: { league: string; count: number }[] }[];
+
+// Sidebar de campeonatos (sempre visível) — árvore país → ligas, estilo /events.
+// Clicar no país filtra/expande; clicar na liga filtra só ela. Derivado do feed.
+function LeagueSidebar({ tree, total, country, league, onPick }: {
+  tree: LeagueTree; total: number; country: string; league: string; onPick: (country: string, league: string) => void;
 }) {
   const [q, setQ] = useState('');
-  const list = q.trim() ? counts.filter((c) => c.league.toLowerCase().includes(q.trim().toLowerCase())) : counts;
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggle = (c: string) => setExpanded((p) => { const s = new Set(p); s.has(c) ? s.delete(c) : s.add(c); return s; });
+  const ql = q.trim().toLowerCase();
+  const view = ql
+    ? tree.map((t) => ({ ...t, leagues: t.leagues.filter((l) => l.league.toLowerCase().includes(ql)) }))
+        .filter((t) => t.country.toLowerCase().includes(ql) || t.leagues.length)
+    : tree;
+  const open = (c: string) => expanded.has(c) || !!ql || country === c;
   return (
     <aside className="hidden lg:flex flex-col shrink-0 w-60 self-start sticky top-4 max-h-[calc(100vh-2rem)] rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/10">
@@ -440,45 +449,68 @@ function LeagueSidebar({ counts, total, value, onChange }: {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar campeonato…"
+            placeholder="Buscar país ou campeonato…"
             className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-2 py-1.5 text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-amber-500/40"
           />
         </div>
       </div>
       <div className="flex-1 overflow-y-auto py-1">
         <button
-          onClick={() => onChange('')}
-          className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-sm transition ${value === '' ? 'bg-amber-500/10 text-amber-100 font-medium' : 'text-gray-200 hover:bg-white/5'}`}
+          onClick={() => onPick('', '')}
+          className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-sm transition ${!country && !league ? 'bg-amber-500/10 text-amber-100 font-medium' : 'text-gray-200 hover:bg-white/5'}`}
         >
           <span>Todos os campeonatos</span>
           <span className="tabular-nums text-xs text-gray-500">{total}</span>
         </button>
-        {list.map((c) => (
-          <button
-            key={c.league}
-            onClick={() => onChange(c.league)}
-            className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-sm transition ${value === c.league ? 'bg-amber-500/10 text-amber-100 font-medium' : 'text-gray-300 hover:bg-white/5'}`}
-          >
-            <span className="truncate text-left">{c.league}</span>
-            <span className="tabular-nums text-xs text-gray-500 shrink-0">{c.count}</span>
-          </button>
-        ))}
-        {list.length === 0 && <div className="px-3 py-4 text-center text-xs text-gray-500">Nenhum campeonato encontrado.</div>}
+        {view.map((t) => {
+          const isOpen = open(t.country);
+          const countrySel = country === t.country && !league;
+          return (
+            <div key={t.country}>
+              <div className={`flex items-center ${countrySel ? 'bg-amber-500/10' : 'hover:bg-white/5'}`}>
+                <button onClick={() => toggle(t.country)} className="grid place-items-center h-8 w-7 shrink-0 text-gray-500 hover:text-gray-200" aria-label="Expandir">
+                  <ChevronDown size={14} className={`transition ${isOpen ? '' : '-rotate-90'}`} />
+                </button>
+                <button onClick={() => onPick(t.country, '')} className={`flex flex-1 items-center justify-between gap-2 pr-3 py-2 text-sm min-w-0 transition ${countrySel ? 'text-amber-100 font-medium' : 'text-gray-200'}`}>
+                  <span className="truncate text-left">{t.country}</span>
+                  <span className="tabular-nums text-xs text-gray-500 shrink-0">{t.count}</span>
+                </button>
+              </div>
+              {isOpen && t.leagues.map((l) => (
+                <button
+                  key={l.league}
+                  onClick={() => onPick(t.country, l.league)}
+                  className={`flex w-full items-center justify-between gap-2 pl-9 pr-3 py-1.5 text-[13px] transition ${league === l.league ? 'bg-amber-500/10 text-amber-100 font-medium' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}
+                >
+                  <span className="truncate text-left">{l.league}</span>
+                  <span className="tabular-nums text-xs text-gray-600 shrink-0">{l.count}</span>
+                </button>
+              ))}
+            </div>
+          );
+        })}
+        {view.length === 0 && <div className="px-3 py-4 text-center text-xs text-gray-500">Nada encontrado.</div>}
       </div>
     </aside>
   );
 }
 
-// Seletor de campeonato compacto p/ telas pequenas (a sidebar some no mobile).
-function LeagueFilterMobile({ counts, total, value, onChange }: {
-  counts: { league: string; count: number }[]; total: number; value: string; onChange: (v: string) => void;
+// Seletor compacto p/ telas pequenas (a sidebar some no mobile). Opções planas
+// país + liga; o valor é "country|league" (país só = "country|").
+function LeagueFilterMobile({ tree, total, country, league, onPick }: {
+  tree: LeagueTree; total: number; country: string; league: string; onPick: (country: string, league: string) => void;
 }) {
+  const options = [{ value: '|', label: `Todos os campeonatos (${total})` }];
+  for (const t of tree) {
+    options.push({ value: `${t.country}|`, label: `${t.country} (${t.count})` });
+    for (const l of t.leagues) options.push({ value: `${t.country}|${l.league}`, label: `   ${l.league} (${l.count})` });
+  }
   return (
     <div className="lg:hidden mb-3">
       <Select
-        value={value}
-        onChange={onChange}
-        options={[{ value: '', label: `Todos os campeonatos (${total})` }, ...counts.map((c) => ({ value: c.league, label: `${c.league} (${c.count})` }))]}
+        value={`${country}|${league}`}
+        onChange={(v) => { const [c, l] = v.split('|'); onPick(c || '', l || ''); }}
+        options={options}
       />
     </div>
   );
@@ -522,6 +554,7 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
   });
   const [bookmaker, setBookmaker] = useState('');
   const [league, setLeague] = useState('');
+  const [country, setCountry] = useState('');
   const [profitMin, setProfitMin] = useState(profitDefault);
   const [sortMode, setSortMode] = useState<'profit' | 'time'>('profit');
   // Filtro por nº de pontas (seleções): 2, 3, 4+ (4 = 4 ou mais). Vazio = todas.
@@ -559,14 +592,27 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
   const sports = useMemo(() => Array.from(new Set(data.map((e) => e.sport).filter(Boolean))), [data]);
   // Ligas presentes nos dados (para o filtro por liga). Ordenadas alfabeticamente.
   const leagues = useMemo(() => Array.from(new Set(data.map((e) => e.league).filter(Boolean))).sort(), [data]);
-  // Campeonatos com contagem de eventos (derivado do feed — sem payload extra no WS).
-  // Ordenado por quantidade desc (como o painel de esportes/ligas).
-  const leagueCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const e of data) { const l = e.league || ''; if (l) m.set(l, (m.get(l) || 0) + 1); }
+  // Árvore país → campeonatos (com contagem), derivada do feed. Espelha o painel
+  // de esportes/ligas do /events. Sem país (feed antigo) cai em "Outros".
+  const leagueTree = useMemo(() => {
+    const m = new Map<string, { count: number; leagues: Map<string, number> }>();
+    for (const e of data) {
+      const ctry = (e.country || '').trim() || 'Outros';
+      const lg = (e.league || '').trim() || '—';
+      if (!m.has(ctry)) m.set(ctry, { count: 0, leagues: new Map() });
+      const node = m.get(ctry)!;
+      node.count++;
+      node.leagues.set(lg, (node.leagues.get(lg) || 0) + 1);
+    }
     return Array.from(m.entries())
-      .map(([leagueName, count]) => ({ league: leagueName, count }))
-      .sort((a, b) => b.count - a.count || a.league.localeCompare(b.league));
+      .map(([ctry, v]) => ({
+        country: ctry,
+        count: v.count,
+        leagues: Array.from(v.leagues.entries())
+          .map(([lg, count]) => ({ league: lg, count }))
+          .sort((a, b) => b.count - a.count || a.league.localeCompare(b.league)),
+      }))
+      .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country));
   }, [data]);
   const houses = useMemo(
     () => Array.from(new Set(data.flatMap((e) => e.surebets.flatMap((sb) => sb.surebet.map((l) => l.bookmaker))))).sort(),
@@ -647,6 +693,7 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
     const f = activeFilter;
     return data
       .filter((e) => (!sport || (e.sport || '').toLowerCase() === sport.toLowerCase()))
+      .filter((e) => (!country || (e.country || '') === country))
       .filter((e) => (!league || (e.league || '') === league))
       .filter((e) => (!f?.sports?.length || f.sports.map((s) => s.toLowerCase()).includes((e.sport || '').toLowerCase())))
       .filter((e) => (!q || `${e.home} ${e.away} ${e.league}`.toLowerCase().includes(q)))
@@ -680,7 +727,7 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
         })
       }))
       .filter((x) => x.surebets.length > 0);
-  }, [data, sport, league, search, profitMin, selectedMarkets, bookmaker, legCounts, activeFilter, isDG, hidden.isSurebetVisible]);
+  }, [data, sport, country, league, search, profitMin, selectedMarkets, bookmaker, legCounts, activeFilter, isDG, hidden.isSurebetVisible]);
 
   // Visão "por surebet": achata e ordena por lucro OU por tempo (mais recente).
   const flat = useMemo(
@@ -693,8 +740,8 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
   );
 
   const totalSurebets = flat.length;
-  const activeFilters = [sport, league, selectedMarkets.size > 0, bookmaker, (parseFloat(profitMin) || 0) > 0, legCounts.size > 0].filter(Boolean).length;
-  const clearFilters = () => { setSport(''); setLeague(''); setSelectedMarkets(new Set()); setBookmaker(''); setProfitMin(profitDefault); setLegCounts(new Set()); };
+  const activeFilters = [sport, country, league, selectedMarkets.size > 0, bookmaker, (parseFloat(profitMin) || 0) > 0, legCounts.size > 0].filter(Boolean).length;
+  const clearFilters = () => { setSport(''); setCountry(''); setLeague(''); setSelectedMarkets(new Set()); setBookmaker(''); setProfitMin(profitDefault); setLegCounts(new Set()); };
 
   // Modal aberto ao clicar numa notificação (feed ou notificação do Windows).
   const [alertModal, setAlertModal] = useState<{ event: SurebetData; sb: Surebet } | null>(null);
@@ -960,10 +1007,10 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
       {/* Conteúdo — no DG, sidebar de campeonatos sempre visível à esquerda. */}
       <div className={isDG ? 'flex gap-4 items-start' : undefined}>
         {isDG && (
-          <LeagueSidebar counts={leagueCounts} total={data.length} value={league} onChange={setLeague} />
+          <LeagueSidebar tree={leagueTree} total={data.length} country={country} league={league} onPick={(c, l) => { setCountry(c); setLeague(l); }} />
         )}
         <div className={isDG ? 'flex-1 min-w-0' : undefined}>
-      {isDG && <LeagueFilterMobile counts={leagueCounts} total={data.length} value={league} onChange={setLeague} />}
+      {isDG && <LeagueFilterMobile tree={leagueTree} total={data.length} country={country} league={league} onPick={(c, l) => { setCountry(c); setLeague(l); }} />}
       {loading && data.length === 0 ? (
         <div className="flex items-center justify-center py-24 text-gray-400">
           <RefreshCcw className="animate-spin mr-2" size={20} /> Carregando surebets...
