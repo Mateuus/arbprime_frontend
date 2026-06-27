@@ -7,7 +7,7 @@ import { SurebetData } from '@/interfaces/arbitragem.interface';
  * pedido (prematch | live), com auto-update. O backend já ordena por melhor
  * lucro. A conexão do WS é gerida globalmente (wsManager); aqui só assinamos.
  */
-export function useSurebets(type: 'prematch' | 'live', autoUpdate = true, enabled = true) {
+export function useSurebets(type: 'prematch' | 'live' | 'duplogreen', autoUpdate = true, enabled = true) {
   const [data, setData] = useState<SurebetData[]>([]);
   const [loading, setLoading] = useState(true);
 

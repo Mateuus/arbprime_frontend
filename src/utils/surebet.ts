@@ -91,3 +91,12 @@ export const profitTone = (pct: number): string => {
   if (pct > 0) return 'text-amber-300 bg-amber-500/15 ring-amber-500/30';
   return 'text-gray-300 bg-white/5 ring-white/10';
 };
+
+// Tom da % no Duplo Green: lá a margem costuma ser negativa, então QUALQUER valor
+// >= 0 é o destaque (verde claro). Perto de zero negativo (perda pequena, ainda
+// atraente) fica âmbar; mais negativo, rose.
+export const dgProfitTone = (pct: number): string => {
+  if (pct >= 0) return 'text-emerald-300 bg-emerald-500/15 ring-emerald-500/30';
+  if (pct >= -2) return 'text-amber-300 bg-amber-500/15 ring-amber-500/30';
+  return 'text-rose-300 bg-rose-500/15 ring-rose-500/30';
+};

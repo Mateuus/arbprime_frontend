@@ -22,7 +22,7 @@ import { SurebetData, Surebet, SurebetOdd } from '@/interfaces/arbitragem.interf
 import { FilterDTO } from '@/interfaces';
 import { detectExtension } from '@/utils/arbExtension';
 import { OpenInHouse } from '@/components/arbbets/OpenInHouse';
-import { marketLabel, marketCategory, optionLabel, profitTone } from '@/utils/surebet';
+import { marketLabel, marketCategory, optionLabel, profitTone, dgProfitTone } from '@/utils/surebet';
 import { surebetKey } from '@/utils/surebetKey';
 import { explainMarket } from '@/utils/marketExplain';
 import RecordBetModal, { RecordBetDraft } from '@/components/analytix/RecordBetModal';
@@ -265,10 +265,20 @@ const SurebetCompact = ({ event, sb, counts, onCalc, onExplain, onOdd, onHide, i
           const dir = oddDir(leg);
           return (
           <div key={i} className="flex items-center gap-2 px-2.5 py-1 text-xs">
-            <div className="w-[104px] shrink-0 min-w-0"><BookmakerTag slug={leg.bookmaker} size={13} nameClassName="text-[11px]" className="w-full" /></div>
+            <div className="w-[124px] shrink-0 min-w-0"><BookmakerTag slug={leg.bookmaker} size={13} nameClassName="text-[11px]" className="w-full" tooltip /></div>
             <span className="flex-1 min-w-0 truncate text-gray-300">
               {multiMarket && <span className="text-gray-500">{marketLabel(leg.market)} · </span>}
               {optionLabel(leg.option, event.home, event.away, leg.handicap)}
+              {leg.pa && (
+                <Tooltip
+                  label="Pagamento Antecipado: a casa paga adiantado se este time abrir 2 gols de vantagem."
+                  className="ml-1 align-middle"
+                >
+                  <span className="inline-flex items-center rounded px-1 py-px text-[9px] font-bold tabular-nums bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30 cursor-help">
+                    PA
+                  </span>
+                </Tooltip>
+              )}
             </span>
             {leg.rawMarket && (
               <Tooltip
@@ -320,11 +330,173 @@ const SurebetCompact = ({ event, sb, counts, onCalc, onExplain, onOdd, onHide, i
   );
 };
 
-export default function ArbBetsPage() {
+// Card do Duplo Green: layout 1 · X · 2 (como a casa exibe o "Com Pagamento
+// Antecipado"). Casa e Fora são pontas PA (acento âmbar + chip); o Empate é normal.
+const DuploGreenCard = ({ event, sb, onCalc, onExplain, onOdd, onHide, isHidden, notify }: {
+  event: SurebetData; sb: Surebet; onCalc: () => void; onExplain: () => void; onOdd: (leg: SurebetOdd) => void;
+  onHide?: (type: HideType, itemKey: string, label?: string, eventStartAt?: string | null) => void; isHidden?: (type: HideType, itemKey: string) => boolean; notify?: (text: string) => void;
+}) => {
+  const byOpt = (opt: string) => sb.surebet.find((l) => (l.option || '').toLowerCase() === opt);
+  const cols: { tag: string; sub: string; leg?: SurebetOdd }[] = [
+    { tag: '1', sub: 'Casa', leg: byOpt('home') },
+    { tag: 'X', sub: 'Empate', leg: byOpt('draw') },
+    { tag: '2', sub: 'Fora', leg: byOpt('away') },
+  ];
+  return (
+    <div className="rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent overflow-hidden">
+      {/* Cabeçalho */}
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-white/10 bg-amber-500/[0.06]">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Zap size={12} className="shrink-0 text-amber-300 fill-amber-300/30" />
+          <span className="text-[11px] font-semibold text-amber-200/90 truncate tracking-wide">Pagamento Antecipado</span>
+          <Tooltip label="Como funciona o Duplo Green?" className="shrink-0">
+            <button onClick={onExplain} className="text-gray-500 hover:text-amber-300 transition"><HelpCircle size={12} /></button>
+          </Tooltip>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums ring-1 ${dgProfitTone(sb.profitMargin)}`}>
+            {sb.profitMargin.toFixed(2)}%
+          </span>
+          <Tooltip label="Calculadora Duplo Green">
+            <button onClick={onCalc} className="grid place-items-center h-6 w-6 rounded-md bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 ring-1 ring-amber-500/20 transition">
+              <Calculator size={13} />
+            </button>
+          </Tooltip>
+        </div>
+      </div>
+      {/* Colunas 1 · X · 2 */}
+      <div className="grid grid-cols-3 divide-x divide-white/[0.07]">
+        {cols.map(({ tag, sub, leg }) => {
+          const isPA = !!leg?.pa;
+          const dir = leg ? oddDir(leg) : 0;
+          return (
+            <div key={tag} className={`relative flex flex-col gap-2 px-2.5 py-2.5 ${isPA ? 'bg-amber-500/[0.05]' : ''}`}>
+              {isPA && <span aria-hidden className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />}
+              {/* topo: posição + marca PA/Empate */}
+              <div className="flex items-center justify-between">
+                <span className="grid place-items-center h-5 min-w-[20px] px-1 rounded-md bg-white/10 text-[11px] font-bold text-gray-200">{tag}</span>
+                {isPA ? (
+                  <Tooltip label="Pagamento Antecipado: a casa paga adiantado se este time abrir 2 gols de vantagem.">
+                    <span className="inline-flex items-center gap-0.5 rounded-full pl-1 pr-1.5 py-0.5 text-[9px] font-bold bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30 cursor-help">
+                      <Zap size={8} className="fill-amber-300" /> PA
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <span className="text-[9px] uppercase tracking-wider text-gray-600">{sub}</span>
+                )}
+              </div>
+              {leg ? (
+                <>
+                  {/* odd */}
+                  <Tooltip label="Ver esta odd em outras casas e o histórico" className="self-start">
+                    <button
+                      onClick={() => onOdd(leg)}
+                      className="group inline-flex items-baseline gap-1 rounded-md px-1 -ml-1 hover:bg-white/5 transition"
+                    >
+                      <span className={`text-xl font-extrabold tabular-nums leading-none ${dir > 0 ? 'text-emerald-300' : dir < 0 ? 'text-rose-300' : 'text-teal-200'} group-hover:underline decoration-dotted underline-offset-2`}>
+                        {Number(leg.price).toFixed(2)}
+                      </span>
+                      {dir !== 0 && <span className={`text-[10px] leading-none ${dir > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{dir > 0 ? '▲' : '▼'}</span>}
+                    </button>
+                  </Tooltip>
+                  {/* casa + ações */}
+                  <div className="flex items-center justify-between gap-1 min-w-0">
+                    <BookmakerTag slug={leg.bookmaker} size={14} nameClassName="text-[10px]" className="min-w-0" tooltip />
+                    <div className="flex items-center shrink-0">
+                      <OpenInHouse leg={leg} event={event} notify={notify} iconSize={12} />
+                      {onHide && isHidden && (
+                        <SurebetActionsMenu event={event} sb={sb} leg={leg} onHide={onHide} isHidden={isHidden} notify={notify} />
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <span className="py-3 text-center text-gray-600 text-sm">—</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// Sidebar de campeonatos (sempre visível) — estilo do painel de esportes/ligas.
+// Lista derivada do feed (com contagem); selecionar filtra os eventos daquele campeonato.
+function LeagueSidebar({ counts, total, value, onChange }: {
+  counts: { league: string; count: number }[]; total: number; value: string; onChange: (v: string) => void;
+}) {
+  const [q, setQ] = useState('');
+  const list = q.trim() ? counts.filter((c) => c.league.toLowerCase().includes(q.trim().toLowerCase())) : counts;
+  return (
+    <aside className="hidden lg:flex flex-col shrink-0 w-60 self-start sticky top-4 max-h-[calc(100vh-2rem)] rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/10">
+        <Trophy size={15} className="text-amber-300" />
+        <span className="text-sm font-semibold text-white">Campeonatos</span>
+      </div>
+      <div className="p-2 border-b border-white/10">
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar campeonato…"
+            className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-2 py-1.5 text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-amber-500/40"
+          />
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto py-1">
+        <button
+          onClick={() => onChange('')}
+          className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-sm transition ${value === '' ? 'bg-amber-500/10 text-amber-100 font-medium' : 'text-gray-200 hover:bg-white/5'}`}
+        >
+          <span>Todos os campeonatos</span>
+          <span className="tabular-nums text-xs text-gray-500">{total}</span>
+        </button>
+        {list.map((c) => (
+          <button
+            key={c.league}
+            onClick={() => onChange(c.league)}
+            className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-sm transition ${value === c.league ? 'bg-amber-500/10 text-amber-100 font-medium' : 'text-gray-300 hover:bg-white/5'}`}
+          >
+            <span className="truncate text-left">{c.league}</span>
+            <span className="tabular-nums text-xs text-gray-500 shrink-0">{c.count}</span>
+          </button>
+        ))}
+        {list.length === 0 && <div className="px-3 py-4 text-center text-xs text-gray-500">Nenhum campeonato encontrado.</div>}
+      </div>
+    </aside>
+  );
+}
+
+// Seletor de campeonato compacto p/ telas pequenas (a sidebar some no mobile).
+function LeagueFilterMobile({ counts, total, value, onChange }: {
+  counts: { league: string; count: number }[]; total: number; value: string; onChange: (v: string) => void;
+}) {
+  return (
+    <div className="lg:hidden mb-3">
+      <Select
+        value={value}
+        onChange={onChange}
+        options={[{ value: '', label: `Todos os campeonatos (${total})` }, ...counts.map((c) => ({ value: c.league, label: `${c.league} (${c.count})` }))]}
+      />
+    </div>
+  );
+}
+
+export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' | 'duplogreen' } = {}) {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useUserContext();
-  const type = (router.query.type === 'live' ? 'live' : 'prematch') as 'prematch' | 'live';
+  // Duplo Green reusa esta página: força o type 'duplogreen' (mesmo método WS,
+  // backend roteia pela key DuploGreenPrematch) e esconde o toggle prematch/live.
+  const isDG = feed === 'duplogreen';
+  const type: 'prematch' | 'live' | 'duplogreen' = isDG
+    ? 'duplogreen'
+    : (router.query.type === 'live' ? 'live' : 'prematch');
   const setType = (t: 'prematch' | 'live') => router.replace({ pathname: '/arbbets', query: { type: t } }, undefined, { shallow: true });
+  // DG aceita margem negativa (piso no master ~-10%); o filtro de lucro não pode
+  // cortar em 0, senão esconderia tudo. Default -10% no DG (sem filtro salvo ativo).
+  const profitDefault = isDG ? '-10' : '0';
 
   const [autoUpdate, setAutoUpdate] = useState(true);
   // Pré-aquece a detecção da extensão "Abrir Jogo na Casa" (resultado fica memoizado
@@ -349,7 +521,8 @@ export default function ArbBetsPage() {
     return s;
   });
   const [bookmaker, setBookmaker] = useState('');
-  const [profitMin, setProfitMin] = useState('0');
+  const [league, setLeague] = useState('');
+  const [profitMin, setProfitMin] = useState(profitDefault);
   const [sortMode, setSortMode] = useState<'profit' | 'time'>('profit');
   // Filtro por nº de pontas (seleções): 2, 3, 4+ (4 = 4 ou mais). Vazio = todas.
   const [legCounts, setLegCounts] = useState<Set<number>>(new Set());
@@ -384,6 +557,17 @@ export default function ArbBetsPage() {
   }, []);
 
   const sports = useMemo(() => Array.from(new Set(data.map((e) => e.sport).filter(Boolean))), [data]);
+  // Ligas presentes nos dados (para o filtro por liga). Ordenadas alfabeticamente.
+  const leagues = useMemo(() => Array.from(new Set(data.map((e) => e.league).filter(Boolean))).sort(), [data]);
+  // Campeonatos com contagem de eventos (derivado do feed — sem payload extra no WS).
+  // Ordenado por quantidade desc (como o painel de esportes/ligas).
+  const leagueCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of data) { const l = e.league || ''; if (l) m.set(l, (m.get(l) || 0) + 1); }
+    return Array.from(m.entries())
+      .map(([leagueName, count]) => ({ league: leagueName, count }))
+      .sort((a, b) => b.count - a.count || a.league.localeCompare(b.league));
+  }, [data]);
   const houses = useMemo(
     () => Array.from(new Set(data.flatMap((e) => e.surebets.flatMap((sb) => sb.surebet.map((l) => l.bookmaker))))).sort(),
     [data]
@@ -445,6 +629,8 @@ export default function ArbBetsPage() {
         if (!active || r.data?.result !== 1) return;
         const f = r.data.data as FilterDTO;
         setActiveFilter(f);
+        // Com filtro salvo ativo, o lucro mínimo segue o que o usuário definiu nele
+        // (ex.: "Padrão DG" = -10). Sem filtro, cai no default (-10 no DG).
         setProfitMin(String(f.profitMin ?? 0));
         setSport(f.sports?.length === 1 ? f.sports[0] : '');
         setBookmaker(f.bookmakers?.length === 1 ? f.bookmakers[0] : '');
@@ -461,6 +647,7 @@ export default function ArbBetsPage() {
     const f = activeFilter;
     return data
       .filter((e) => (!sport || (e.sport || '').toLowerCase() === sport.toLowerCase()))
+      .filter((e) => (!league || (e.league || '') === league))
       .filter((e) => (!f?.sports?.length || f.sports.map((s) => s.toLowerCase()).includes((e.sport || '').toLowerCase())))
       .filter((e) => (!q || `${e.home} ${e.away} ${e.league}`.toLowerCase().includes(q)))
       .map((e) => ({
@@ -477,8 +664,9 @@ export default function ArbBetsPage() {
             if (!legCounts.has(bucket)) return false;
           }
           if (f) {
-            if (f.profitMin != null && sb.profitMargin < f.profitMin) return false;
-            if (f.profitMax && f.profitMax > 0 && sb.profitMargin > f.profitMax) return false;
+            // No DG o piso de lucro do filtro salvo é ignorado (margens são negativas).
+            if (!isDG && f.profitMin != null && sb.profitMargin < f.profitMin) return false;
+            if (!isDG && f.profitMax && f.profitMax > 0 && sb.profitMargin > f.profitMax) return false;
             if (f.bookmakers?.length && !sb.surebet.every((l) => f.bookmakers.includes(l.bookmaker))) return false;
             if (f.oddsMin != null && f.oddsMin !== 0 && sb.surebet.some((l) => l.price < f.oddsMin)) return false;
             if (f.oddsMax && f.oddsMax > 0 && sb.surebet.some((l) => l.price > f.oddsMax)) return false;
@@ -492,7 +680,7 @@ export default function ArbBetsPage() {
         })
       }))
       .filter((x) => x.surebets.length > 0);
-  }, [data, sport, search, profitMin, selectedMarkets, bookmaker, legCounts, activeFilter, hidden.isSurebetVisible]);
+  }, [data, sport, league, search, profitMin, selectedMarkets, bookmaker, legCounts, activeFilter, isDG, hidden.isSurebetVisible]);
 
   // Visão "por surebet": achata e ordena por lucro OU por tempo (mais recente).
   const flat = useMemo(
@@ -505,8 +693,8 @@ export default function ArbBetsPage() {
   );
 
   const totalSurebets = flat.length;
-  const activeFilters = [sport, selectedMarkets.size > 0, bookmaker, (parseFloat(profitMin) || 0) > 0, legCounts.size > 0].filter(Boolean).length;
-  const clearFilters = () => { setSport(''); setSelectedMarkets(new Set()); setBookmaker(''); setProfitMin('0'); setLegCounts(new Set()); };
+  const activeFilters = [sport, league, selectedMarkets.size > 0, bookmaker, (parseFloat(profitMin) || 0) > 0, legCounts.size > 0].filter(Boolean).length;
+  const clearFilters = () => { setSport(''); setLeague(''); setSelectedMarkets(new Set()); setBookmaker(''); setProfitMin(profitDefault); setLegCounts(new Set()); };
 
   // Modal aberto ao clicar numa notificação (feed ou notificação do Windows).
   const [alertModal, setAlertModal] = useState<{ event: SurebetData; sb: Surebet } | null>(null);
@@ -574,7 +762,7 @@ export default function ArbBetsPage() {
               <h2 className="text-lg font-bold text-white">Entre para ver as surebets</h2>
               <p className="text-sm text-gray-400 mt-1 mb-5">As oportunidades de arbitragem do ArbBets são exclusivas para usuários logados.</p>
               <button
-                onClick={() => router.push({ pathname: '/arbbets', query: { ...router.query, modal: 'auth', page: 'login' } }, undefined, { shallow: true })}
+                onClick={() => router.push({ pathname: router.pathname, query: { ...router.query, modal: 'auth', page: 'login' } }, undefined, { shallow: true })}
                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-900 font-semibold transition"
               >
                 Fazer login
@@ -591,18 +779,18 @@ export default function ArbBetsPage() {
       {/* Cabeçalho */}
       <header className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="grid place-items-center h-11 w-11 rounded-xl bg-gradient-to-br from-teal-500/30 to-teal-500/5 ring-1 ring-teal-500/30">
-            <Zap className="text-teal-300" size={22} />
+          <div className={`grid place-items-center h-11 w-11 rounded-xl ring-1 ${isDG ? 'bg-gradient-to-br from-amber-500/30 to-amber-500/5 ring-amber-500/30' : 'bg-gradient-to-br from-teal-500/30 to-teal-500/5 ring-teal-500/30'}`}>
+            <Zap className={isDG ? 'text-amber-300' : 'text-teal-300'} size={22} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">ArbBets</h1>
-            <p className="text-sm text-gray-400">Surebets entre as casas monitoradas</p>
+            <h1 className="text-xl font-bold text-white">{isDG ? 'Duplo Green' : 'ArbBets'}</h1>
+            <p className="text-sm text-gray-400">{isDG ? 'Resultado final com Pagamento Antecipado (PA) nas pontas casa e fora' : 'Surebets entre as casas monitoradas'}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right hidden sm:block">
             <div className="text-2xl font-bold text-white tabular-nums">{totalSurebets}</div>
-            <div className="text-[11px] uppercase tracking-wider text-gray-400">surebets</div>
+            <div className="text-[11px] uppercase tracking-wider text-gray-400">{isDG ? 'eventos' : 'surebets'}</div>
           </div>
           {hidden.count > 0 && (
             <button
@@ -625,31 +813,34 @@ export default function ArbBetsPage() {
         </div>
       </header>
 
-      {/* Abas tipo (prematch/live) + visão */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
-          {([['prematch', 'Pré-jogo'], ['live', 'Ao vivo']] as const).map(([v, label]) => (
-            <button
-              key={v}
-              onClick={() => setType(v)}
-              className={`px-4 py-1.5 text-sm font-medium rounded-lg transition ${type === v ? 'bg-teal-500 text-slate-900' : 'text-gray-300 hover:text-white'}`}
-            >
-              {label}
-            </button>
-          ))}
+      {/* Abas tipo (prematch/live) + visão — só no modo surebet padrão. No DG não há
+          prematch/live nem alternância por surebet/evento (o campeonato vai na sidebar). */}
+      {!isDG && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
+            {([['prematch', 'Pré-jogo'], ['live', 'Ao vivo']] as const).map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setType(v)}
+                className={`px-4 py-1.5 text-sm font-medium rounded-lg transition ${type === v ? 'bg-teal-500 text-slate-900' : 'text-gray-300 hover:text-white'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
+            {([['surebets', 'Por surebet'], ['events', 'Por evento']] as const).map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition ${view === v ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
-          {([['surebets', 'Por surebet'], ['events', 'Por evento']] as const).map(([v, label]) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition ${view === v ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
 
       {/* Toolbar: busca + filtro salvo + botão Filtros (popover) */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -667,7 +858,7 @@ export default function ArbBetsPage() {
             options={[{ value: '', label: 'Sem filtro salvo' }, ...savedFilters.map((f) => ({ value: f.id, label: f.name }))]}
           />
           <button
-            onClick={() => router.push({ pathname: '/arbbets', query: { ...router.query, modal: 'user', page: 'abfilter' } }, undefined, { shallow: true })}
+            onClick={() => router.push({ pathname: router.pathname, query: { ...router.query, modal: 'user', page: 'abfilter' } }, undefined, { shallow: true })}
             className="grid place-items-center h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-teal-300 transition"
             title="Gerenciar filtros"
           >
@@ -728,6 +919,14 @@ export default function ArbBetsPage() {
                   <Select className="mt-1" value={sport} onChange={setSport}
                     options={[{ value: '', label: 'Todos os esportes' }, ...sports.map((s) => ({ value: s, label: s }))]} />
                 </div>
+                {/* No DG o campeonato é escolhido pelo dropdown dedicado da toolbar. */}
+                {!isDG && (
+                  <div className="block text-xs text-gray-400">
+                    Liga
+                    <Select className="mt-1" value={league} onChange={setLeague}
+                      options={[{ value: '', label: 'Todas as ligas' }, ...leagues.map((l) => ({ value: l, label: l }))]} />
+                  </div>
+                )}
                 <div className="block text-xs text-gray-400">
                   Casa
                   <Select className="mt-1" value={bookmaker} onChange={setBookmaker} options={bookmakerOptions} />
@@ -747,16 +946,24 @@ export default function ArbBetsPage() {
         </div>
       </div>
 
-      {/* Filtro rápido de mercados */}
-      <MarketQuickFilter
-        tree={marketTree}
-        selected={selectedMarkets}
-        onToggleMarket={toggleMarket}
-        onToggleCategory={toggleMarketCategory}
-        onClearAll={() => setSelectedMarkets(new Set())}
-      />
+      {/* Filtro rápido de mercados — no DG só há resultado final, então não aparece. */}
+      {!isDG && (
+        <MarketQuickFilter
+          tree={marketTree}
+          selected={selectedMarkets}
+          onToggleMarket={toggleMarket}
+          onToggleCategory={toggleMarketCategory}
+          onClearAll={() => setSelectedMarkets(new Set())}
+        />
+      )}
 
-      {/* Conteúdo */}
+      {/* Conteúdo — no DG, sidebar de campeonatos sempre visível à esquerda. */}
+      <div className={isDG ? 'flex gap-4 items-start' : undefined}>
+        {isDG && (
+          <LeagueSidebar counts={leagueCounts} total={data.length} value={league} onChange={setLeague} />
+        )}
+        <div className={isDG ? 'flex-1 min-w-0' : undefined}>
+      {isDG && <LeagueFilterMobile counts={leagueCounts} total={data.length} value={league} onChange={setLeague} />}
       {loading && data.length === 0 ? (
         <div className="flex items-center justify-center py-24 text-gray-400">
           <RefreshCcw className="animate-spin mr-2" size={20} /> Carregando surebets...
@@ -764,9 +971,9 @@ export default function ArbBetsPage() {
       ) : totalSurebets === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-20 text-center">
           <Trophy className="mx-auto text-gray-600 mb-3" size={32} />
-          <p className="text-gray-400">Nenhuma surebet {type === 'live' ? 'ao vivo' : 'pré-jogo'} para os filtros aplicados.</p>
+          <p className="text-gray-400">Nenhuma {isDG ? 'oportunidade Duplo Green' : `surebet ${type === 'live' ? 'ao vivo' : 'pré-jogo'}`} para os filtros aplicados.</p>
         </div>
-      ) : view === 'surebets' ? (
+      ) : (view === 'surebets' || isDG) ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-2">
           {flat.map(({ event, sb }, i) => {
             const key = surebetKey(event, sb);
@@ -786,7 +993,11 @@ export default function ArbBetsPage() {
                   <WatchButton on={watchSb.has(key)} onClick={(e) => { e.stopPropagation(); watchSb.toggle(key); }} />
                 </div>
               </div>
-              <SurebetCompact event={event} sb={sb} counts={surebetCounts} onCalc={() => setCalc({ event, sb })} onExplain={() => openExplain(event, sb)} onOdd={(leg) => setOddModal({ event, leg })} onHide={hidden.hide} isHidden={hidden.isHidden} notify={notify} />
+              {isDG ? (
+                <DuploGreenCard event={event} sb={sb} onCalc={() => setCalc({ event, sb })} onExplain={() => openExplain(event, sb)} onOdd={(leg) => setOddModal({ event, leg })} onHide={hidden.hide} isHidden={hidden.isHidden} notify={notify} />
+              ) : (
+                <SurebetCompact event={event} sb={sb} counts={surebetCounts} onCalc={() => setCalc({ event, sb })} onExplain={() => openExplain(event, sb)} onOdd={(leg) => setOddModal({ event, leg })} onHide={hidden.hide} isHidden={hidden.isHidden} notify={notify} />
+              )}
             </div>
             );
           })}
@@ -861,8 +1072,12 @@ export default function ArbBetsPage() {
             })}
         </div>
       )}
+        </div>
+      </div>
 
-      {calc && <CalcModal event={calc.event} sb={calc.sb} onClose={() => setCalc(null)} defaultStake={activeFilter?.stake} notify={notify} />}
+      {calc && (isDG
+        ? <DGCalcModal event={calc.event} sb={calc.sb} onClose={() => setCalc(null)} defaultStake={activeFilter?.stake} notify={notify} />
+        : <CalcModal event={calc.event} sb={calc.sb} onClose={() => setCalc(null)} defaultStake={activeFilter?.stake} notify={notify} />)}
       {eventModal && (
         <EventModal
           event={eventModal.event}
@@ -879,7 +1094,9 @@ export default function ArbBetsPage() {
           notify={notify}
         />
       )}
-      {explain && <ExplainModal marketIds={explain.marketIds} home={explain.home} away={explain.away} onClose={() => setExplain(null)} />}
+      {explain && (isDG
+        ? <DGExplainModal onClose={() => setExplain(null)} />
+        : <ExplainModal marketIds={explain.marketIds} home={explain.home} away={explain.away} onClose={() => setExplain(null)} />)}
       {oddModal && <OddModal event={oddModal.event} leg={oddModal.leg} onClose={() => setOddModal(null)} />}
       {alertModal && (
         <AlertSurebetModal
@@ -1530,7 +1747,7 @@ function CalcModal({ event, sb, onClose, defaultStake, notify }: { event: Surebe
                 <div className="w-[120px] sm:w-[160px] min-w-0 shrink-0">
                   {houseOpts.length > 1
                     ? <Select value={houseStr[i] ?? leg.bookmaker} onChange={(v) => setHouse(i, v)} options={houseOpts} buttonClassName="py-1 px-2 text-xs" />
-                    : <BookmakerTag slug={houseStr[i] ?? leg.bookmaker} size={14} nameClassName="text-[11px]" />}
+                    : <BookmakerTag slug={houseStr[i] ?? leg.bookmaker} size={14} nameClassName="text-[11px]" tooltip />}
                   <div className="flex items-center gap-1 mt-0.5 min-w-0">
                     <span className="text-[10px] text-gray-500 truncate">{optionLabel(leg.option, event.home, event.away, leg.handicap)}</span>
                     <CommissionBadge pct={getBookmaker(houseStr[i] ?? leg.bookmaker)?.commissionPct} className="!px-1 !py-0 !text-[9px]" />
@@ -1608,5 +1825,364 @@ function CalcModal({ event, sb, onClose, defaultStake, notify }: { event: Surebe
       />
     )}
     </>
+  );
+}
+
+// Calculadora DEDICADA do Duplo Green (separada da CalcModal de surebet p/ não mexer
+// nela). Distribui a banca em 1·X·2, permite trocar a casa de cada perna e mostra,
+// além do resultado normal (pior caso), o potencial do DUPLO GREEN: se a ponta PA
+// (casa/fora) abrir 2 gols, ela paga adiantado e a cobertura (empate) ainda pode ganhar.
+function DGCalcModal({ event, sb, onClose, defaultStake, notify }: { event: SurebetData; sb: Surebet; onClose: () => void; defaultStake?: number; notify?: (text: string) => void }) {
+  const { getBookmaker, bookmakers } = useBookmakers();
+  const base0 = defaultStake && defaultStake > 0 ? defaultStake : 1000;
+  const idxOf = (opt: string) => sb.surebet.findIndex((l) => (l.option || '').toLowerCase() === opt);
+  const homeIdx = idxOf('home'), drawIdx = idxOf('draw'), awayIdx = idxOf('away');
+  // Comissão cadastrada na casa (exchange, ex.: Betfair); '0' quando não tem.
+  const commFor = (slug: string) => {
+    const c = getBookmaker(slug)?.commissionPct;
+    return c != null && Number(c) > 0 ? String(c) : '0';
+  };
+
+  const [oddsStr, setOddsStr] = useState<string[]>(sb.surebet.map((l) => String(l.price)));
+  const [stakesStr, setStakesStr] = useState<string[]>([]);
+  const [totalStr, setTotalStr] = useState(String(base0));
+  const [houseStr, setHouseStr] = useState<string[]>(sb.surebet.map((l) => l.bookmaker));
+  const [showComm, setShowComm] = useState(false);
+  const [commStr, setCommStr] = useState<string[]>(sb.surebet.map(() => '0'));
+
+  useEffect(() => {
+    const odds0 = sb.surebet.map((l) => Number(l.price) || 0);
+    setOddsStr(sb.surebet.map((l) => String(l.price)));
+    setStakesStr(balancedStakes(odds0, base0).map(fmt));
+    setHouseStr(sb.surebet.map((l) => l.bookmaker));
+    const comms = sb.surebet.map((l) => commFor(l.bookmaker));
+    setCommStr(comms);
+    if (comms.some((c) => num(c) > 0)) setShowComm(true);
+    setTotalStr(String(base0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sb, base0]);
+
+  // Registro de casas carrega assíncrono: ao chegar, preenche a comissão das pernas
+  // ainda zeradas (sem sobrescrever edição manual).
+  useEffect(() => {
+    const autos = houseStr.map((slug) => commFor(slug));
+    setCommStr((prev) => prev.map((p, i) => (num(p) > 0 ? p : autos[i])));
+    if (autos.some((a) => num(a) > 0)) setShowComm(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookmakers]);
+
+  // Casas que oferecem a mesma seleção da perna (a própria + otherOdds), deduplicadas.
+  const housesForLeg = (i: number) => {
+    const leg = sb.surebet[i];
+    const m = new Map<string, { bookmaker: string; price: number }>();
+    m.set(leg.bookmaker.toLowerCase(), { bookmaker: leg.bookmaker, price: leg.price });
+    for (const o of leg.otherOdds || []) {
+      const k = (o.bookmaker || '').toLowerCase();
+      if (!m.has(k)) m.set(k, { bookmaker: o.bookmaker, price: o.price });
+    }
+    return Array.from(m.values()).sort((a, b) => b.price - a.price);
+  };
+
+  const odds = oddsStr.map(num);
+  const stakes = stakesStr.map(num);
+  // Comissão (exchange) reduz só o LUCRO da casa que vencer → odd efetiva.
+  const comm = commStr.map((c) => (showComm ? num(c) / 100 : 0));
+  const eOdds = odds.map((o, i) => effOdd(o, comm[i] || 0));
+  const returns = stakes.map((s, i) => s * (eOdds[i] || 0));
+  const total = stakes.reduce((a, b) => a + b, 0);
+  const guaranteed = returns.length ? Math.min(...returns) : 0;
+  const profit = guaranteed - total;
+  const profitPct = total ? (profit / total) * 100 : 0;
+  const hasComm = showComm && comm.some((c) => c > 0);
+
+  const setTotal = (v: string) => { setTotalStr(v); setStakesStr(balancedStakes(odds, num(v)).map(fmt)); };
+  const setStake = (i: number, v: string) => {
+    const val = num(v);
+    if (val <= 0) { setStakesStr((p) => p.map((s, j) => (j === i ? v : s))); return; }
+    const r = val * (odds[i] || 0);
+    const next = odds.map((o, j) => (j === i ? v : o > 0 ? fmt(r / o) : '0'));
+    setStakesStr(next); setTotalStr(fmt(next.reduce((a, s) => a + num(s), 0)));
+  };
+  const setOdd = (i: number, v: string) => {
+    const nextOdds = oddsStr.map((o, j) => (j === i ? v : o));
+    setOddsStr(nextOdds); setStakesStr(balancedStakes(nextOdds.map(num), total).map(fmt));
+  };
+  const setHouse = (i: number, slug: string) => {
+    setHouseStr((p) => p.map((s, j) => (j === i ? slug : s)));
+    const h = housesForLeg(i).find((x) => x.bookmaker === slug);
+    if (h) setOdd(i, String(h.price));
+    const c = commFor(slug);
+    setCommStr((p) => p.map((s, j) => (j === i ? c : s)));
+    if (num(c) > 0) setShowComm(true);
+  };
+  const setComm = (i: number, v: string) => setCommStr((p) => p.map((c, j) => (j === i ? v : c)));
+  // Perna "efetiva" p/ abrir o jogo na casa escolhida (com o stake calculado).
+  const effLeg = (i: number): SurebetOdd => {
+    const leg = sb.surebet[i];
+    const size = stakes[i] || undefined;
+    const slug = (houseStr[i] ?? leg.bookmaker).toLowerCase();
+    if (slug === leg.bookmaker.toLowerCase()) return { ...leg, size };
+    const alt = (leg.otherOdds || []).find((o) => (o.bookmaker || '').toLowerCase() === slug);
+    return alt ? { ...leg, bookmaker: alt.bookmaker, eventId: alt.eventId, price: alt.price, link: undefined, size } : { ...leg, size };
+  };
+
+  // P/L de cada posição num cenário: a vencedora rende stake*(oddEfetiva-1) — já
+  // com a comissão da exchange; a perdedora -stake.
+  const posPL = (i: number, winners: number[]) => (winners.includes(i) ? (stakes[i] || 0) * ((eOdds[i] || 0) - 1) : -(stakes[i] || 0));
+  const netOf = (winners: number[]) => [homeIdx, drawIdx, awayIdx].filter((x) => x >= 0).reduce((a, i) => a + posPL(i, winners), 0);
+  // Cenários: 3 normais (1 green) + 4 de Duplo Green (a ponta PA abre 2-0 e o jogo
+  // depois empata/vira, fazendo uma 2ª posição ganhar também).
+  const scenarios = [
+    { label: `${event.home} vence`, winners: [homeIdx], dg: false },
+    { label: 'Empate', winners: [drawIdx], dg: false },
+    { label: `${event.away} vence`, winners: [awayIdx], dg: false },
+    { label: `${event.home} abre 2-0 → empate`, winners: [homeIdx, drawIdx], dg: true },
+    { label: `${event.home} abre 2-0 → ${event.away} vira`, winners: [homeIdx, awayIdx], dg: true },
+    { label: `${event.away} abre 2-0 → empate`, winners: [awayIdx, drawIdx], dg: true },
+    { label: `${event.away} abre 2-0 → ${event.home} vira`, winners: [awayIdx, homeIdx], dg: true },
+  ].filter((s) => s.winners.every((w) => w >= 0));
+  const posCols = [{ idx: homeIdx, tag: '1' }, { idx: drawIdx, tag: 'X' }, { idx: awayIdx, tag: '2' }].filter((c) => c.idx >= 0);
+  // Faixa do resultado SEM Duplo Green (os 3 cenários normais): pior e melhor caso.
+  const normalNets = scenarios.filter((s) => !s.dg).map((s) => netOf(s.winners));
+  const nWorst = normalNets.length ? Math.min(...normalNets) : 0;
+  const nBest = normalNets.length ? Math.max(...normalNets) : 0;
+  const pct = (v: number) => (total ? (v / total) * 100 : 0);
+
+  const tagFor = (opt: string) => (opt === 'home' ? '1' : opt === 'away' ? '2' : opt === 'draw' ? 'X' : '');
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      {/* Fecha só quando o clique COMEÇA no fundo. Evita fechar ao soltar o mouse
+          fora após editar input ou escolher casa no select (a opção desmonta e o
+          clique cairia no backdrop). */}
+      <div className="relative w-full sm:max-w-2xl bg-brand-dark border border-white/10 rounded-t-2xl sm:rounded-2xl p-4 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="sm:hidden mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
+        <button onClick={onClose} className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-rose-400"><X size={20} /></button>
+
+        <div className="mb-4 pr-8">
+          <div className="flex items-center gap-1.5 text-xs text-amber-300/80"><Calculator size={13} /> Duplo Green · Pagamento Antecipado</div>
+          <h2 className="text-lg font-bold text-white">{event.home} <span className="text-gray-500 font-normal">x</span> {event.away}</h2>
+        </div>
+
+        <div className="mb-3">
+          <label className="block text-xs text-gray-400">
+            Valor total a investir (R$)
+            <input value={totalStr} onChange={(e) => setTotal(e.target.value)} inputMode="decimal" className={`${inputClass} mt-1 text-base`} />
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3 text-xs text-gray-300">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none" title="Comissão da casa (exchange) — incide só sobre o lucro da casa que vencer">
+            <input type="checkbox" checked={showComm} onChange={(e) => setShowComm(e.target.checked)} className="accent-teal-500" />
+            Comissões
+          </label>
+        </div>
+
+        {/* Pernas 1 · X · 2 */}
+        <div className="space-y-1.5">
+          {sb.surebet.map((leg, i) => {
+            const legHouses = housesForLeg(i);
+            const houseOpts = legHouses.map((h) => {
+              const b = getBookmaker(h.bookmaker);
+              return {
+                value: h.bookmaker,
+                label: `${b?.name || h.bookmaker} — ${h.price.toFixed(2)}`,
+                color: b?.color || undefined,
+                icon: <BookmakerLogo name={b?.name || h.bookmaker} slug={h.bookmaker} logoUrl={b?.logoUrl} color={b?.color} size={14} />
+              };
+            });
+            return (
+              <div key={i} className="flex items-center gap-1.5 sm:gap-2 rounded-lg bg-white/5 ring-1 ring-white/10 px-2 py-1.5">
+                <span className="grid place-items-center h-6 w-6 shrink-0 rounded bg-white/10 text-[11px] font-bold text-gray-300">{tagFor((leg.option || '').toLowerCase())}</span>
+                <div className="w-[110px] sm:w-[150px] min-w-0 shrink-0">
+                  {houseOpts.length > 1
+                    ? <Select value={houseStr[i] ?? leg.bookmaker} onChange={(v) => setHouse(i, v)} options={houseOpts} buttonClassName="py-1 px-2 text-xs" />
+                    : <BookmakerTag slug={houseStr[i] ?? leg.bookmaker} size={14} nameClassName="text-[11px]" tooltip />}
+                  <div className="flex items-center gap-1 mt-0.5 min-w-0">
+                    <span className="text-[10px] text-gray-500 truncate">{optionLabel(leg.option, event.home, event.away, leg.handicap)}</span>
+                    {leg.pa && <span className="inline-flex items-center rounded px-1 py-px text-[8px] font-bold bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30">PA</span>}
+                    <OpenInHouse leg={effLeg(i)} event={event} notify={notify} iconSize={11} title="Abrir o jogo na casa" />
+                  </div>
+                </div>
+                <input value={oddsStr[i] ?? ''} onChange={(e) => setOdd(i, e.target.value)} inputMode="decimal" aria-label="Odd"
+                  className={`${fieldBase} w-14 sm:w-20 shrink-0 text-center py-1.5 px-1`} />
+                {showComm && (
+                  <input value={commStr[i] ?? ''} onChange={(e) => setComm(i, e.target.value)} inputMode="decimal" aria-label="Comissão %" title="Comissão % (só incide se ESTA ponta vencer)"
+                    className={`${fieldBase} w-12 sm:w-16 shrink-0 text-center py-1.5 px-1`} />
+                )}
+                <input value={stakesStr[i] ?? ''} onChange={(e) => setStake(i, e.target.value)} inputMode="decimal" aria-label="Apostar"
+                  className={`${fieldBase} w-full flex-1 min-w-0 text-center py-1.5 px-1 font-bold text-teal-200`} />
+                <div className="w-[68px] sm:w-24 text-right shrink-0">
+                  <div className="text-sm font-bold tabular-nums text-white leading-none">{returns[i]?.toFixed(2) ?? '0.00'}</div>
+                  <div className="text-[9px] text-gray-500">retorno</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {hasComm && (
+          <p className="mt-2 text-[11px] text-gray-400 leading-relaxed">
+            A comissão (exchange) só é descontada na ponta que <b className="text-gray-200">vencer</b> — incide sobre o lucro dela. Se o resultado bater em outra ponta, essa ponta não tem comissão. Os valores nos cenários abaixo já consideram isso.
+          </p>
+        )}
+
+        {/* Sem Duplo Green: faixa de resultado dos 3 cenários normais (1 posição ganha) */}
+        <div className={`mt-4 rounded-xl p-3 ring-1 ${nWorst >= 0 ? 'bg-emerald-500/10 ring-emerald-500/30' : nBest < 0 ? 'bg-rose-500/10 ring-rose-500/30' : 'bg-amber-500/10 ring-amber-500/30'}`}>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="text-xs font-semibold text-white">Sem Duplo Green (resultado normal)</span>
+            <span className="text-[10px] uppercase tracking-wider text-gray-400">Total R$ {total.toFixed(2)}</span>
+          </div>
+          {nWorst >= 0 ? (
+            <p className="text-[13px] text-gray-200 leading-relaxed">
+              Você <b className="text-emerald-300">lucra de qualquer jeito</b>: entre <b className="text-emerald-300 tabular-nums">+R$ {nWorst.toFixed(2)}</b> ({pct(nWorst).toFixed(2)}%) e <b className="text-emerald-300 tabular-nums">+R$ {nBest.toFixed(2)}</b> ({pct(nBest).toFixed(2)}%), dependendo de quem vencer. O Duplo Green é bônus.
+            </p>
+          ) : nBest < 0 ? (
+            <p className="text-[13px] text-gray-200 leading-relaxed">
+              Você <b className="text-rose-300">perde</b> entre <b className="text-rose-300 tabular-nums">R$ {nWorst.toFixed(2)}</b> ({pct(nWorst).toFixed(2)}%) e <b className="text-rose-300 tabular-nums">R$ {nBest.toFixed(2)}</b> ({pct(nBest).toFixed(2)}%). É a perda controlada que você assume buscando o Duplo Green.
+            </p>
+          ) : (
+            <p className="text-[13px] text-gray-200 leading-relaxed">
+              Pode <b className="text-emerald-300">lucrar até +R$ {nBest.toFixed(2)}</b> ({pct(nBest).toFixed(2)}%) ou <b className="text-rose-300">perder até R$ {nWorst.toFixed(2)}</b> ({pct(nWorst).toFixed(2)}%), dependendo de quem vencer.
+            </p>
+          )}
+        </div>
+
+        {/* Cenários: quanto cada posição rende/perde (inclui os casos de 2-0) */}
+        <div className="mt-3 rounded-xl ring-1 ring-white/10 overflow-hidden">
+          <div className="px-3 py-2 bg-amber-500/[0.06] border-b border-white/10 text-xs font-semibold text-amber-200">Cenários — quanto cada posição rende/perde</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="text-gray-500">
+                  <th className="text-left font-medium px-3 py-1.5">Cenário</th>
+                  {posCols.map((c) => <th key={c.tag} className="text-right font-medium px-2 py-1.5 w-16">{c.tag}</th>)}
+                  <th className="text-right font-medium px-3 py-1.5 w-24">Resultado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {scenarios.map((s, i) => {
+                  const net = netOf(s.winners);
+                  return (
+                    <tr key={i} className={s.dg ? 'bg-emerald-500/[0.04]' : ''}>
+                      <td className="px-3 py-1.5 text-gray-300 whitespace-nowrap">
+                        {s.dg && <span className="mr-1 text-amber-300">⚡</span>}{s.label}
+                      </td>
+                      {posCols.map((c) => {
+                        const win = s.winners.includes(c.idx);
+                        const pl = posPL(c.idx, s.winners);
+                        return <td key={c.tag} className={`px-2 py-1.5 text-right tabular-nums ${win ? 'text-emerald-300' : 'text-rose-300/60'}`}>{win ? '+' : ''}{pl.toFixed(2)}</td>;
+                      })}
+                      <td className={`px-3 py-1.5 text-right font-bold tabular-nums ${net >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{net >= 0 ? '+' : ''}{net.toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-3 py-2 text-[10px] text-gray-500 leading-relaxed border-t border-white/10">
+            As 3 primeiras linhas são o resultado <b className="text-gray-300">sem</b> pagamento antecipado (uma posição ganha). As linhas <span className="text-amber-300">⚡</span> são o <b className="text-amber-200">Duplo Green</b>: a ponta PA abre 2 gols (paga adiantado) e o jogo depois empata/vira, fazendo uma 2ª posição ganhar também. Não é garantido — depende de abrir 2-0.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modal de explicação DEDICADA do Duplo Green: o que é PA, o que é Duplo Green,
+// como montamos as 3 pontas e um exemplo fechado com base de R$ 1.000,00.
+function DGExplainModal({ onClose }: { onClose: () => void }) {
+  // Exemplo fictício (base R$ 1.000) — odds 1.90 / 3.30 / 5.55, banca dividida para
+  // os retornos ficarem iguais (~990,56 cada). Números estáticos, só ilustrativos.
+  const ex = [
+    { tag: '1', label: 'Casa (PA)', odd: 1.90, stake: 521.35, ret: 990.56, pa: true },
+    { tag: 'X', label: 'Empate', odd: 3.30, stake: 300.17, ret: 990.56, pa: false },
+    { tag: '2', label: 'Fora (PA)', odd: 5.55, stake: 178.48, ret: 990.56, pa: true },
+  ];
+  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="rounded-xl bg-white/[0.03] ring-1 ring-white/10 p-3">
+      <div className="text-sm font-semibold text-white mb-1.5">{title}</div>
+      <div className="text-[13px] text-gray-300 leading-relaxed space-y-2">{children}</div>
+    </div>
+  );
+  return (
+    <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4" onClick={onClose}>
+      <div className="relative w-full sm:max-w-2xl bg-brand-dark border border-white/10 rounded-t-2xl sm:rounded-2xl p-4 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="sm:hidden mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
+        <button onClick={onClose} className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-rose-400"><X size={20} /></button>
+
+        <div className="flex items-center gap-2 mb-4 pr-8 text-amber-300">
+          <Zap size={18} className="fill-amber-300/30" />
+          <span className="text-xs uppercase tracking-wider">Como funciona o Duplo Green</span>
+        </div>
+
+        <div className="space-y-3">
+          <Section title="Pagamento Antecipado (PA)">
+            <p>É quando a casa considera sua aposta <b className="text-gray-100">vencedora antes do fim da partida</b> se uma condição acontecer. No futebol, o caso comum: o time que você apostou <b className="text-amber-200">abre 2 gols de vantagem</b> em qualquer momento — a casa paga a aposta na hora, independente do placar final.</p>
+            <p className="text-[12px] text-gray-400">Nomes por casa: Betano “2 Gols de Vantagem”, Superbet “Super Placar”, estrelabet “PA”. PA só existe em <b className="text-gray-200">Casa</b> e <b className="text-gray-200">Fora</b> — empate não tem (não dá pra abrir 2 gols e empatar).</p>
+          </Section>
+
+          <Section title="Duplo Green">
+            <p>Acontece quando <b className="text-emerald-300">duas apostas diferentes ficam vencedoras no mesmo jogo</b>. A ponta PA paga adiantado quando o time abre 2-0 (1º green); se depois o jogo <b className="text-gray-100">vira ou empata</b>, a aposta de cobertura também ganha (2º green).</p>
+          </Section>
+
+          <Section title="Como montamos no DG">
+            <p>Cobrimos os 3 resultados — <b>1</b> (Casa, com PA), <b>X</b> (Empate) e <b>2</b> (Fora, com PA) — em casas diferentes, dividindo a banca para que os retornos fiquem equilibrados. Assim, no pior caso (ninguém abre 2-0) você fica perto do zero a zero; e se rolar o 2-0 + virada/empate, você embolsa duas pontas.</p>
+          </Section>
+
+          <Section title="Exemplo com base de R$ 1.000,00">
+            <div className="rounded-lg ring-1 ring-white/10 overflow-hidden">
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="text-gray-500 bg-white/[0.03]">
+                    <th className="text-left font-medium px-2 py-1.5">Posição</th>
+                    <th className="text-right font-medium px-2 py-1.5">Odd</th>
+                    <th className="text-right font-medium px-2 py-1.5">Apostar</th>
+                    <th className="text-right font-medium px-2 py-1.5">Retorna</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {ex.map((r) => (
+                    <tr key={r.tag}>
+                      <td className="px-2 py-1.5 text-gray-200">
+                        <span className="inline-grid place-items-center h-5 w-5 rounded bg-white/10 text-[11px] font-bold mr-1.5">{r.tag}</span>
+                        {r.label}
+                        {r.pa && <span className="ml-1 inline-flex items-center rounded px-1 py-px text-[8px] font-bold bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30">PA</span>}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-gray-200">{r.odd.toFixed(2)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-teal-200">R$ {r.stake.toFixed(2)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-white">R$ {r.ret.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+              <div className="rounded-lg bg-rose-500/10 ring-1 ring-rose-500/30 p-2.5">
+                <div className="text-[11px] uppercase tracking-wider text-gray-400">Pior caso (sem 2-0)</div>
+                <div className="text-base font-bold tabular-nums text-rose-300">− R$ 9,44 <span className="text-xs font-normal">(−0,94%)</span></div>
+                <div className="text-[11px] text-gray-400 mt-0.5">Uma posição ganha (≈ R$ 990,56) e as outras perdem. Perda pequena.</div>
+              </div>
+              <div className="rounded-lg bg-emerald-500/10 ring-1 ring-emerald-500/30 p-2.5">
+                <div className="text-[11px] uppercase tracking-wider text-gray-400">Duplo Green (abre 2-0 + vira/empata)</div>
+                <div className="text-base font-bold tabular-nums text-emerald-300">+ R$ 981,12 <span className="text-xs font-normal">(+98%)</span></div>
+                <div className="text-[11px] text-gray-400 mt-0.5">Duas posições ganham (≈ 2 × R$ 990,56). É o cenário raro e lucrativo.</div>
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Como escolher os eventos">
+            <p>Prefira eventos com a <b className="text-gray-100">% perto de zero</b> (a perda do pior caso é mínima se o 2-0 não acontecer) ou eventos <b className="text-emerald-300">positivos</b> — nesses, mesmo sem Duplo Green você já ganha um pouco e não perde. O Duplo Green vira o “bônus” quando o 2-0 acontece.</p>
+          </Section>
+
+          <div className="rounded-xl bg-amber-500/[0.06] ring-1 ring-amber-500/20 p-3 text-[12px] text-gray-300 leading-relaxed">
+            <b className="text-amber-200">Atenção:</b> não é lucro garantido. O Duplo Green depende de um time abrir 2 gols de vantagem — um evento <b className="text-gray-100">raro</b> — e das regras de cada casa (mercado, promoção ativa, limites e restrições). O “pior caso” é a perda controlada que você assume buscando esse bônus. Aposte com responsabilidade.
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

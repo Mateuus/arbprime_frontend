@@ -180,6 +180,14 @@ export const useMenuItems = (): MenuItem[] => {
             icon: <CalendarClock size={18} />,
             requiresAuth: true,
             onClick: () => router.push('/arbbets')
+          },
+          {
+            id: 'duplo-green',
+            name: 'Duplo Green',
+            path: '/arbbets/duplo-green',
+            icon: <GiSoccerBall size={18} />,
+            requiresAuth: true,
+            onClick: () => router.push('/arbbets/duplo-green')
           }
         ]
       },

@@ -3,6 +3,8 @@
 // Gerado a partir do catálogo; fonte da verdade dos ids é o arbbetting.
 export const MARKET_NAMES: Record<string, string> = {
   'match-winner:1': 'Resultado Final',
+  'match-winner-pa:1': 'Resultado Final PA',
+  'duplo-green:1': 'Duplo Green',
   'match-winner-so:1': 'Resultado Final SO',
   'match-winner-lay:2': 'Resultado Final Lay',
   'match-winner-1st-half:3': 'Resultado Final - 1º Tempo',

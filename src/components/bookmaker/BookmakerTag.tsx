@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useBookmakers } from '@/hooks/useBookmakers';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 interface LogoProps {
   name: string;
@@ -46,18 +47,21 @@ interface TagProps {
   showName?: boolean;
   className?: string;
   nameClassName?: string;
+  /** Mostra o nome completo da casa num tooltip ao passar o mouse (útil quando o nome é truncado). */
+  tooltip?: boolean;
 }
 
 /**
  * Ícone + nome da casa. O nome usa a COR cadastrada da casa. Resolve os dados
  * pelo slug no registro (useBookmakers); se a casa não estiver cadastrada,
- * mostra o slug como nome e um monograma neutro.
+ * mostra o slug como nome e um monograma neutro. Com `tooltip`, o nome completo
+ * aparece num cartão ao passar o mouse — bom para layouts onde o nome trunca.
  */
-export function BookmakerTag({ slug, size = 18, showName = true, className = '', nameClassName = '' }: TagProps) {
+export function BookmakerTag({ slug, size = 18, showName = true, className = '', nameClassName = '', tooltip = false }: TagProps) {
   const { getBookmaker } = useBookmakers();
   const b = getBookmaker(slug);
   const name = b?.name || slug;
-  return (
+  const tag = (
     <span className={`inline-flex items-center gap-1.5 min-w-0 ${className}`}>
       <BookmakerLogo name={name} slug={slug} logoUrl={b?.logoUrl} color={b?.color} size={size} />
       {showName && (
@@ -66,6 +70,12 @@ export function BookmakerTag({ slug, size = 18, showName = true, className = '',
         </span>
       )}
     </span>
+  );
+  if (!tooltip) return tag;
+  return (
+    <Tooltip label={name} className="min-w-0 max-w-full">
+      {tag}
+    </Tooltip>
   );
 }
 
