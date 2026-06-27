@@ -266,6 +266,8 @@ export interface EventGroupPrice {
   // Pagamento Antecipado: a casa paga a aposta como vencedora se o time abrir a
   // vantagem de gols definida pela casa, mesmo que o placar mude depois.
   pa?: boolean;
+  // Liquidez disponível (em R$) nessa odd — só em exchanges (ex.: betbra).
+  size?: number | null;
 }
 export interface EventGroupSelection {
   selection: string;

@@ -43,6 +43,15 @@ const PaBadge = ({ className = '' }: { className?: string }) => (
   </span>
 );
 
+// Liquidez (size) de odd de exchange (ex.: betbra) → R$ compacto. null/0 = oculto.
+const fmtSize = (size?: number | null): string | null => {
+  if (size == null || !Number.isFinite(size) || size <= 0) return null;
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: 1
+  }).format(size);
+};
+const SIZE_HELP = 'Liquidez disponível nesta odd na exchange (quanto dá para casar nesse preço). Acima disso, a odd piora.';
+
 // Tradução de seleções "cruas" em inglês (sobretudo combos: home/yes, no/over...).
 // 1 = Casa, x = Empate, 2 = Fora; yes/no = Sim/Não (ambas marcam); over/under = Mais/Menos.
 const TOKEN_PT: Record<string, string> = {
@@ -306,7 +315,7 @@ export default function EventDetailPage() {
   const [category, setCategory] = useState('all');
 
   // Modal de histórico de uma odd específica.
-  const [hist, setHist] = useState<{ bookmaker: string; eventId: string; marketId: string; marketName: string | null; selection: string } | null>(null);
+  const [hist, setHist] = useState<{ bookmaker: string; eventId: string; marketId: string; marketName: string | null; selection: string; size?: number | null } | null>(null);
   const [histRows, setHistRows] = useState<HistoryRow[]>([]);
   const [histLoading, setHistLoading] = useState(false);
 
@@ -331,7 +340,7 @@ export default function EventDetailPage() {
     fetchDetail();
   }, [fetchDetail]);
 
-  const openHistory = async (h: { bookmaker: string; eventId: string; marketId: string; marketName: string | null; selection: string }) => {
+  const openHistory = async (h: { bookmaker: string; eventId: string; marketId: string; marketName: string | null; selection: string; size?: number | null }) => {
     setHist(h);
     setHistRows([]);
     setHistLoading(true);
@@ -407,10 +416,11 @@ export default function EventDetailPage() {
     }
     const boosted = !!p.boosted;
     const pa = !!p.pa;
+    const size = fmtSize(p.size);
     return (
       <button
-        onClick={() => openHistory({ bookmaker: p.bookmaker, eventId: p.eventId, marketId, marketName, selection: sel.selection })}
-        title={`${p.bookmaker}${boosted ? ' — odd turbinada (Super Placar/Super Odds): limite de stake' : ''}${pa ? ` — ${PA_HELP}` : ''} — ver histórico de movimentação`}
+        onClick={() => openHistory({ bookmaker: p.bookmaker, eventId: p.eventId, marketId, marketName, selection: sel.selection, size: p.size })}
+        title={`${p.bookmaker}${boosted ? ' — odd turbinada (Super Placar/Super Odds): limite de stake' : ''}${pa ? ` — ${PA_HELP}` : ''}${size ? ` — ${SIZE_HELP}` : ''} — ver histórico de movimentação`}
         className={`group relative flex flex-col items-center justify-center rounded-lg px-2 py-1.5 transition ring-1 ${
           boosted
             ? 'bg-amber-500/10 ring-amber-400/50 hover:bg-amber-500/20'
@@ -421,6 +431,7 @@ export default function EventDetailPage() {
         {boosted && <Zap size={11} className="absolute top-1 right-1 text-amber-400 fill-amber-400/40" />}
         <span className={`text-sm font-bold tabular-nums ${boosted ? 'text-amber-300' : 'text-teal-300'}`}>{Number(p.price).toFixed(2)}</span>
         {!houseFilter && <span className={`text-[9px] uppercase tracking-wide ${boosted ? 'text-amber-200/70' : 'text-gray-500 group-hover:text-teal-200/70'}`}>{p.bookmaker}</span>}
+        {size && <span className="text-[9px] font-semibold tabular-nums text-emerald-400/80 leading-none mt-0.5">{size}</span>}
       </button>
     );
   };
@@ -555,12 +566,13 @@ export default function EventDetailPage() {
                           const p = priceFor(s);
                           const boosted = !!p?.boosted;
                           const pa = !!p?.pa;
+                          const size = fmtSize(p?.size);
                           return (
                             <button
                               key={si}
                               disabled={!p}
-                              onClick={() => p && openHistory({ bookmaker: p.bookmaker, eventId: p.eventId, marketId: m.marketId, marketName: m.marketName, selection: s.selection })}
-                              title={p ? `${p.bookmaker}${boosted ? ' — odd turbinada (limite de stake)' : ''}${pa ? ` — ${PA_HELP}` : ''} — ver histórico` : undefined}
+                              onClick={() => p && openHistory({ bookmaker: p.bookmaker, eventId: p.eventId, marketId: m.marketId, marketName: m.marketName, selection: s.selection, size: p.size })}
+                              title={p ? `${p.bookmaker}${boosted ? ' — odd turbinada (limite de stake)' : ''}${pa ? ` — ${PA_HELP}` : ''}${size ? ` — ${SIZE_HELP}` : ''} — ver histórico` : undefined}
                               className={`flex items-center justify-between gap-2 rounded-lg ring-1 px-3 py-2 disabled:opacity-40 transition ${
                                 boosted
                                   ? 'bg-amber-500/10 ring-amber-400/50 hover:bg-amber-500/20'
@@ -572,7 +584,10 @@ export default function EventDetailPage() {
                                 {boosted && <Zap size={11} className="text-amber-400 fill-amber-400/40 shrink-0" />}
                                 {selLabel(s)}
                               </span>
-                              <span className={`text-sm font-bold tabular-nums shrink-0 ${boosted ? 'text-amber-300' : 'text-teal-300'}`}>{p ? Number(p.price).toFixed(2) : '—'}</span>
+                              <span className="flex flex-col items-end shrink-0 leading-none">
+                                <span className={`text-sm font-bold tabular-nums ${boosted ? 'text-amber-300' : 'text-teal-300'}`}>{p ? Number(p.price).toFixed(2) : '—'}</span>
+                                {size && <span className="text-[9px] font-semibold tabular-nums text-emerald-400/80 mt-0.5">{size}</span>}
+                              </span>
                             </button>
                           );
                         })}
@@ -607,6 +622,11 @@ export default function EventDetailPage() {
               <div className="min-w-0">
                 <h2 className="text-base font-bold text-white truncate">{hist.marketName || hist.marketId}</h2>
                 <p className="text-sm text-gray-400 truncate">{selLabel({ selection: hist.selection, handicap: '' })}</p>
+                {fmtSize(hist.size) && (
+                  <p className="text-xs font-semibold text-emerald-400 mt-0.5" title={SIZE_HELP}>
+                    Liquidez: {fmtSize(hist.size)}
+                  </p>
+                )}
               </div>
             </div>
 
