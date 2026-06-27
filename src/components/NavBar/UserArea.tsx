@@ -46,8 +46,8 @@ const UserArea: React.FC<UserAreaProps> = ({ isAuthenticated }) => {
   };
 
   useEffect(() => {
-    if (isAuthenticated) loadSubscription();
-    else setSub(null);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (isAuthenticated) loadSubscription(); else setSub(null);
   }, [isAuthenticated]);
 
   const handleLogout = async () => {

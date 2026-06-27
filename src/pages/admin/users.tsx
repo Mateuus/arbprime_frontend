@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/router';
 import { apiGateway, AdminUserDTO, PlanDTO } from '@/gateways/api.gateway';
 import {
   Users, RefreshCcw, Search, Loader2, X, Pencil, ShieldCheck, ShieldOff, Gift,
-  ChevronLeft, ChevronRight, Crown, BadgeCheck, Ban, Save, Plus
+  ChevronLeft, ChevronRight, Crown, BadgeCheck, Ban, Save, Plus, Phone
 } from 'lucide-react';
 
 const errorMessage = (e: unknown, fallback: string): string => {
@@ -22,6 +23,7 @@ const RoleBadge = ({ role }: { role: string }) =>
     : <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 bg-white/5 text-gray-400 ring-white/10">user</span>;
 
 const AdminUsersPage = () => {
+  const router = useRouter();
   const [users, setUsers] = useState<AdminUserDTO[]>([]);
   const [plans, setPlans] = useState<PlanDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,17 +166,27 @@ const AdminUsersPage = () => {
             {users.map((u) => {
               const sub = u.activeSubscription;
               return (
-                <div key={u.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className="grid place-items-center h-9 w-9 rounded-full bg-white/5 ring-1 ring-white/10 text-gray-400 text-sm font-semibold shrink-0">
-                    {(u.fullname || u.email || '?').charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-white truncate">{u.fullname || '—'}</span>
-                      <RoleBadge role={u.role} />
+                <div key={u.id} className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.03] transition">
+                  {/* Identidade — clique abre o detalhe */}
+                  <button
+                    onClick={() => router.push(`/admin/users/${u.id}`)}
+                    className="flex items-center gap-3 min-w-0 flex-1 text-left"
+                    title="Ver detalhes do usuário"
+                  >
+                    <div className="grid place-items-center h-9 w-9 rounded-full bg-white/5 ring-1 ring-white/10 text-gray-400 text-sm font-semibold shrink-0">
+                      {(u.fullname || u.email || '?').charAt(0).toUpperCase()}
                     </div>
-                    <div className="text-[11px] text-gray-500 truncate">{u.email}</div>
-                  </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-white truncate hover:text-teal-300 transition">{u.fullname || '—'}</span>
+                        <RoleBadge role={u.role} />
+                      </div>
+                      <div className="text-[11px] text-gray-500 truncate flex items-center gap-2">
+                        <span className="truncate">{u.email}</span>
+                        {u.phone && <span className="hidden md:inline-flex items-center gap-1 shrink-0"><Phone size={10} /> {u.phone}</span>}
+                      </div>
+                    </div>
+                  </button>
 
                   {/* Assinatura */}
                   <div className="hidden sm:block text-right shrink-0 w-44">
@@ -190,8 +202,11 @@ const AdminUsersPage = () => {
 
                   <span className="hidden md:inline-flex items-center rounded-full bg-white/5 ring-1 ring-white/10 px-2 py-0.5 text-[10px] text-gray-400 shrink-0">nível {u.level}</span>
 
-                  <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg text-gray-400 hover:text-teal-300 hover:bg-white/10 transition shrink-0" title="Gerenciar">
+                  <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg text-gray-400 hover:text-teal-300 hover:bg-white/10 transition shrink-0" title="Ações rápidas">
                     <Pencil size={15} />
+                  </button>
+                  <button onClick={() => router.push(`/admin/users/${u.id}`)} className="p-1.5 rounded-lg text-gray-400 hover:text-teal-300 hover:bg-white/10 transition shrink-0" title="Ver detalhes">
+                    <ChevronRight size={16} />
                   </button>
                 </div>
               );
@@ -200,11 +215,16 @@ const AdminUsersPage = () => {
         )}
       </div>
 
-      {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-center gap-3">
-          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="grid place-items-center h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 disabled:opacity-40"><ChevronLeft size={16} /></button>
-          <span className="text-sm text-gray-400">Página {page} de {totalPages}</span>
-          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="grid place-items-center h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 disabled:opacity-40"><ChevronRight size={16} /></button>
+      {!loading && users.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-xs text-gray-500">
+            Mostrando {(page - 1) * 25 + 1}–{(page - 1) * 25 + users.length} de {total} usuário{total === 1 ? '' : 's'}
+          </span>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="grid place-items-center h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 disabled:opacity-40"><ChevronLeft size={16} /></button>
+            <span className="text-sm text-gray-400">Página {page} de {totalPages}</span>
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="grid place-items-center h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 disabled:opacity-40"><ChevronRight size={16} /></button>
+          </div>
         </div>
       )}
 
