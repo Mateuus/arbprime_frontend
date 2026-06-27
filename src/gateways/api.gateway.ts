@@ -263,6 +263,9 @@ export interface EventGroupPrice {
   inverted: boolean;
   // odd com vantagem (Super Placar/Super Odds). Tem limite de stake / 1 por cliente.
   boosted?: boolean;
+  // Pagamento Antecipado: a casa paga a aposta como vencedora se o time abrir a
+  // vantagem de gols definida pela casa, mesmo que o placar mude depois.
+  pa?: boolean;
 }
 export interface EventGroupSelection {
   selection: string;

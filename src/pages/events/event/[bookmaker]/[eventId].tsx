@@ -31,6 +31,18 @@ const formatTime = (s: string): string => {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
 };
 
+// Pagamento Antecipado (PA): promo em que a casa paga a aposta como vencedora se
+// o time abrir a vantagem de gols definida por ela, mesmo que o placar mude.
+const PA_HELP = 'Pagamento Antecipado (PA): a casa paga sua aposta como VENCEDORA se o seu time abrir a vantagem de gols definida por ela (ex.: 2 gols à frente), mesmo que o adversário empate ou vire o jogo depois. A linha de gols e as regras variam por casa.';
+const PaBadge = ({ className = '' }: { className?: string }) => (
+  <span
+    title={PA_HELP}
+    className={`inline-flex items-center rounded-sm bg-sky-500/20 px-1 text-[8px] font-bold leading-tight text-sky-300 ring-1 ring-sky-400/40 cursor-help ${className}`}
+  >
+    PA
+  </span>
+);
+
 // Tradução de seleções "cruas" em inglês (sobretudo combos: home/yes, no/over...).
 // 1 = Casa, x = Empate, 2 = Fora; yes/no = Sim/Não (ambas marcam); over/under = Mais/Menos.
 const TOKEN_PT: Record<string, string> = {
@@ -394,16 +406,18 @@ export default function EventDetailPage() {
       return <div className="rounded-lg bg-black/20 px-2 py-2 text-center text-xs text-gray-600">—</div>;
     }
     const boosted = !!p.boosted;
+    const pa = !!p.pa;
     return (
       <button
         onClick={() => openHistory({ bookmaker: p.bookmaker, eventId: p.eventId, marketId, marketName, selection: sel.selection })}
-        title={`${p.bookmaker}${boosted ? ' — odd turbinada (Super Placar/Super Odds): limite de stake' : ''} — ver histórico de movimentação`}
+        title={`${p.bookmaker}${boosted ? ' — odd turbinada (Super Placar/Super Odds): limite de stake' : ''}${pa ? ` — ${PA_HELP}` : ''} — ver histórico de movimentação`}
         className={`group relative flex flex-col items-center justify-center rounded-lg px-2 py-1.5 transition ring-1 ${
           boosted
             ? 'bg-amber-500/10 ring-amber-400/50 hover:bg-amber-500/20'
             : 'bg-black/30 ring-white/10 hover:bg-teal-500/10 hover:ring-teal-500/40'
         }`}
       >
+        {pa && <PaBadge className="absolute top-1 left-1" />}
         {boosted && <Zap size={11} className="absolute top-1 right-1 text-amber-400 fill-amber-400/40" />}
         <span className={`text-sm font-bold tabular-nums ${boosted ? 'text-amber-300' : 'text-teal-300'}`}>{Number(p.price).toFixed(2)}</span>
         {!houseFilter && <span className={`text-[9px] uppercase tracking-wide ${boosted ? 'text-amber-200/70' : 'text-gray-500 group-hover:text-teal-200/70'}`}>{p.bookmaker}</span>}
@@ -540,12 +554,13 @@ export default function EventDetailPage() {
                         {m.selections.map((s, si) => {
                           const p = priceFor(s);
                           const boosted = !!p?.boosted;
+                          const pa = !!p?.pa;
                           return (
                             <button
                               key={si}
                               disabled={!p}
                               onClick={() => p && openHistory({ bookmaker: p.bookmaker, eventId: p.eventId, marketId: m.marketId, marketName: m.marketName, selection: s.selection })}
-                              title={p ? `${p.bookmaker}${boosted ? ' — odd turbinada (limite de stake)' : ''} — ver histórico` : undefined}
+                              title={p ? `${p.bookmaker}${boosted ? ' — odd turbinada (limite de stake)' : ''}${pa ? ` — ${PA_HELP}` : ''} — ver histórico` : undefined}
                               className={`flex items-center justify-between gap-2 rounded-lg ring-1 px-3 py-2 disabled:opacity-40 transition ${
                                 boosted
                                   ? 'bg-amber-500/10 ring-amber-400/50 hover:bg-amber-500/20'
@@ -553,6 +568,7 @@ export default function EventDetailPage() {
                               }`}
                             >
                               <span className="text-xs text-gray-300 truncate flex items-center gap-1" title={selLabel(s)}>
+                                {pa && <PaBadge className="shrink-0" />}
                                 {boosted && <Zap size={11} className="text-amber-400 fill-amber-400/40 shrink-0" />}
                                 {selLabel(s)}
                               </span>
