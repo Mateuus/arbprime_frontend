@@ -11,6 +11,7 @@ import { useWatchSet } from '@/hooks/useWatchSet';
 import { useSurebetAlerts } from '@/hooks/useSurebetAlerts';
 import { apiGateway } from '@/gateways/api.gateway';
 import { Select } from '@/components/ui/Select';
+import { usePopover } from '@/components/ui/usePopover';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { BookmakerTag, BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
 import { CommissionBadge } from '@/components/bookmaker/CommissionBadge';
@@ -60,54 +61,71 @@ function MarketQuickFilter({ tree, selected, onToggleMarket, onToggleCategory, o
   onClearAll: () => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
+  // Posição fixa presa à viewport: evita que o dropdown abra fora da tela quando
+  // a pílula está perto da borda (linha com flex-wrap no mobile).
+  const { pos: popPos, place: placePop, menuRef: popMenuRef } = usePopover(open !== null, () => setOpen(null), { align: 'left' });
+  const openCat = open !== null ? tree.find((c) => c.key === open) ?? null : null;
   if (!tree.length) return null;
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
       {tree.map((cat) => {
         const ids = cat.markets.map((m) => m.id);
         const selCount = ids.reduce((n, id) => n + (selected.has(id) ? 1 : 0), 0);
-        const allOn = selCount > 0 && selCount === ids.length;
         const someOn = selCount > 0;
         return (
-          <div key={cat.key} className="relative shrink-0">
+          <div key={cat.key} className="shrink-0">
             <button
-              onClick={() => setOpen((o) => (o === cat.key ? null : cat.key))}
+              onClick={(e) => {
+                if (open === cat.key) { setOpen(null); return; }
+                placePop(e.currentTarget);
+                setOpen(cat.key);
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition ${someOn ? 'bg-teal-500/15 border-teal-500/40 text-teal-200' : 'bg-white/5 border-white/10 text-gray-200 hover:bg-white/10'}`}
             >
               {cat.label}
               {someOn && <span className="grid place-items-center h-4 min-w-4 px-1 rounded-full bg-teal-500 text-[10px] font-bold text-slate-900">{selCount}</span>}
               <ChevronDown size={14} className={`transition ${open === cat.key ? 'rotate-180' : ''}`} />
             </button>
-            {open === cat.key && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setOpen(null)} />
-                <div className="absolute left-0 mt-2 z-50 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-brand-dark p-2 shadow-2xl max-h-[60vh] overflow-y-auto">
-                  <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="accent-teal-500"
-                      checked={allOn}
-                      ref={(el) => { if (el) el.indeterminate = someOn && !allOn; }}
-                      onChange={() => onToggleCategory(ids, !allOn)}
-                    />
-                    <span className="text-sm font-semibold text-white">{cat.label} — todos</span>
-                  </label>
-                  <div className="my-1 border-t border-white/10" />
-                  {cat.markets.map((m) => (
-                    <label key={m.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer">
-                      <input type="checkbox" className="accent-teal-500" checked={selected.has(m.id)} onChange={() => onToggleMarket(m.id)} />
-                      <span className="text-sm text-gray-200 truncate">{m.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
         );
       })}
       {selected.size > 0 && (
         <button onClick={onClearAll} className="shrink-0 text-xs text-rose-300 hover:text-rose-200 px-2 py-1">Limpar mercados</button>
       )}
+      {openCat && popPos && (() => {
+        const ids = openCat.markets.map((m) => m.id);
+        const selCount = ids.reduce((n, id) => n + (selected.has(id) ? 1 : 0), 0);
+        const allOn = selCount > 0 && selCount === ids.length;
+        const someOn = selCount > 0;
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(null)} />
+            <div
+              ref={popMenuRef}
+              style={{ position: 'fixed', top: popPos.top, left: popPos.left, width: popPos.width }}
+              className="z-50 rounded-2xl border border-white/10 bg-brand-dark p-2 shadow-2xl max-h-[60vh] overflow-y-auto"
+            >
+              <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="accent-teal-500"
+                  checked={allOn}
+                  ref={(el) => { if (el) el.indeterminate = someOn && !allOn; }}
+                  onChange={() => onToggleCategory(ids, !allOn)}
+                />
+                <span className="text-sm font-semibold text-white">{openCat.label} — todos</span>
+              </label>
+              <div className="my-1 border-t border-white/10" />
+              {openCat.markets.map((m) => (
+                <label key={m.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer">
+                  <input type="checkbox" className="accent-teal-500" checked={selected.has(m.id)} onChange={() => onToggleMarket(m.id)} />
+                  <span className="text-sm text-gray-200 truncate">{m.name}</span>
+                </label>
+              ))}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
@@ -565,6 +583,9 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
     return s;
   });
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Popover "Filtros" preso à viewport (align à direita do botão), com clamp para
+  // não estourar fora da tela quando o botão embrulha perto da borda no mobile.
+  const { pos: filtersPos, place: placeFilters, menuRef: filtersMenuRef } = usePopover(filtersOpen, () => setFiltersOpen(false), { align: 'right' });
   // Filtros salvos do usuário (ABFilter).
   const [savedFilters, setSavedFilters] = useState<{ id: string; name: string }[]>([]);
   const [activeFilterId, setActiveFilterId] = useState('');
@@ -913,9 +934,9 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
           </button>
         </div>
 
-        <div className="relative shrink-0">
+        <div className="shrink-0">
           <button
-            onClick={() => setFiltersOpen((v) => !v)}
+            onClick={(e) => { if (!filtersOpen) placeFilters(e.currentTarget); setFiltersOpen((v) => !v); }}
             className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg border transition ${
               filtersOpen || activeFilters > 0 ? 'bg-teal-500/15 border-teal-500/40 text-teal-200' : 'bg-white/5 border-white/10 text-gray-200 hover:bg-white/10'
             }`}
@@ -928,10 +949,13 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
             <ChevronDown size={14} className={`transition ${filtersOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {filtersOpen && (
+          {filtersOpen && filtersPos && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setFiltersOpen(false)} />
-              <div className="absolute right-0 mt-2 z-50 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-brand-dark p-4 shadow-2xl space-y-3">
+              <div
+                ref={filtersMenuRef}
+                style={{ position: 'fixed', top: filtersPos.top, left: filtersPos.left, width: filtersPos.width }}
+                className="z-50 max-h-[80vh] overflow-y-auto rounded-2xl border border-white/10 bg-brand-dark p-4 shadow-2xl space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-white">Filtros</span>
                   {activeFilters > 0 && (

@@ -10,6 +10,7 @@ import {
 } from 'react-icons/gi';
 import { apiGateway, GroupedEvent, ExternalEventsParams } from '@/gateways/api.gateway';
 import { Select } from '@/components/ui/Select';
+import { usePopover } from '@/components/ui/usePopover';
 import { BookmakerTag } from '@/components/bookmaker/BookmakerTag';
 
 interface Pagination {
@@ -167,6 +168,8 @@ export default function EventsPage() {
   const [sort, setSort] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Popover "Filtros" preso à viewport com clamp (não abre fora da tela no mobile).
+  const { pos: filtersPos, place: placeFilters, menuRef: filtersMenuRef } = usePopover(filtersOpen, () => setFiltersOpen(false), { align: 'right' });
   // Sidebar de esportes/campeonatos (estilo casa de aposta).
   const [facets, setFacets] = useState<FacetSport[]>([]);
   const [expandedSport, setExpandedSport] = useState('');
@@ -457,9 +460,9 @@ export default function EventsPage() {
         </div>
 
         {/* Botão Filtros + popover */}
-        <div className="relative shrink-0">
+        <div className="shrink-0">
           <button
-            onClick={() => setFiltersOpen((v) => !v)}
+            onClick={(e) => { if (!filtersOpen) placeFilters(e.currentTarget); setFiltersOpen((v) => !v); }}
             className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg border transition ${
               filtersOpen || activeFilters > 0
                 ? 'bg-teal-500/15 border-teal-500/40 text-teal-200'
@@ -476,11 +479,14 @@ export default function EventsPage() {
             <ChevronDown size={14} className={`transition ${filtersOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {filtersOpen && (
+          {filtersOpen && filtersPos && (
             <>
               {/* Click-away */}
               <div className="fixed inset-0 z-40" onClick={() => setFiltersOpen(false)} />
-              <div className="absolute right-0 mt-2 z-50 w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-brand-dark p-4 shadow-2xl space-y-3">
+              <div
+                ref={filtersMenuRef}
+                style={{ position: 'fixed', top: filtersPos.top, left: filtersPos.left, width: filtersPos.width }}
+                className="z-50 max-h-[80vh] overflow-y-auto rounded-2xl border border-white/10 bg-brand-dark p-4 shadow-2xl space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-white">Filtros</span>
                   {activeFilters > 0 && (

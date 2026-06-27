@@ -29,7 +29,7 @@ interface SelectProps {
  */
 export function Select({ value, onChange, options, placeholder = '—', className = '', buttonClassName = '', title }: SelectProps) {
   const [open, setOpen] = useState(false);
-  const [rect, setRect] = useState<{ left: number; top: number; width: number } | null>(null);
+  const [rect, setRect] = useState<{ left: number; top: number; width: number; maxWidth: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -39,7 +39,13 @@ export function Select({ value, onChange, options, placeholder = '—', classNam
     const el = btnRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setRect({ left: r.left, top: r.bottom + 4, width: r.width });
+    // Clampa à viewport para o menu não estourar fora da tela no mobile quando o
+    // botão está perto da borda direita (o menu pode ser mais largo que o botão).
+    const gap = 8;
+    const vw = typeof window !== 'undefined' ? window.innerWidth : r.right;
+    const width = Math.max(r.width, Math.min(240, vw - gap * 2));
+    const left = Math.max(gap, Math.min(r.left, vw - gap - width));
+    setRect({ left, top: r.bottom + 4, width: r.width, maxWidth: vw - left - gap });
   };
 
   const toggle = () => {
@@ -93,7 +99,7 @@ export function Select({ value, onChange, options, placeholder = '—', classNam
           <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />
           <div
             ref={menuRef}
-            style={{ left: rect.left, top: rect.top, minWidth: rect.width }}
+            style={{ left: rect.left, top: rect.top, minWidth: rect.width, maxWidth: rect.maxWidth }}
             className="fixed z-[9999] max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-brand-dark p-1 shadow-2xl"
           >
             {options.map((o) => (
