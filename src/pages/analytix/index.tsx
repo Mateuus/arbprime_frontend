@@ -1,15 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
-import { Check, Plus, TrendingUp, Percent, Target, Wallet, Trophy } from 'lucide-react';
+import { Check, Plus, TrendingUp, Percent, Target, Wallet, Trophy, Hourglass } from 'lucide-react';
 import { apiGateway, AnalytixSummaryDTO, TimeseriesPointDTO, BreakdownRowDTO, BetDTO } from '@/gateways/api.gateway';
 import { useBookmakers } from '@/hooks/useBookmakers';
 import AnalytixShell from '@/components/analytix/AnalytixShell';
 import KpiCard from '@/components/analytix/KpiCard';
 import PeriodSelector from '@/components/analytix/PeriodSelector';
 import BankrollSelect from '@/components/analytix/BankrollSelect';
-import BetsTable from '@/components/analytix/BetsTable';
-import SettleBetModal from '@/components/analytix/SettleBetModal';
+import RecentBetsList from '@/components/analytix/RecentBetsList';
 import RecordBetModal, { RecordBetDraft } from '@/components/analytix/RecordBetModal';
 import EmptyState from '@/components/analytix/EmptyState';
 import { useBankrolls } from '@/components/analytix/useAnalytix';
@@ -50,7 +49,6 @@ export default function AnalytixDashboard() {
   const [recent, setRecent] = useState<BetDTO[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [settleBet, setSettleBet] = useState<BetDTO | null>(null);
   const [showRecord, setShowRecord] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -81,13 +79,6 @@ export default function AnalytixDashboard() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const deleteBet = async (bet: BetDTO) => {
-    if (!confirm('Excluir esta aposta?')) return;
-    await apiGateway.deleteBet(bet.id);
-    notify('Aposta excluída.');
-    void load();
-  };
-
   const sparkCum = series.map((p) => p.cumulativeProfit);
   const sparkBank = series.map((p) => p.bankroll);
 
@@ -113,7 +104,7 @@ export default function AnalytixDashboard() {
       )}
     >
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiCard label="Lucro total" loading={loading} icon={<TrendingUp size={16} />}
           value={summary ? signedBRL(summary.totalProfit) : '—'} valueClass={profitColor(summary?.totalProfit)}
           spark={sparkCum} sparkColor={(summary?.totalProfit || 0) >= 0 ? '#34d399' : '#fb7185'} />
@@ -124,6 +115,9 @@ export default function AnalytixDashboard() {
         <KpiCard label="Taxa de acerto" loading={loading} icon={<Trophy size={16} />}
           value={summary ? pct(summary.winRate) : '—'}
           delta={summary ? `${summary.settledCount} liquidadas` : ''} />
+        <KpiCard label="Pendente" loading={loading} icon={<Hourglass size={16} />}
+          value={summary ? BRL(summary.pendingStake) : '—'}
+          delta={summary ? `${summary.openCount} em aberto` : ''} />
         <KpiCard label="Banca atual" loading={loading} icon={<Wallet size={16} />}
           value={summary ? BRL(summary.currentBankroll) : '—'} spark={sparkBank} sparkColor="#5eead4" />
       </div>
@@ -165,18 +159,13 @@ export default function AnalytixDashboard() {
             </section>
             <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <h2 className="text-sm font-semibold text-gray-200 mb-3">Apostas recentes</h2>
-              {recent.length ? (
-                <BetsTable bets={recent} onSettle={setSettleBet} onDelete={deleteBet} />
-              ) : (
-                <div className="py-8 text-center text-sm text-gray-500">Nenhuma aposta ainda.</div>
-              )}
+              <RecentBetsList bets={recent} />
               <button onClick={() => router.push('/analytix/apostas')} className="mt-3 text-xs text-teal-300 hover:text-teal-200">Ver todas as apostas →</button>
             </section>
           </div>
         </>
       )}
 
-      {settleBet && <SettleBetModal bet={settleBet} onClose={() => setSettleBet(null)} onSettled={() => { notify('Aposta liquidada.'); void load(); }} />}
       {showRecord && <RecordBetModal draft={blankDraft()} onClose={() => setShowRecord(false)} onSaved={() => { notify('Aposta lançada.'); void load(); }} />}
 
       {toast && (

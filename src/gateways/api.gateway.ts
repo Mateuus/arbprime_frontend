@@ -340,6 +340,39 @@ export interface BookmakerDTO {
   updatedAt: string;
 }
 
+export type CrawlerHealth = 'online' | 'stale' | 'offline';
+
+export interface CrawlerStatusDTO {
+  key: string;
+  bookmaker: string;
+  sport: string;
+  name: string;
+  logoUrl: string | null;
+  color: string | null;
+  registered: boolean;
+  status: string;
+  events: number;
+  durationMs: number;
+  date: string | null;
+  ageSeconds: number | null;
+  health: CrawlerHealth;
+}
+
+export interface CrawlerStatusResponseDTO {
+  crawlers: CrawlerStatusDTO[];
+  summary: {
+    total: number;
+    online: number;
+    stale: number;
+    offline: number;
+    totalEvents: number;
+    sports: string[];
+    lastUpdate: string | null;
+  };
+  thresholds: { staleSeconds: number; offlineSeconds: number };
+  serverTime: string;
+}
+
 export interface UpsertBookmakerDTO {
   slug: string;
   name: string;
@@ -359,6 +392,15 @@ const getBookmakers = async () => {
 // Estatísticas agregadas da landing (público, só números — sem dados gated).
 const getHomeStats = async () => {
   return apiClient.get('/stats');
+};
+
+// Status dos coletores (Status Page pública). Limiares de saúde opcionais.
+const getCrawlerStatus = async (params?: { stale?: number; offline?: number }) => {
+  const qs = new URLSearchParams();
+  if (params?.stale) qs.set('stale', String(params.stale));
+  if (params?.offline) qs.set('offline', String(params.offline));
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return apiClient.get(`/status/crawlers${suffix}`);
 };
 
 const addBookmaker = async (data: UpsertBookmakerDTO) => {
@@ -1445,13 +1487,15 @@ export interface BetLegDTO {
   settledReturn: number | null;
   legProfit: number | null;
   potentialReturn: number;
+  // Seleções de uma MÚLTIPLA (betType='multi'); null em simples/surebet.
+  selections: { market: string | null; rawMarket: string | null; selection: string | null; handicap: string | null; odd: number }[] | null;
   settledAt: string | null;
 }
 
 export interface BetDTO {
   id: string;
   bankrollId: string;
-  betType: 'arb' | 'single';
+  betType: 'arb' | 'single' | 'multi';
   status: BetStatusValue;
   eventId: string | null;
   home: string | null;
@@ -1506,6 +1550,7 @@ export interface AnalytixSummaryDTO {
   betsCount: number;
   openCount: number;
   settledCount: number;
+  pendingStake: number; // exposição: stake real parado em apostas pendentes
   currentBankroll: number;
   roiBase: number;
 }
@@ -1529,6 +1574,7 @@ export interface BreakdownRowDTO {
 }
 
 export interface CreateBetLegDTO {
+  id?: string; // só na edição: casa com a perna existente p/ preservar status
   bookmakerSlug: string;
   accountId?: string | null;
   houseEventId?: string | null;
@@ -1545,7 +1591,7 @@ export interface CreateBetLegDTO {
 
 export interface CreateBetDTO {
   bankrollId?: string;
-  betType: 'arb' | 'single';
+  betType: 'arb' | 'single' | 'multi';
   eventId?: string | null;
   home?: string | null;
   away?: string | null;
@@ -1619,9 +1665,11 @@ const deletePartner = async (id: string) => apiClient.delete(`/analytix/partners
 const getBets = async (params: { status?: string; bookmaker?: string; sport?: string; betType?: string; bankrollId?: string; from?: string; to?: string; page?: number; limit?: number } = {}) => apiClient.get(`/analytix/bets${analytixQp(params)}`);
 const getBetById = async (id: string) => apiClient.get(`/analytix/bets/${id}`);
 const createBet = async (data: CreateBetDTO) => apiClient.post('/analytix/bets', data);
-const updateBet = async (id: string, data: Partial<{ tags: string[]; notes: string; hidden: boolean; home: string; away: string; sport: string; league: string }>) => apiClient.put(`/analytix/bets/${id}`, data);
+const updateBet = async (id: string, data: Partial<CreateBetDTO> & { hidden?: boolean }) => apiClient.put(`/analytix/bets/${id}`, data);
 const settleBet = async (id: string, legs: SettleLegInput[]) => apiClient.post(`/analytix/bets/${id}/settle`, { legs });
 const deleteBet = async (id: string) => apiClient.delete(`/analytix/bets/${id}`);
+// Remove UMA perna (aposta individual). Se era a última, a aposta inteira é apagada.
+const deleteLeg = async (betId: string, legId: string) => apiClient.delete(`/analytix/bets/${betId}/legs/${legId}`);
 
 // Transações
 const getAnalytixTransactions = async (params: { bankrollId?: string; accountId?: string; type?: string; from?: string; to?: string } = {}) => apiClient.get(`/analytix/transactions${analytixQp(params)}`);
@@ -1759,6 +1807,7 @@ export const apiGateway = {
     // Bookmakers
     getBookmakers,
     getHomeStats,
+    getCrawlerStatus,
     addBookmaker,
     updateBookmaker,
     toggleBookmaker,
@@ -1881,6 +1930,7 @@ export const apiGateway = {
     updateBet,
     settleBet,
     deleteBet,
+    deleteLeg,
     getAnalytixTransactions,
     createAnalytixTransaction,
     deleteAnalytixTransaction,

@@ -50,6 +50,20 @@ export const fmtDateTime = (s: string | null | undefined): string => {
   return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 };
 
+/**
+ * Data/hora do JOGO (kickoff) p/ exibição: "dom, 28/06 16:00". Sem ano (jogos são
+ * próximos); devolve null quando não há data — o chamador decide o fallback.
+ */
+export const fmtGameDateTime = (s: string | null | undefined): string | null => {
+  if (!s) return null;
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return null;
+  const wd = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+  const dm = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  const hm = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return `${wd}, ${dm} ${hm}`;
+};
+
 // ---- Status das pernas ----
 export const LEG_STATUS_LABELS: Record<LegStatusValue, string> = {
   pending: 'Pendente',
@@ -59,6 +73,16 @@ export const LEG_STATUS_LABELS: Record<LegStatusValue, string> = {
   half_won: 'Meio ganha',
   half_lost: 'Meio perdida',
   cashout: 'Cashout',
+};
+
+export const LEG_STATUS_STYLE: Record<LegStatusValue, string> = {
+  pending: 'bg-amber-500/15 text-amber-300 ring-amber-500/30',
+  won: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
+  lost: 'bg-rose-500/15 text-rose-300 ring-rose-500/30',
+  void: 'bg-zinc-500/15 text-zinc-300 ring-zinc-500/30',
+  half_won: 'bg-emerald-500/10 text-emerald-200 ring-emerald-500/20',
+  half_lost: 'bg-rose-500/10 text-rose-200 ring-rose-500/20',
+  cashout: 'bg-sky-500/15 text-sky-300 ring-sky-500/30',
 };
 
 export const LEG_STATUS_OPTIONS: { value: LegStatusValue; label: string }[] = [

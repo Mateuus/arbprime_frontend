@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Check, Plus, ListChecks, Filter } from 'lucide-react';
-import { apiGateway, BetDTO } from '@/gateways/api.gateway';
+import { apiGateway, BetDTO, BetLegDTO } from '@/gateways/api.gateway';
 import { useBookmakers } from '@/hooks/useBookmakers';
 import AnalytixShell from '@/components/analytix/AnalytixShell';
 import BankrollSelect from '@/components/analytix/BankrollSelect';
@@ -10,12 +10,20 @@ import SettleBetModal from '@/components/analytix/SettleBetModal';
 import RecordBetModal, { RecordBetDraft } from '@/components/analytix/RecordBetModal';
 import EmptyState from '@/components/analytix/EmptyState';
 import { Select } from '@/components/ui/Select';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
 import { useBankrolls } from '@/components/analytix/useAnalytix';
 import { BET_STATUS_OPTIONS, periodRange, PeriodKey, unwrap } from '@/components/analytix/format';
 
 const blankDraft = (): RecordBetDraft => ({
   betType: 'single', source: 'manual', totalStake: 0,
   legs: [{ bookmakerSlug: '', odd: 2, stake: 0, selection: '', market: '' }],
+});
+
+// Draft mínimo p/ abrir o modal em modo EDIÇÃO (o editBet preenche o resto).
+const draftFromBet = (b: BetDTO): RecordBetDraft => ({
+  betType: b.betType, source: b.source === 'calculator' ? 'calculator' : 'manual', totalStake: b.totalStake,
+  eventId: b.eventId, surebetKey: b.surebetKey, home: b.home, away: b.away, sport: b.sport, league: b.league, eventStart: b.eventStart, legs: [],
 });
 
 export default function AnalytixApostas() {
@@ -27,12 +35,14 @@ export default function AnalytixApostas() {
   const [page, setPage] = useState(1);
 
   const [bets, setBets] = useState<BetDTO[]>([]);
-  const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  const [settleBet, setSettleBet] = useState<BetDTO | null>(null);
+  const [settle, setSettle] = useState<{ bet: BetDTO; legId: string } | null>(null);
   const [showRecord, setShowRecord] = useState(false);
+  const [editBet, setEditBet] = useState<BetDTO | null>(null);
+  const [confirmDel, setConfirmDel] = useState<{ bet: BetDTO; leg: BetLegDTO } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState('');
   const notify = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2500); };
 
@@ -49,7 +59,6 @@ export default function AnalytixApostas() {
       });
       const data = unwrap<{ items: BetDTO[]; total: number; totalPages: number }>(r, { items: [], total: 0, totalPages: 1 });
       setBets(data.items || []);
-      setTotal(data.total || 0);
       setTotalPages(data.totalPages || 1);
     } finally {
       setLoading(false);
@@ -65,18 +74,28 @@ export default function AnalytixApostas() {
   const onBookmaker = (v: string) => { setBookmaker(v); setPage(1); };
   const clearFilters = () => { setStatus(''); setBookmaker(''); setPeriod('all'); setPage(1); };
 
-  const deleteBet = async (bet: BetDTO) => {
-    if (!confirm('Excluir esta aposta?')) return;
-    await apiGateway.deleteBet(bet.id);
-    notify('Aposta excluída.');
-    void load();
+  // Exclui UMA perna (aposta individual). Se era a última, o backend apaga a aposta toda.
+  const doDelete = async () => {
+    if (!confirmDel) return;
+    setDeleting(true);
+    try {
+      await apiGateway.deleteLeg(confirmDel.bet.id, confirmDel.leg.id);
+      setConfirmDel(null);
+      notify('Aposta excluída.');
+      void load();
+    } finally {
+      setDeleting(false);
+    }
   };
+
+  // Cada perna é uma aposta individual na lista → conta pernas, não "apostas-mãe".
+  const rowCount = bets.reduce((a, b) => a + (b.legs?.length || 0), 0);
 
   return (
     <AnalytixShell
       active="apostas"
       title="Apostas"
-      subtitle={`${total} aposta${total === 1 ? '' : 's'} registrada${total === 1 ? '' : 's'}`}
+      subtitle={`${rowCount} aposta${rowCount === 1 ? '' : 's'} registrada${rowCount === 1 ? '' : 's'}`}
       actions={(
         <>
           <BankrollSelect bankrolls={bankrolls} selectedId={selectedId} onChange={onBankroll} />
@@ -93,7 +112,15 @@ export default function AnalytixApostas() {
         <Select className="w-36" value={status} onChange={onStatus} buttonClassName="bg-black/20 py-1.5"
           options={BET_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))} />
         <Select className="w-44" value={bookmaker} onChange={onBookmaker} buttonClassName="bg-black/20 py-1.5"
-          options={[{ value: '', label: 'Todas as casas' }, ...bookmakers.map((b) => ({ value: b.slug, label: b.name }))]} />
+          options={[
+            { value: '', label: 'Todas as casas' },
+            ...bookmakers.map((b) => ({
+              value: b.slug,
+              label: b.name,
+              color: b.color || undefined,
+              icon: <BookmakerLogo name={b.name} slug={b.slug} logoUrl={b.logoUrl} color={b.color} size={16} />,
+            })),
+          ]} />
         {(status || bookmaker || period !== 'all') && (
           <button onClick={clearFilters} className="text-xs text-teal-300 hover:text-teal-200">Limpar</button>
         )}
@@ -112,7 +139,12 @@ export default function AnalytixApostas() {
         />
       ) : (
         <>
-          <BetsTable bets={bets} onSettle={setSettleBet} onDelete={deleteBet} />
+          <BetsTable
+            bets={bets}
+            onSettle={(bet, leg) => setSettle({ bet, legId: leg.id })}
+            onEdit={setEditBet}
+            onDelete={(bet, leg) => setConfirmDel({ bet, leg })}
+          />
           {totalPages > 1 && (
             <div className="mt-4 flex items-center justify-center gap-2">
               <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="px-3 py-1.5 rounded-lg bg-white/5 ring-1 ring-white/10 text-sm text-gray-200 disabled:opacity-40">Anterior</button>
@@ -123,8 +155,20 @@ export default function AnalytixApostas() {
         </>
       )}
 
-      {settleBet && <SettleBetModal bet={settleBet} onClose={() => setSettleBet(null)} onSettled={() => { notify('Aposta liquidada.'); void load(); }} />}
+      {settle && <SettleBetModal bet={settle.bet} legId={settle.legId} onClose={() => setSettle(null)} onSettled={() => { notify('Aposta liquidada.'); void load(); }} />}
       {showRecord && <RecordBetModal draft={blankDraft()} onClose={() => setShowRecord(false)} onSaved={() => { notify('Aposta lançada.'); void load(); }} />}
+      {editBet && <RecordBetModal draft={draftFromBet(editBet)} editBet={editBet} onClose={() => setEditBet(null)} onSaved={() => { notify('Aposta atualizada.'); void load(); }} />}
+      {confirmDel && (
+        <ConfirmModal
+          title="Excluir aposta"
+          message="Tem certeza que deseja excluir esta aposta? Esta ação não pode ser desfeita."
+          confirmLabel="Excluir"
+          danger
+          loading={deleting}
+          onConfirm={doDelete}
+          onClose={() => setConfirmDel(null)}
+        />
+      )}
 
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[10001] rounded-xl bg-brand-dark border border-white/10 shadow-2xl px-4 py-2.5 text-sm text-gray-100 flex items-center gap-2">
