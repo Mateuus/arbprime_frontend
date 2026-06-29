@@ -253,3 +253,20 @@ input:-webkit-autofill {
 @media (prefers-reduced-motion: reduce) {
   .led-border::before { animation: none; }
 }
+/* -------------------------------------------------------------------------
+   Fade-in suave de card (ex.: middle novo chegando via WebSocket). Mais sutil
+   que o slideUp (que vem de 100%): pequeno deslocamento + fade, uma única vez.
+   ------------------------------------------------------------------------- */
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* SEM fill-mode (não usar 'both'/'forwards'): se o transform da keyframe persistir,
+   o card vira "containing block" e quebra o position:fixed dos tooltips internos
+   (eles ficam presos/atrás dos cards vizinhos). Sem fill, o transform some ao fim. */
+.animate-card-in {
+  animation: card-in 0.4s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-card-in { animation: none; }
+}
