@@ -7,6 +7,20 @@ html, body {
   min-height: 100%;
   background-color: #09090b; /* ou bg-zinc-900 se for a cor usada */
   color-scheme: dark; /* dropdowns/inputs nativos renderizam no tema escuro */
+  /* Impede o "font boosting" do Chrome/Samsung Internet no Android, que infla o
+     tamanho de alguns blocos de texto e quebra o layout (botões cortados etc.). */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Linha que rola na horizontal sem mostrar a barra (ex.: filtros de mercado no
+   mobile). Sobrescreve a barra azul global. */
+.no-scrollbar {
+  -ms-overflow-style: none;   /* Edge/IE antigo */
+  scrollbar-width: none;      /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;              /* Chrome/Safari/Samsung Internet */
 }
 
 #__next {

@@ -67,7 +67,11 @@ function MarketQuickFilter({ tree, selected, onToggleMarket, onToggleCategory, o
   const openCat = open !== null ? tree.find((c) => c.key === open) ?? null : null;
   if (!tree.length) return null;
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2">
+    <div className="relative mb-4 -mx-3 sm:mx-0">
+      {/* Mercados: rola na horizontal no mobile (1 linha, nunca quebra/corta) e
+          embrulha (wrap) a partir de sm. Corrige o corte dos botões no Samsung
+          Internet, onde o flex-wrap antigo bugava. */}
+      <div className="no-scrollbar flex flex-nowrap items-center gap-2 overflow-x-auto px-3 sm:flex-wrap sm:overflow-visible sm:px-0">
       {tree.map((cat) => {
         const ids = cat.markets.map((m) => m.id);
         const selCount = ids.reduce((n, id) => n + (selected.has(id) ? 1 : 0), 0);
@@ -80,7 +84,7 @@ function MarketQuickFilter({ tree, selected, onToggleMarket, onToggleCategory, o
                 placePop(e.currentTarget);
                 setOpen(cat.key);
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition ${someOn ? 'bg-teal-500/15 border-teal-500/40 text-teal-200' : 'bg-white/5 border-white/10 text-gray-200 hover:bg-white/10'}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition whitespace-nowrap ${someOn ? 'bg-teal-500/15 border-teal-500/40 text-teal-200' : 'bg-white/5 border-white/10 text-gray-200 hover:bg-white/10'}`}
             >
               {cat.label}
               {someOn && <span className="grid place-items-center h-4 min-w-4 px-1 rounded-full bg-teal-500 text-[10px] font-bold text-slate-900">{selCount}</span>}
@@ -90,8 +94,11 @@ function MarketQuickFilter({ tree, selected, onToggleMarket, onToggleCategory, o
         );
       })}
       {selected.size > 0 && (
-        <button onClick={onClearAll} className="shrink-0 text-xs text-rose-300 hover:text-rose-200 px-2 py-1">Limpar mercados</button>
+        <button onClick={onClearAll} className="shrink-0 whitespace-nowrap text-xs text-rose-300 hover:text-rose-200 px-2 py-1">Limpar mercados</button>
       )}
+      </div>
+      {/* Esmaece a borda direita no mobile, sinalizando que há mais para rolar. */}
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-brand-dark to-transparent sm:hidden" />
       {openCat && popPos && (() => {
         const ids = openCat.markets.map((m) => m.id);
         const selCount = ids.reduce((n, id) => n + (selected.has(id) ? 1 : 0), 0);

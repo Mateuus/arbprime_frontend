@@ -104,7 +104,7 @@ export default function ArbCrypto({ Component, pageProps }: AppProps) {
         <div className="hidden lg:block">
           <Sidebar />
         </div>
-        <div className="flex-1 flex flex-col bg-brand-dark">
+        <div className="flex-1 flex flex-col bg-brand-dark min-w-0">
           <Navbar />
           <main className="flex-1 overflow-y-auto">
             <Component {...pageProps} />
