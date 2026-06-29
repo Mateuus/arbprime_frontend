@@ -1,9 +1,10 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { Split, RefreshCcw, Search, Zap, Filter, ChevronDown, ChevronRight, HelpCircle, LayoutGrid, List, Trophy, Clock, EyeOff } from 'lucide-react';
+import { Split, RefreshCcw, Search, Zap, Filter, ChevronDown, ChevronRight, HelpCircle, LayoutGrid, List, Trophy, Clock, EyeOff, Settings } from 'lucide-react';
 import { useMiddles } from '@/hooks/useMiddles';
 import { useUserContext } from '@/context/UserContext';
 import { useHiddenSet } from '@/hooks/useHiddenSet';
+import { apiGateway } from '@/gateways/api.gateway';
 import { Select } from '@/components/ui/Select';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { MiddleCard } from '@/components/middles/MiddleCard';
@@ -11,6 +12,7 @@ import { MiddleCalcModal } from '@/components/middles/MiddleCalcModal';
 import { MiddleEventModal } from '@/components/middles/MiddleEventModal';
 import HiddenItemsModal from '@/components/arbbets/HiddenItemsModal';
 import { MiddleData, Middle } from '@/interfaces/middle.interface';
+import { FilterDTO } from '@/interfaces';
 import { marketLabel } from '@/utils/surebet';
 import { fmtDateTime, fmtSigned, evTone, toHiddenLeg } from '@/utils/middle';
 import { detectExtension } from '@/utils/arbExtension';
@@ -36,7 +38,11 @@ export default function MiddlesPage() {
   const { data, loading } = useMiddles('prematch', autoUpdate, isAuthenticated);
 
   const [search, setSearch] = useState('');
-  const [bookmaker, setBookmaker] = useState('');
+  // Filtro salvo do usuário (ABFilter) — o MESMO preset das surebets/arbbets. O
+  // usuário escolhe; aplicamos as CASAS do preset aos middles (não reinventa a roda).
+  const [savedFilters, setSavedFilters] = useState<{ id: string; name: string }[]>([]);
+  const [activeFilterId, setActiveFilterId] = useState('');
+  const [activeFilter, setActiveFilter] = useState<FilterDTO | null>(null);
   const [league, setLeague] = useState('');
   const [marketId, setMarketId] = useState('');
   const [evMin, setEvMin] = useState(EV_FLOOR);
@@ -64,11 +70,36 @@ export default function MiddlesPage() {
     toastTimer.current = setTimeout(() => setToast(null), 2600);
   }, []);
 
-  // Casas e mercados presentes nos dados (para os selects de filtro).
-  const houses = useMemo(
-    () => Array.from(new Set(data.flatMap((g) => g.middles.flatMap((m) => m.legs.map((l) => l.bookmaker))))).sort(),
-    [data],
-  );
+  // Carrega a lista de filtros salvos e auto-seleciona (lembra a escolha; senão o 1º).
+  useEffect(() => {
+    apiGateway.getUserFilters()
+      .then((r) => {
+        if (r.data?.result !== 1 || !Array.isArray(r.data.data)) return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const list: { id: string; name: string }[] = r.data.data.map((f: any) => ({ id: String(f.id), name: f.name }));
+        setSavedFilters(list);
+        const stored = typeof window !== 'undefined' ? localStorage.getItem('middles:filter') : null;
+        if (stored === null) { if (list.length) setActiveFilterId(list[0].id); } // 1ª vez → primeiro filtro
+        else if (stored && list.some((f) => f.id === stored)) setActiveFilterId(stored); // lembra a escolha
+        // stored === '' → usuário escolheu "Sem filtro", respeita
+      })
+      .catch(() => {});
+  }, []);
+  const selectFilter = (idv: string) => {
+    setActiveFilterId(idv);
+    if (typeof window !== 'undefined') localStorage.setItem('middles:filter', idv);
+  };
+  // Carrega a config do filtro ativo — usamos as CASAS dele p/ filtrar os middles.
+  useEffect(() => {
+    if (!activeFilterId) { setActiveFilter(null); return; }
+    let active = true;
+    apiGateway.getFilterById(activeFilterId)
+      .then((r) => { if (active && r.data?.result === 1) setActiveFilter(r.data.data as FilterDTO); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [activeFilterId]);
+
+  // Mercados e campeonatos presentes nos dados (para os selects de filtro).
   const markets = useMemo(() => {
     const m = new Map<string, string>();
     for (const g of data) for (const md of g.middles) if (!m.has(md.market)) m.set(md.market, marketLabel(md.market));
@@ -89,7 +120,9 @@ export default function MiddlesPage() {
       for (const m of g.middles) {
         // Ocultação pessoal: some o middle se o usuário ocultou o evento, a casa ou a seleção.
         if (!hidden.isSurebetVisible(g.id, m.legs.map(toHiddenLeg))) continue;
-        if (bookmaker && !m.legs.some((l) => l.bookmaker === bookmaker)) continue;
+        // Filtro salvo (preset do usuário): só mostra se TODAS as pernas usam
+        // casas do preset — casa fora do preset não aparece. (igual arbbets)
+        if (activeFilter?.bookmakers?.length && !m.legs.every((l) => activeFilter.bookmakers.includes(l.bookmaker))) continue;
         if (marketId && m.market !== marketId) continue;
         if (m.ev < evMin) continue;
         if (m.pGap < pGapMin) continue;
@@ -110,7 +143,7 @@ export default function MiddlesPage() {
       return (b.m.ev || 0) - (a.m.ev || 0);
     });
     return flat;
-  }, [data, search, bookmaker, league, marketId, evMin, pGapMin, gapFullOnly, sortMode, hidden.isSurebetVisible]);
+  }, [data, search, activeFilter, league, marketId, evMin, pGapMin, gapFullOnly, sortMode, hidden.isSurebetVisible]);
 
   // Agrupado por evento (modo "Por evento"): preserva a ordem do `items` (já
   // ordenado), então os eventos aparecem na ordem do seu melhor middle.
@@ -132,7 +165,7 @@ export default function MiddlesPage() {
 
   const total = useMemo(() => data.reduce((acc, g) => acc + g.middles.length, 0), [data]);
   const activeFilters =
-    (bookmaker ? 1 : 0) + (league ? 1 : 0) + (marketId ? 1 : 0) + (gapFullOnly ? 1 : 0) + (evMin > EV_FLOOR ? 1 : 0) + (pGapMin > 0 ? 1 : 0);
+    (league ? 1 : 0) + (marketId ? 1 : 0) + (gapFullOnly ? 1 : 0) + (evMin > EV_FLOOR ? 1 : 0) + (pGapMin > 0 ? 1 : 0);
 
   const openCalc = useCallback((event: MiddleData, m: Middle) => setCalc({ event, m }), []);
 
@@ -216,6 +249,22 @@ export default function MiddlesPage() {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar evento, liga..." className={`${inputClass} pl-9`} />
         </div>
+        {/* Filtro salvo do usuário — mesmo preset (casas) das surebets/arbbets */}
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Select
+            className="w-40"
+            value={activeFilterId}
+            onChange={selectFilter}
+            options={[{ value: '', label: 'Sem filtro salvo' }, ...savedFilters.map((f) => ({ value: f.id, label: f.name }))]}
+          />
+          <button
+            onClick={() => router.push({ pathname: router.pathname, query: { ...router.query, modal: 'user', page: 'abfilter' } }, undefined, { shallow: true })}
+            className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/5 text-gray-400 transition hover:bg-white/10 hover:text-indigo-300"
+            title="Gerenciar filtros salvos"
+          >
+            <Settings size={15} />
+          </button>
+        </div>
         {/* Listar por middle (lista plana) ou por evento (agrupado) */}
         <div className="inline-flex rounded-lg border border-white/10 bg-white/5 p-0.5">
           <button
@@ -265,10 +314,6 @@ export default function MiddlesPage() {
             <Select className="mt-1" value={league} onChange={setLeague}
               options={[{ value: '', label: 'Todos' }, ...leagues.map((l) => ({ value: l, label: l }))]} />
           </label>
-          <label className="text-[11px] text-gray-400">Casa
-            <Select className="mt-1" value={bookmaker} onChange={setBookmaker}
-              options={[{ value: '', label: 'Todas' }, ...houses.map((h) => ({ value: h, label: h }))]} />
-          </label>
           <label className="text-[11px] text-gray-400">Mercado
             <Select className="mt-1" value={marketId} onChange={setMarketId}
               options={[{ value: '', label: 'Todos' }, ...markets.map((m) => ({ value: m.id, label: m.name }))]} />
@@ -285,6 +330,11 @@ export default function MiddlesPage() {
             <input type="checkbox" checked={gapFullOnly} onChange={(e) => setGapFullOnly(e.target.checked)} className="h-4 w-4 accent-indigo-500" />
             Só miolo cheio (gapFull) — esconde os soft/asiáticos de meia-vitória
           </label>
+
+          <div className="sm:col-span-2 lg:col-span-4 flex items-start gap-2 rounded-lg bg-white/[0.03] p-2 text-[11px] text-gray-400 ring-1 ring-white/5">
+            <Settings size={13} className="mt-0.5 shrink-0 text-indigo-400/60" />
+            <span>As <strong className="text-gray-300">casas</strong> vêm do seu <strong className="text-gray-300">filtro salvo</strong> (seletor no topo). Edite as casas do preset na engrenagem ⚙ — vale para Surebets e Middles.</span>
+          </div>
         </div>
       )}
 
