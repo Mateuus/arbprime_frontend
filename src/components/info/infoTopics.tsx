@@ -5,6 +5,7 @@ import {
   TrendingUp, Hourglass, Building2, Eye, BarChart3, Target,
 } from 'lucide-react';
 import { InfoModal } from '@/components/ui/InfoModal';
+import { MiddleGuide } from '@/components/info/MiddleGuide';
 
 /**
  * Registro de TÓPICOS de informação. O modal (InfoModal) é genérico e
@@ -290,6 +291,15 @@ export const INFO_TOPICS: Record<string, InfoTopic> = {
         </Section>
       </div>
     ),
+  },
+
+  // O que é um middle (aposta de intervalo) — produto irmão das surebets.
+  middle: {
+    title: 'O que é um Middle (aposta de intervalo)?',
+    subtitle: 'Você aposta nos dois lados de um total com uma folga — se cair no meio, ganha os dois.',
+    icon: violetIcon(<Target size={20} />),
+    footerNote: 'Não é lucro garantido: é +EV de alta variância. Acerte o miolo e leva os dois lados.',
+    body: <MiddleGuide />,
   },
 };
 

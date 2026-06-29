@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { GiHomeGarage, GiWallet, GiCoins, GiSoccerBall } from 'react-icons/gi';
-import { Gift, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags, CreditCard, Receipt, ServerCog, Flag, Wallet, ListChecks, Gem, LineChart, SlidersHorizontal, Handshake, Ticket, ClipboardCheck, Activity } from 'lucide-react';
+import { Gift, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags, CreditCard, Receipt, ServerCog, Flag, Wallet, ListChecks, Gem, LineChart, SlidersHorizontal, Handshake, Ticket, ClipboardCheck, Activity, Split } from 'lucide-react';
 import { useMemo } from 'react';
 import { ReactNode } from 'react';
 import { useUserContext } from '@/context/UserContext';
@@ -223,6 +223,15 @@ export const useMenuItems = (): MenuItem[] => {
             onClick: () => router.push('/valuebets/clv')
           }
         ]
+      },
+
+      {
+        id: 'middles',
+        name: 'Middles',
+        path: '/middles',
+        icon: <Split size={22} />,
+        requiresAuth: true,
+        onClick: () => router.push('/middles')
       },
 
       // ===================== ADMIN =====================
