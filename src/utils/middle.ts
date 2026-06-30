@@ -4,6 +4,7 @@
 import { Middle, MiddleLeg, MiddleData, MiddleLineType } from '@/interfaces/middle.interface';
 import { SurebetData, SurebetOdd, Surebet } from '@/interfaces/arbitragem.interface';
 import { marketLabel, optionLabel } from '@/utils/surebet';
+import { formatEventDateTime } from '@/utils/eventTime';
 
 // EV "≈0" (free middle): |EV%| abaixo deste limiar conta como neutro (âmbar).
 export const FREE_MIDDLE_EPS = 0.1;
@@ -170,13 +171,9 @@ export const seenAgo = (iso?: string): string => {
   return `${Math.floor(s / 3600)}h`;
 };
 
-// Data/hora curtas pt-BR (dd/mm hh:mm). null se a data não for válida.
-export const fmtDateTime = (iso?: string): string | null => {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-};
+// Data/hora curtas pt-BR (dd/mm hh:mm) do kickoff. null se a data não for válida.
+// `event.date` é GMT-3 tagueado Z → wallclock verbatim. Ver utils/eventTime.
+export const fmtDateTime = (iso?: string): string | null => formatEventDateTime(iso);
 
 // Valor em R$ (pt-BR). Aceita negativo (perda).
 export const fmtBRL = (n: number): string =>

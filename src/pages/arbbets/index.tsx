@@ -25,6 +25,7 @@ import { detectExtension } from '@/utils/arbExtension';
 import { OpenInHouse } from '@/components/arbbets/OpenInHouse';
 import { marketLabel, marketCategory, optionLabel, profitTone, dgProfitTone } from '@/utils/surebet';
 import { surebetKey } from '@/utils/surebetKey';
+import { formatEventDateTime } from '@/utils/eventTime';
 import { explainMarket } from '@/utils/marketExplain';
 import RecordBetModal, { RecordBetDraft } from '@/components/analytix/RecordBetModal';
 
@@ -137,14 +138,8 @@ function MarketQuickFilter({ tree, selected, onToggleMarket, onToggleCategory, o
   );
 }
 
-const fmtDate = (s: string): string => {
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return '—';
-  // Sem a vírgula que o locale pt-BR coloca entre data e hora ("24/06, 10:00" → "24/06 10:00").
-  const date = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  return `${date} ${time}`;
-};
+// Início do jogo (kickoff). `date` é GMT-3 tagueado Z → wallclock verbatim. Ver utils/eventTime.
+const fmtDate = (s: string): string => formatEventDateTime(s) ?? '—';
 
 // Idade do surebet a partir do create_at.
 const ageOf = (s: string): string => {

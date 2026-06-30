@@ -9,6 +9,7 @@ import {
   GiBoxingGlove, GiHockey, GiBaseballBat, GiAmericanFootballHelmet, GiPingPongBat
 } from 'react-icons/gi';
 import { apiGateway, GroupedEvent, ExternalEventsParams } from '@/gateways/api.gateway';
+import { formatEventDateParts } from '@/utils/eventTime';
 import { Select } from '@/components/ui/Select';
 import { usePopover } from '@/components/ui/usePopover';
 import { BookmakerTag } from '@/components/bookmaker/BookmakerTag';
@@ -79,18 +80,10 @@ const errorMessage = (e: unknown, fallback: string): string => {
 };
 
 // Data em duas linhas (dia/mês em cima, hora embaixo) para a lista compacta.
-// eventDate é o instante REAL (UTC) do jogo. Formatamos no fuso explícito de
-// São Paulo (GMT-3) para mostrar o horário local correto — ex.: 17:00Z → 14:00.
-// (Antes usava timeZone:'UTC', resquício de quando o event_date vinha "naive".)
-const formatDateParts = (dateString: string | null): { day: string; time: string } => {
-  if (!dateString) return { day: '—', time: '' };
-  const d = new Date(dateString);
-  if (Number.isNaN(d.getTime())) return { day: '—', time: '' };
-  return {
-    day: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' }),
-    time: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
-  };
-};
+// eventDate é GMT-3 tagueado Z (o wallclock já é horário de Brasília) → exibimos
+// verbatim. Ver utils/eventTime.
+const formatDateParts = (dateString: string | null): { day: string; time: string } =>
+  formatEventDateParts(dateString);
 
 // Cor determinística por nome de time (mimetiza os marcadores/flags do mockup).
 const DOT_COLORS = [

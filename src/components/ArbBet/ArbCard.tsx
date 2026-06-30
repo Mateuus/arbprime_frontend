@@ -4,6 +4,7 @@ import { Calendar, Clock, Edit, Trash2 } from 'lucide-react';
 import { format, isBefore, differenceInHours, differenceInMinutes, parseISO, isValid } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import { capitalizeFirstLetter, getMarketName, getBookmakerEventLink } from '@/utils/functions';
+import { formatEventDateTime } from '@/utils/eventTime';
 import { RenderPriceWithHistory } from './components/renderPriceWithHistory';
 import Link from 'next/link';
 
@@ -103,10 +104,8 @@ export default function ArbCard({ data, selected, onSelect }: Props) {
 }
 
 export function formatTime2(dateString: string) {
-  const utcDate = new Date(dateString);
-  const gmtDate = utcDate.setHours(utcDate.getHours() + 3);
-
-  return format(gmtDate, 'dd/MM HH:mm');
+  // `date` é GMT-3 tagueado Z — formatamos o wallclock verbatim. Ver utils/eventTime.
+  return formatEventDateTime(dateString) ?? '';
 }
 
 export function formatTime(dateString: string) {

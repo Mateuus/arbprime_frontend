@@ -20,13 +20,13 @@ interface HistoryRow {
   recordedAt: string;
 }
 
-// Data/hora do JOGO (eventDate = instante real UTC) no fuso de São Paulo (GMT-3),
-// ex.: 17:00Z → 14:00. Antes usava 'UTC' (resquício do event_date "naive").
+// Data/hora do JOGO (eventDate). O eventDate é GMT-3 tagueado Z — o wallclock já
+// é horário de Brasília, então exibimos verbatim em UTC. Ver utils/eventTime.
 const formatDate = (s: string | null): string => {
   if (!s) return '—';
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
 };
 const formatTime = (s: string): string => {
   const d = new Date(s);

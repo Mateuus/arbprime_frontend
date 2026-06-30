@@ -8,6 +8,7 @@ import {
   edgeTone, tierMeta, confidenceTone, houseVigTone, fmtVigPct, valuebetSelectionLabel, valuebetMarketLabel,
   toSurebetLeg, toSurebetEvent,
 } from '@/utils/valuebet';
+import { formatEventDateTime } from '@/utils/eventTime';
 
 interface Props {
   group: ValuebetGroup;
@@ -44,12 +45,7 @@ export function ValuebetCard({ group, vb, onBet, notify }: Props) {
   const leg = useMemo(() => toSurebetLeg(vb), [vb]);
   const event = useMemo(() => toSurebetEvent(group), [group]);
 
-  const dateLabel = (() => {
-    if (!group.date) return null;
-    const d = new Date(group.date);
-    if (Number.isNaN(d.getTime())) return null;
-    return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-  })();
+  const dateLabel = formatEventDateTime(group.date);
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-white/20">

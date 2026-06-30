@@ -7,6 +7,7 @@ import { getBookmakerEventLink } from '@/utils/functions';
 import { openGameInHouse, isExtensionKnownInstalled, detectExtension, houseSupportsAutofill } from '@/utils/arbExtension';
 import { BookmakerTag } from '@/components/bookmaker/BookmakerTag';
 import { marketLabel, optionLabel } from '@/utils/surebet';
+import { formatEventDateTime } from '@/utils/eventTime';
 
 interface Props {
   leg: SurebetOdd;
@@ -59,12 +60,7 @@ export function OpenInHouse({ leg, event, notify, iconSize = 11, className = '',
   const selection = optionLabel(leg.option, event.home, event.away, leg.handicap);
   const rawMarket = leg.rawMarket && leg.rawMarket.trim() && leg.rawMarket.trim().toLowerCase() !== market.toLowerCase() ? leg.rawMarket.trim() : null;
   const rawSelection = leg.rawSelection && leg.rawSelection.trim() && leg.rawSelection.trim().toLowerCase() !== selection.toLowerCase() ? leg.rawSelection.trim() : null;
-  const dateLabel = (() => {
-    if (!event.date) return null;
-    const d = new Date(event.date);
-    if (Number.isNaN(d.getTime())) return null;
-    return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-  })();
+  const dateLabel = formatEventDateTime(event.date);
 
   return (
     <>
