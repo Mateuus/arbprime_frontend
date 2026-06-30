@@ -10,6 +10,7 @@ import { OpenInHouse } from '@/components/arbbets/OpenInHouse';
 import { Select } from '@/components/ui/Select';
 import RecordBetModal, { RecordBetDraft } from '@/components/analytix/RecordBetModal';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { useBookmakers } from '@/hooks/useBookmakers';
 import { apiGateway, GroupedEvent, EventGroupDetail } from '@/gateways/api.gateway';
 import { DuasVidas, DuasVidasData, DuasVidasBooster } from '@/interfaces/duasvidas.interface';
 import { SurebetOdd } from '@/interfaces/arbitragem.interface';
@@ -24,6 +25,7 @@ const fmtPct = (n: number | null | undefined, dp = 2) =>
   n == null || !Number.isFinite(n) ? '—' : `${n >= 0 ? '+' : ''}${n.toFixed(dp)}%`;
 const num = (s: string) => parseFloat((s || '').replace(',', '.')) || 0;
 const impl = (o: number) => (o > 0 ? (1 / o) * 100 : 0); // odd → probabilidade implícita %
+const effOdd = (odd: number, commFrac: number) => (odd > 0 ? 1 + (odd - 1) * (1 - commFrac) : 0); // odd líquida de comissão (exchange)
 
 const oddInputCls =
   'w-[58px] rounded-lg border border-white/10 bg-black/30 px-1.5 py-1 text-center text-sm font-bold tabular-nums text-white focus:border-fuchsia-500/50 focus:outline-none focus:ring-1 focus:ring-fuchsia-500/40';
@@ -32,6 +34,15 @@ const PaBadge = () => (
   <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-amber-500/15 px-1 py-px text-[8px] font-bold text-amber-300 ring-1 ring-amber-500/30">
     <Zap size={7} className="fill-amber-300" /> PA
   </span>
+);
+
+// Linha de comissão (exchange): input editável; o retorno daquela perna já sai líquido.
+const CommRow = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+  <div className="mt-1.5 flex items-center gap-1.5 pl-9 text-[10px] text-amber-300/90">
+    <Percent size={10} /> comissão
+    <input value={value} onChange={(e) => onChange(e.target.value)} inputMode="decimal" className="w-12 rounded border border-white/10 bg-black/30 px-1.5 py-0.5 text-center text-[11px] tabular-nums text-white focus:border-amber-500/50 focus:outline-none" aria-label="Comissão %" />
+    <span className="text-gray-500">% · retorno já líquido</span>
+  </div>
 );
 
 interface LiveBooster {
@@ -61,6 +72,7 @@ export function DuasVidasCalcModal({ event, sb, onClose, defaultStake, notify }:
   const favLeg = useMemo(() => sb.surebet.find((l) => !l.isParlay && (l.option || '').toLowerCase() !== 'draw')!, [sb]);
   const drawLeg = useMemo(() => sb.surebet.find((l) => (l.option || '').toLowerCase() === 'draw')!, [sb]);
   const baseZebraOdd = parlay.zebraPrice ?? (parlay.price / (parlay.booster?.price || 1));
+  const { getBookmaker } = useBookmakers();
 
   const [stakeStr, setStakeStr] = useState(() => String(defaultStake && defaultStake > 0 ? defaultStake : 1000));
   const [boosterIdx, setBoosterIdx] = useState(-1);
@@ -80,6 +92,8 @@ export function DuasVidasCalcModal({ event, sb, onClose, defaultStake, notify }:
     fav: String(favLeg.price), draw: String(drawLeg.price),
     zebra: String(baseZebraOdd), booster: String(parlay.booster?.price ?? ''),
   });
+  // Comissão % por perna (exchange). Auto-preenchida da casa; editável.
+  const [commStr, setCommStr] = useState({ fav: '0', draw: '0', parlay: '0' });
 
   // Picker do 2º jogo
   const [pSearch, setPSearch] = useState('');
@@ -130,25 +144,37 @@ export function DuasVidasCalcModal({ event, sb, onClose, defaultStake, notify }:
     else { setDrawSlug(slug); if (h) setOddStr((o) => ({ ...o, draw: String(h.price) })); }
   };
 
-  // Odds correntes (editadas) + métricas honestas.
+  // Odds correntes (editadas).
   const favOdd = num(oddStr.fav), drawOdd = num(oddStr.draw), zebraOdd = num(oddStr.zebra), boosterOdd = num(oddStr.booster);
   const parlayOdd = zebraOdd * boosterOdd;
   const total = Math.max(0, num(stakeStr));
+
+  // Comissão por perna (auto da casa; editável quando a casa cobra — ex.: exchange betbra).
+  const favCommPct = getBookmaker(favChosen.bookmaker)?.commissionPct ?? 0;
+  const drawCommPct = getBookmaker(drawChosen.bookmaker)?.commissionPct ?? 0;
+  const parlayCommPct = getBookmaker(boosterHouse)?.commissionPct ?? 0;
+  // Auto-preenche ao trocar de casa / quando as casas carregam (preserva edição manual).
+  useEffect(() => { setCommStr((c) => ({ ...c, fav: String(favCommPct) })); }, [favCommPct]);
+  useEffect(() => { setCommStr((c) => ({ ...c, draw: String(drawCommPct) })); }, [drawCommPct]);
+  useEffect(() => { setCommStr((c) => ({ ...c, parlay: String(parlayCommPct) })); }, [parlayCommPct]);
+  const favCommFrac = num(commStr.fav) / 100, drawCommFrac = num(commStr.draw) / 100, parlayCommFrac = num(commStr.parlay) / 100;
+  // Odds EFETIVAS (líquidas de comissão) — usadas em métricas, stakes e retornos.
+  const effFav = effOdd(favOdd, favCommFrac), effDraw = effOdd(drawOdd, drawCommFrac), effParlay = effOdd(parlayOdd, parlayCommFrac);
+
   const metrics = useMemo(
-    () => dvMetrics({ coverFavOdd: favOdd, drawOdd, zebraOdd, boosterOdd, p2: sb.p2, pg: booster.pFair }),
-    [favOdd, drawOdd, zebraOdd, boosterOdd, sb.p2, booster.pFair],
+    () => dvMetrics({ coverFavOdd: effFav, drawOdd: effDraw, zebraOdd, boosterOdd, p2: sb.p2, pg: booster.pFair }),
+    [effFav, effDraw, zebraOdd, boosterOdd, sb.p2, booster.pFair],
   );
 
-  // Stakes ∝ 1/odd + arredondamento opcional.
+  // Stakes ∝ 1/odd EFETIVA mantendo SEMPRE 3 posições (odd vazia/0 → stake 0).
   const step = num(roundStepStr);
-  // Stakes ∝ 1/odd mantendo SEMPRE 3 posições (odd vazia/0 → stake 0, sem quebrar índices).
-  const invs = [favOdd, drawOdd, parlayOdd].map((o) => (o > 0 ? 1 / o : 0));
+  const invs = [effFav, effDraw, effParlay].map((o) => (o > 0 ? 1 / o : 0));
   const invSum = invs.reduce((a, b) => a + b, 0) || 1;
   const rawStakes = invs.map((i) => (total * i) / invSum);
   const stakes = (roundEnabled && step > 0) ? rawStakes.map((s) => Math.round(s / step) * step) : rawStakes;
   const [sFav, sDraw, sParlay] = stakes;
   const totalStaked = stakes.reduce((a, b) => a + b, 0);
-  const retFav = sFav * favOdd, retDraw = sDraw * drawOdd, retParlay = sParlay * parlayOdd;
+  const retFav = sFav * effFav, retDraw = sDraw * effDraw, retParlay = sParlay * effParlay;
 
   const zebraName = sb.zebraSide === 'home' ? event.home : event.away;
   const favName = sb.zebraSide === 'home' ? event.away : event.home;
@@ -235,9 +261,9 @@ export function DuasVidasCalcModal({ event, sb, onClose, defaultStake, notify }:
     sport: event.sport, league: event.league, eventStart: event.date, surebetKey: sb.id,
     totalStake: totalStaked, expectedProfitPct: metrics.apparentMargin, expectedProfit: totalStaked * (metrics.apparentMargin / 100),
     legs: [
-      { bookmakerSlug: favChosen.bookmaker, houseEventId: favChosen.eventId, market: favLeg.market, rawMarket: favLeg.rawMarket || null, selection: favName, handicap: null, side: 'back' as const, odd: favOdd, stake: sFav, commissionPct: null },
-      { bookmakerSlug: drawChosen.bookmaker, houseEventId: drawChosen.eventId, market: drawLeg.market, rawMarket: drawLeg.rawMarket || null, selection: 'Empate', handicap: null, side: 'back' as const, odd: drawOdd, stake: sDraw, commissionPct: null },
-      { bookmakerSlug: boosterHouse, houseEventId: parlay.eventId, market: 'duas-vidas:1', rawMarket: 'Múltipla (Duas Vidas)', selection: `${zebraName} × ${boosterName}`, handicap: null, side: 'back' as const, odd: parlayOdd, stake: sParlay, commissionPct: null },
+      { bookmakerSlug: favChosen.bookmaker, houseEventId: favChosen.eventId, market: favLeg.market, rawMarket: favLeg.rawMarket || null, selection: favName, handicap: null, side: 'back' as const, odd: favOdd, stake: sFav, commissionPct: favCommPct > 0 ? num(commStr.fav) : null },
+      { bookmakerSlug: drawChosen.bookmaker, houseEventId: drawChosen.eventId, market: drawLeg.market, rawMarket: drawLeg.rawMarket || null, selection: 'Empate', handicap: null, side: 'back' as const, odd: drawOdd, stake: sDraw, commissionPct: drawCommPct > 0 ? num(commStr.draw) : null },
+      { bookmakerSlug: boosterHouse, houseEventId: parlay.eventId, market: 'duas-vidas:1', rawMarket: 'Múltipla (Duas Vidas)', selection: `${zebraName} × ${boosterName}`, handicap: null, side: 'back' as const, odd: parlayOdd, stake: sParlay, commissionPct: parlayCommPct > 0 ? num(commStr.parlay) : null },
     ],
   });
 
@@ -320,26 +346,32 @@ export function DuasVidasCalcModal({ event, sb, onClose, defaultStake, notify }:
         {/* Pernas */}
         <div className="mt-3 space-y-2">
           {/* Cobertura: favorito */}
-          <div className="flex items-center gap-2 rounded-lg bg-emerald-500/[0.05] p-2.5 ring-1 ring-emerald-500/15">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-emerald-500/15 text-[11px] font-bold text-emerald-300 ring-1 ring-emerald-500/30">1ª</span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 truncate text-[12px] font-semibold text-white">{favName} {favLeg.pa && <PaBadge />}</div>
-              {houseSelect('fav', favHouses, favChosen)}
+          <div className="rounded-lg bg-emerald-500/[0.05] p-2.5 ring-1 ring-emerald-500/15">
+            <div className="flex items-center gap-2">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-emerald-500/15 text-[11px] font-bold text-emerald-300 ring-1 ring-emerald-500/30">1ª</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 truncate text-[12px] font-semibold text-white">{favName} {favLeg.pa && <PaBadge />}</div>
+                {houseSelect('fav', favHouses, favChosen)}
+              </div>
+              <input value={oddStr.fav} onChange={(e) => setOddStr((o) => ({ ...o, fav: e.target.value }))} inputMode="decimal" className={oddInputCls} aria-label="Odd favorito" />
+              <div className="w-[84px] shrink-0 text-right"><div className="text-sm font-bold tabular-nums text-emerald-200">{fmtBRL(sFav)}</div><div className="text-[9px] tabular-nums text-gray-500">retorno {fmtBRL(retFav)}</div></div>
+              <OpenInHouse leg={favLegLive} event={event} notify={notify} iconSize={14} />
             </div>
-            <input value={oddStr.fav} onChange={(e) => setOddStr((o) => ({ ...o, fav: e.target.value }))} inputMode="decimal" className={oddInputCls} aria-label="Odd favorito" />
-            <div className="w-[84px] shrink-0 text-right"><div className="text-sm font-bold tabular-nums text-emerald-200">{fmtBRL(sFav)}</div><div className="text-[9px] tabular-nums text-gray-500">retorno {fmtBRL(retFav)}</div></div>
-            <OpenInHouse leg={favLegLive} event={event} notify={notify} iconSize={14} />
+            {favCommPct > 0 && <CommRow value={commStr.fav} onChange={(v) => setCommStr((c) => ({ ...c, fav: v }))} />}
           </div>
           {/* Cobertura: empate */}
-          <div className="flex items-center gap-2 rounded-lg bg-emerald-500/[0.05] p-2.5 ring-1 ring-emerald-500/15">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-emerald-500/15 text-[11px] font-bold text-emerald-300 ring-1 ring-emerald-500/30">2ª</span>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[12px] font-semibold text-white">Empate</div>
-              {houseSelect('draw', drawHouses, drawChosen)}
+          <div className="rounded-lg bg-emerald-500/[0.05] p-2.5 ring-1 ring-emerald-500/15">
+            <div className="flex items-center gap-2">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-emerald-500/15 text-[11px] font-bold text-emerald-300 ring-1 ring-emerald-500/30">2ª</span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[12px] font-semibold text-white">Empate</div>
+                {houseSelect('draw', drawHouses, drawChosen)}
+              </div>
+              <input value={oddStr.draw} onChange={(e) => setOddStr((o) => ({ ...o, draw: e.target.value }))} inputMode="decimal" className={oddInputCls} aria-label="Odd empate" />
+              <div className="w-[84px] shrink-0 text-right"><div className="text-sm font-bold tabular-nums text-emerald-200">{fmtBRL(sDraw)}</div><div className="text-[9px] tabular-nums text-gray-500">retorno {fmtBRL(retDraw)}</div></div>
+              <OpenInHouse leg={drawLegLive} event={event} notify={notify} iconSize={14} />
             </div>
-            <input value={oddStr.draw} onChange={(e) => setOddStr((o) => ({ ...o, draw: e.target.value }))} inputMode="decimal" className={oddInputCls} aria-label="Odd empate" />
-            <div className="w-[84px] shrink-0 text-right"><div className="text-sm font-bold tabular-nums text-emerald-200">{fmtBRL(sDraw)}</div><div className="text-[9px] tabular-nums text-gray-500">retorno {fmtBRL(retDraw)}</div></div>
-            <OpenInHouse leg={drawLegLive} event={event} notify={notify} iconSize={14} />
+            {drawCommPct > 0 && <CommRow value={commStr.draw} onChange={(v) => setCommStr((c) => ({ ...c, draw: v }))} />}
           </div>
           {/* Múltipla (quebrada por seleção) */}
           <div className="rounded-lg bg-fuchsia-500/[0.07] p-2.5 ring-1 ring-fuchsia-500/25">
@@ -363,6 +395,7 @@ export function DuasVidasCalcModal({ event, sb, onClose, defaultStake, notify }:
               <span className="text-[11px] tabular-nums text-fuchsia-300/80">{(zebraOdd || 0).toFixed(2)} × {(boosterOdd || 0).toFixed(2)} = <strong className="text-fuchsia-200">{(parlayOdd || 0).toFixed(2)}</strong></span>
               <OpenInHouse leg={{ ...parlay, price: parlayOdd } as SurebetOdd} event={event} notify={notify} iconSize={14} />
             </div>
+            {parlayCommPct > 0 && <CommRow value={commStr.parlay} onChange={(v) => setCommStr((c) => ({ ...c, parlay: v }))} />}
           </div>
         </div>
 
