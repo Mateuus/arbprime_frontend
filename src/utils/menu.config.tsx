@@ -196,6 +196,14 @@ export const useMenuItems = (): MenuItem[] => {
             icon: <GiSoccerBall size={18} />,
             requiresAuth: true,
             onClick: () => router.push('/arbbets/duplo-green')
+          },
+          {
+            id: 'duas-vidas',
+            name: 'Duas Vidas',
+            path: '/arbbets/duas-vidas',
+            icon: <Zap size={18} />,
+            requiresAuth: true,
+            onClick: () => router.push('/arbbets/duas-vidas')
           }
         ]
       },
