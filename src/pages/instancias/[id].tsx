@@ -282,6 +282,7 @@ export default function InstanceDetailPage() {
                     </select>
                   </label>
                   <NumField label="Máx. apostas/evento" step="1" value={cfg.maxBetsPerEvent} onChange={(v) => patch({ maxBetsPerEvent: v })} />
+                  <NullNumField label="Só jogos até (dias)" step="1" value={cfg.maxEventDays} onChange={(v) => patch({ maxEventDays: v })} />
                 </div>
                 <div className="mt-3">
                   <ProxySelect value={cfg.proxyId} onChange={(pid) => patch({ proxyId: pid })} getCreds={() => ({ username: creds.username, password: creds.password })} />

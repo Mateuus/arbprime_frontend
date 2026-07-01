@@ -30,6 +30,7 @@ export interface BetInstanceConfig {
   stopLossDay: number | null;
   pollIntervalSec: number;
   dryRun: boolean;
+  maxEventDays: number | null;
   restartPolicy: RestartPolicy;
   maxRetries: number;
   proxyId: string | null;
