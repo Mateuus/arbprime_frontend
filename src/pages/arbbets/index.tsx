@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import {
-  Calculator, RefreshCcw, Search, X, Zap, Trophy, TrendingUp, Clock, Layers, HelpCircle, Filter, ChevronDown, Settings, Bell, BellRing, Tag, Check, EyeOff, Rocket
+  Calculator, RefreshCcw, Search, X, Zap, Trophy, TrendingUp, Clock, Layers, HelpCircle, Filter, ChevronDown, Settings, Bell, BellRing, Tag, Check, Copy, EyeOff, Rocket
 } from 'lucide-react';
 import { useSurebets } from '@/hooks/useSurebets';
 import { useUserContext } from '@/context/UserContext';
@@ -34,6 +34,55 @@ const fieldBase =
   'bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 ' +
   'focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500/50 transition';
 const inputClass = `w-full ${fieldBase}`;
+
+// Ícone do "mercado na casa" (rawMarket). Hover mostra o nome cru; CLIQUE copia
+// p/ colar e achar o mercado rápido no site da casa. Vira ✓ por 1s ao copiar.
+function CopyRawButton({ rawMarket, rawSelection }: { rawMarket: string; rawSelection?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = (e: { stopPropagation(): void }) => {
+    e.stopPropagation();
+    const text = rawSelection ? `${rawMarket} — ${rawSelection}` : rawMarket;
+    void navigator.clipboard?.writeText(text)
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); })
+      .catch(() => {});
+  };
+  return (
+    <Tooltip
+      label={(
+        <span className="block">
+          <span className="text-gray-400">Mercado na casa:</span> {rawMarket}
+          {rawSelection && <span className="block"><span className="text-gray-400">Seleção:</span> {rawSelection}</span>}
+          <span className="mt-0.5 block text-teal-300">Clique para copiar</span>
+        </span>
+      )}
+      className="shrink-0"
+    >
+      <button type="button" onClick={copy} className="shrink-0 text-gray-500 hover:text-teal-300" aria-label="Copiar mercado na casa">
+        {copied ? <Check size={11} className="text-emerald-400" /> : <Tag size={11} />}
+      </button>
+    </Tooltip>
+  );
+}
+
+// Botão de copiar um texto visível (ex.: "Na casa: X" no modal). Vira ✓ ao copiar.
+function CopyTextButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        void navigator.clipboard?.writeText(text)
+          .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); })
+          .catch(() => {});
+      }}
+      className="shrink-0 text-gray-500 hover:text-teal-300"
+      title="Copiar"
+    >
+      {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+    </button>
+  );
+}
 
 // Categorias de mercado (rótulo + ordem) do filtro rápido. Só aparecem as que
 // existem nos dados atuais; os sub-mercados de cada uma são derivados ao vivo.
@@ -301,17 +350,7 @@ const SurebetCompact = ({ event, sb, counts, onCalc, onExplain, onOdd, onHide, i
               )}
             </span>
             {leg.rawMarket && (
-              <Tooltip
-                label={
-                  <span className="block">
-                    <span className="text-gray-400">Mercado na casa:</span> {leg.rawMarket}
-                    {leg.rawSelection && <span className="block"><span className="text-gray-400">Seleção:</span> {leg.rawSelection}</span>}
-                  </span>
-                }
-                className="shrink-0 text-gray-500 hover:text-teal-300 cursor-help"
-              >
-                <Tag size={11} />
-              </Tooltip>
+              <CopyRawButton rawMarket={leg.rawMarket} rawSelection={leg.rawSelection || undefined} />
             )}
             {dir !== 0 && (
               <Tooltip label={dir > 0 ? 'Odd subiu' : 'Odd caiu'} className="shrink-0">
@@ -1376,6 +1415,7 @@ function OddModal({ event, leg, onClose }: { event: SurebetData; leg: SurebetOdd
             <p className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-gray-400">
               <Tag size={11} className="text-gray-500 shrink-0" />
               Na casa: <span className="text-gray-200">{leg.rawMarket}</span>
+              <CopyTextButton text={leg.rawMarket} />
             </p>
           )}
         </div>
