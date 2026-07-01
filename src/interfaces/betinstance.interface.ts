@@ -22,6 +22,7 @@ export interface BetInstanceConfig {
   flatStake: number | null;
   minStake: number;
   maxStakePerBet: number;
+  stakeRounding: number;
   dedupeScope: DedupeScope;
   maxBetsPerEvent: number;
   maxBetsPerDay: number | null;

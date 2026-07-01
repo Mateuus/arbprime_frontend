@@ -254,6 +254,16 @@ export default function InstanceDetailPage() {
                   : <NumField label="Valor fixo (R$)" step="0.5" value={cfg.flatStake ?? 0} onChange={(v) => patch({ flatStake: v })} />}
                 <NumField label="Stake mínimo (R$)" step="0.5" value={cfg.minStake} onChange={(v) => patch({ minStake: v })} />
                 <NumField label="Stake máx./aposta (R$)" step="0.5" value={cfg.maxStakePerBet} onChange={(v) => patch({ maxStakePerBet: v })} />
+                <label className="block text-xs text-gray-400">Arredondar stake
+                  <select value={cfg.stakeRounding} onChange={(e) => patch({ stakeRounding: Number(e.target.value) })} className={`${inputCls} mt-1`}>
+                    <option value={0}>Sem arredondar (centavos)</option>
+                    <option value={0.5}>Múltiplo de R$ 0,50</option>
+                    <option value={1}>Múltiplo de R$ 1</option>
+                    <option value={2}>Múltiplo de R$ 2</option>
+                    <option value={5}>Múltiplo de R$ 5</option>
+                    <option value={10}>Múltiplo de R$ 10</option>
+                  </select>
+                </label>
               </div>
             </Section>
             </>
