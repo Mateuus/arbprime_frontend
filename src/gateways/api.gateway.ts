@@ -1646,6 +1646,30 @@ const getClvBreakdown = async (dimension: 'bookmaker' | 'market' | 'tier', days 
 const getJuiceBreakdown = async (dimension: 'bookmaker' | 'market', days = 30) => apiClient.get(`/valuebet/clv/juice?dimension=${dimension}&days=${days}`);
 const getClvTimeseries = async (days = 30) => apiClient.get(`/valuebet/clv/timeseries?days=${days}`);
 const getClvPending = async (limit = 100) => apiClient.get(`/valuebet/clv/pending?limit=${limit}`);
+
+// ---- Instâncias de Bet ----
+const getInstances = async () => apiClient.get('/instances');
+const getInstance = async (id: string) => apiClient.get(`/instances/${id}`);
+const createInstance = async (body: unknown) => apiClient.post('/instances', body);
+const updateInstance = async (id: string, body: unknown) => apiClient.put(`/instances/${id}`, body);
+const deleteInstance = async (id: string) => apiClient.delete(`/instances/${id}`);
+const startInstance = async (id: string) => apiClient.post(`/instances/${id}/start`, {});
+const pauseInstance = async (id: string) => apiClient.post(`/instances/${id}/pause`, {});
+const stopInstance = async (id: string) => apiClient.post(`/instances/${id}/stop`, {});
+const testInstanceLogin = async (body: { instanceId?: string; username?: string; password?: string; proxyId?: string }) =>
+  apiClient.post('/instances/test-login', body);
+const getInstanceEvents = async (id: string, opts: { limit?: number; from?: string; to?: string; type?: string } = {}) => {
+  const p = new URLSearchParams();
+  if (opts.limit) p.set('limit', String(opts.limit));
+  if (opts.from) p.set('from', opts.from);
+  if (opts.to) p.set('to', opts.to);
+  if (opts.type && opts.type !== 'all') p.set('type', opts.type);
+  return apiClient.get(`/instances/${id}/events?${p.toString()}`);
+};
+const clearInstanceEvents = async (id: string) => apiClient.delete(`/instances/${id}/events`);
+const getInstanceProxies = async () => apiClient.get('/instances/proxies');
+const checkInstanceProxies = async (body: { username?: string; password?: string; withLogin?: boolean }) =>
+  apiClient.post('/instances/proxies/check', body);
 const updateBankroll = async (id: string, data: Partial<{ name: string; initialCapital: number; currency: string; unitValue: number; commissionPct: number; isDefault: boolean; isActive: boolean }>) => apiClient.put(`/analytix/bankrolls/${id}`, data);
 const deleteBankroll = async (id: string) => apiClient.delete(`/analytix/bankrolls/${id}`);
 
@@ -1953,7 +1977,21 @@ export const apiGateway = {
     getLeaderboard,
     getCommunityAnalytics,
     getCommunityNotifications,
-    markCommunityNotificationsRead
+    markCommunityNotificationsRead,
+    // Instâncias de Bet
+    getInstances,
+    getInstance,
+    createInstance,
+    updateInstance,
+    deleteInstance,
+    startInstance,
+    pauseInstance,
+    stopInstance,
+    testInstanceLogin,
+    getInstanceEvents,
+    clearInstanceEvents,
+    getInstanceProxies,
+    checkInstanceProxies
 };
     
 export default apiGateway;
