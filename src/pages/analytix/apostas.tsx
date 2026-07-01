@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Plus, ListChecks, Filter } from 'lucide-react';
+import { Check, Plus, ListChecks, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiGateway, BetDTO, BetLegDTO } from '@/gateways/api.gateway';
 import { useBookmakers } from '@/hooks/useBookmakers';
 import AnalytixShell from '@/components/analytix/AnalytixShell';
@@ -14,6 +14,51 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
 import { useBankrolls } from '@/components/analytix/useAnalytix';
 import { BET_STATUS_OPTIONS, periodRange, PeriodKey, unwrap } from '@/components/analytix/format';
+
+// Lista de páginas com reticências (1 … 4 5 6 … 20).
+function pageList(page: number, totalPages: number): (number | '…')[] {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const out: (number | '…')[] = [1];
+  if (page > 3) out.push('…');
+  for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) out.push(i);
+  if (page < totalPages - 2) out.push('…');
+  out.push(totalPages);
+  return out;
+}
+
+function Paginator({ page, totalPages, total, limit, onPage, onLimit }: {
+  page: number; totalPages: number; total: number; limit: number;
+  onPage: (p: number) => void; onLimit: (l: number) => void;
+}) {
+  const from = total === 0 ? 0 : (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
+  const btn = 'grid place-items-center h-8 min-w-[32px] px-2 rounded-lg text-sm transition disabled:opacity-40';
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="text-xs text-gray-400">
+        Mostrando <span className="text-gray-200">{from}–{to}</span> de <span className="text-gray-200">{total}</span> aposta{total === 1 ? '' : 's'}
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center gap-1">
+          <button disabled={page <= 1} onClick={() => onPage(page - 1)} className={`${btn} bg-white/5 ring-1 ring-white/10 text-gray-200 hover:bg-white/10`} title="Anterior"><ChevronLeft size={16} /></button>
+          {pageList(page, totalPages).map((n, i) =>
+            n === '…'
+              ? <span key={`e${i}`} className="px-1.5 text-gray-600">…</span>
+              : <button key={n} onClick={() => onPage(n)} className={`${btn} ${n === page ? 'bg-teal-500 text-slate-900 font-semibold' : 'bg-white/5 ring-1 ring-white/10 text-gray-200 hover:bg-white/10'}`}>{n}</button>,
+          )}
+          <button disabled={page >= totalPages} onClick={() => onPage(page + 1)} className={`${btn} bg-white/5 ring-1 ring-white/10 text-gray-200 hover:bg-white/10`} title="Próxima"><ChevronRight size={16} /></button>
+        </div>
+      )}
+
+      <select value={limit} onChange={(e) => onLimit(Number(e.target.value))} className="bg-black/20 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-gray-200 focus:outline-none">
+        <option value={25}>25 / página</option>
+        <option value={50}>50 / página</option>
+        <option value={100}>100 / página</option>
+      </select>
+    </div>
+  );
+}
 
 const blankDraft = (): RecordBetDraft => ({
   betType: 'single', source: 'manual', totalStake: 0,
@@ -36,6 +81,8 @@ export default function AnalytixApostas() {
 
   const [bets, setBets] = useState<BetDTO[]>([]);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [limit, setLimit] = useState(25);
   const [loading, setLoading] = useState(true);
 
   const [settle, setSettle] = useState<{ bet: BetDTO; legId: string } | null>(null);
@@ -55,15 +102,16 @@ export default function AnalytixApostas() {
         bookmaker: bookmaker || undefined,
         ...range,
         page,
-        limit: 25,
+        limit,
       });
       const data = unwrap<{ items: BetDTO[]; total: number; totalPages: number }>(r, { items: [], total: 0, totalPages: 1 });
       setBets(data.items || []);
       setTotalPages(data.totalPages || 1);
+      setTotal(data.total || 0);
     } finally {
       setLoading(false);
     }
-  }, [selectedId, status, bookmaker, period, page]);
+  }, [selectedId, status, bookmaker, period, page, limit]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -88,14 +136,11 @@ export default function AnalytixApostas() {
     }
   };
 
-  // Cada perna é uma aposta individual na lista → conta pernas, não "apostas-mãe".
-  const rowCount = bets.reduce((a, b) => a + (b.legs?.length || 0), 0);
-
   return (
     <AnalytixShell
       active="apostas"
       title="Apostas"
-      subtitle={`${rowCount} aposta${rowCount === 1 ? '' : 's'} registrada${rowCount === 1 ? '' : 's'}`}
+      subtitle={`${total} aposta${total === 1 ? '' : 's'} registrada${total === 1 ? '' : 's'}`}
       actions={(
         <>
           <BankrollSelect bankrolls={bankrolls} selectedId={selectedId} onChange={onBankroll} />
@@ -145,12 +190,11 @@ export default function AnalytixApostas() {
             onEdit={setEditBet}
             onDelete={(bet, leg) => setConfirmDel({ bet, leg })}
           />
-          {totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-center gap-2">
-              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="px-3 py-1.5 rounded-lg bg-white/5 ring-1 ring-white/10 text-sm text-gray-200 disabled:opacity-40">Anterior</button>
-              <span className="text-sm text-gray-400">{page} / {totalPages}</span>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="px-3 py-1.5 rounded-lg bg-white/5 ring-1 ring-white/10 text-sm text-gray-200 disabled:opacity-40">Próxima</button>
-            </div>
+          {total > 0 && (
+            <Paginator
+              page={page} totalPages={totalPages} total={total} limit={limit}
+              onPage={setPage} onLimit={(l) => { setLimit(l); setPage(1); }}
+            />
           )}
         </>
       )}
