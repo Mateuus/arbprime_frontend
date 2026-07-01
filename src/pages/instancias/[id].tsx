@@ -7,7 +7,7 @@ import { BetInstance, BetInstanceConfig } from '@/interfaces/betinstance.interfa
 import { statusMeta, timeAgo } from '@/utils/betInstanceUi';
 import { ProxySelect } from '@/components/instancias/ProxySelect';
 import { InstanceLog } from '@/components/instancias/InstanceLog';
-import { ArrowLeft, Play, Pause, Square, Save, Loader2, Bot, Trash2, ShieldCheck, ShieldAlert, Wallet } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Square, Save, Loader2, Bot, Trash2, ShieldCheck, ShieldAlert, Wallet, RefreshCw, RotateCw, Clock, AlertTriangle } from 'lucide-react';
 
 const errMsg = (e: unknown, fb: string): string =>
   (e as { response?: { data?: { message?: string } } })?.response?.data?.message || fb;
@@ -50,6 +50,9 @@ type Tab = 'valuebet' | 'stake' | 'advanced' | 'account';
 type ClvRow = { key: string; n: number; clvAvgPct: number | null; clvPositivePct: number | null };
 type BankrollLite = { id: string; name: string; kind: string; currency: string; currentBalance: number };
 type AccountLite = { id: string; slug: string; label?: string | null; balance?: number };
+type BalanceInfo = { cash: number; betting: number; bonus: number; total: number; openBetsCount: number; openBetsBalance: number; currency: string; symbol: string; fetchedAt: number };
+type SessionInfo = { loggedAt: string; ageMs: number; maxAgeMs: number; customerId?: number };
+type BalanceResp = { balance: BalanceInfo | null; session: SessionInfo | null; live: boolean; liveError: string | null; hasSession: boolean };
 
 export default function InstanceDetailPage() {
   const router = useRouter();
@@ -74,6 +77,9 @@ export default function InstanceDetailPage() {
   const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null);
   const [testing, setTesting] = useState(false);
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [bal, setBal] = useState<BalanceResp | null>(null);
+  const [balLoading, setBalLoading] = useState(false);
+  const [renewing, setRenewing] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -135,6 +141,26 @@ export default function InstanceDetailPage() {
     try { await apiGateway.deleteInstance(id); router.push('/instancias'); } catch (e) { alert(errMsg(e, 'Falha ao remover.')); }
   };
 
+  const loadBalance = useCallback(async (live = false) => {
+    if (!id) return;
+    setBalLoading(true);
+    try {
+      const r = await apiGateway.getInstanceBalance(id, live);
+      if (r.data?.result === 1) setBal(r.data.data as BalanceResp);
+    } catch { /* silencioso */ } finally { setBalLoading(false); }
+  }, [id]);
+
+  useEffect(() => { if (tab === 'account') void loadBalance(false); }, [tab, loadBalance]);
+
+  const doRenew = async () => {
+    setRenewing(true); setMsg(null);
+    try {
+      await apiGateway.renewInstanceSession(id);
+      setMsg({ type: 'ok', text: 'Renovação solicitada — a sessão será refeita no próximo ciclo.' });
+      setTimeout(() => void loadBalance(false), 4000);
+    } catch (e) { setMsg({ type: 'err', text: errMsg(e, 'Falha ao renovar.') }); } finally { setRenewing(false); }
+  };
+
   const ensureVbBanca = async () => {
     try {
       const r = await apiGateway.ensureValuebetBankroll();
@@ -150,6 +176,13 @@ export default function InstanceDetailPage() {
   const desired = live?.desiredState ?? inst.desiredState;
   const sm = statusMeta(status);
   const running = desired === 'running';
+
+  const b = bal?.balance ?? null;
+  const sess = bal?.session ?? null;
+  const sym = b?.symbol ?? 'R$';
+  const lowBal = b != null && b.cash < cfg.minStake;
+  const renewInH = sess ? Math.max(0, (sess.maxAgeMs - sess.ageMs) / 3600000) : null;
+  const ageH = sess ? sess.ageMs / 3600000 : null;
 
   return (
     <div className="w-full px-3 sm:px-6 py-6">
@@ -312,6 +345,50 @@ export default function InstanceDetailPage() {
           )}
 
           {tab === 'account' && (
+            <>
+            <Section title="Saldo & sessão da casa">
+              {!bal?.hasSession && !balLoading ? (
+                <p className="text-[11px] text-gray-500">Sem sessão ativa. Inicie a instância para logar na casa e ler o saldo real.</p>
+              ) : (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3.5">
+                      <div className="flex items-center gap-1.5 text-[11px] text-gray-400"><Wallet size={13} /> Saldo para apostar</div>
+                      <div className={`mt-1 text-2xl font-bold tabular-nums ${lowBal ? 'text-amber-300' : 'text-emerald-300'}`}>
+                        {b ? `${sym}${b.cash.toFixed(2)}` : (balLoading ? '…' : '—')}
+                      </div>
+                      {b && (
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-gray-500">
+                          <span>Bônus {sym}{b.bonus.toFixed(2)}</span>
+                          <span>Abertas {b.openBetsCount} ({sym}{b.openBetsBalance.toFixed(2)})</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3.5">
+                      <div className="flex items-center gap-1.5 text-[11px] text-gray-400"><Clock size={13} /> Sessão</div>
+                      {sess ? (
+                        <>
+                          <div className="mt-1 text-sm text-white">Logado há <span className="font-semibold tabular-nums">{ageH! < 1 ? `${Math.round(ageH! * 60)}min` : `${ageH!.toFixed(1)}h`}</span></div>
+                          <div className="mt-0.5 text-[10px] text-gray-500">{renewInH != null && renewInH > 0 ? `renova automático em ~${renewInH.toFixed(1)}h (limite 23h da casa)` : 'renovando na próxima volta…'}{sess.customerId ? ` · id ${sess.customerId}` : ''}</div>
+                        </>
+                      ) : <div className="mt-1 text-sm text-gray-500">—</div>}
+                    </div>
+                  </div>
+                  {lowBal && (
+                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200 ring-1 ring-amber-500/30">
+                      <AlertTriangle size={14} className="mt-px shrink-0" />
+                      <span>Saldo abaixo do stake mínimo ({sym}{cfg.minStake.toFixed(2)}). A instância <b>pausa as apostas</b> até recarregar — assim não fica martelando a casa (o que gerava os erros 429/422).</span>
+                    </div>
+                  )}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button disabled={balLoading} onClick={() => loadBalance(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-200 ring-1 ring-white/10 hover:bg-white/10 disabled:opacity-50">{balLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Atualizar saldo</button>
+                    <button disabled={renewing || !bal?.hasSession} onClick={doRenew} className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-cyan-200 ring-1 ring-cyan-500/30 hover:bg-white/10 disabled:opacity-50">{renewing ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />} Renovar sessão</button>
+                    {bal?.liveError && <span className="text-[11px] text-rose-300">falha ao ler ao vivo: {bal.liveError}</span>}
+                    {b && <span className="text-[10px] text-gray-600">atualizado {timeAgo(new Date(b.fetchedAt).toISOString())}</span>}
+                  </div>
+                </>
+              )}
+            </Section>
             <Section title="Credenciais da casa">
               <p className="mb-3 text-[11px] text-gray-500">{inst.hasCredentials ? 'Login definido ✓ (mostrado abaixo). A senha fica em branco por segurança — para trocar, preencha usuário E senha.' : 'Defina usuário e senha para poder iniciar.'} Guardadas cifradas; a senha nunca é exibida.</p>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -323,6 +400,7 @@ export default function InstanceDetailPage() {
                 {test && <span className={`inline-flex items-center gap-1 text-xs ${test.ok ? 'text-emerald-300' : 'text-rose-300'}`}>{test.ok ? <ShieldCheck size={13} /> : <ShieldAlert size={13} />} {test.text}</span>}
               </div>
             </Section>
+            </>
           )}
 
           {msg && <div className={`rounded-lg px-3 py-2 text-xs ring-1 ${msg.type === 'ok' ? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30' : 'bg-rose-500/10 text-rose-300 ring-rose-500/30'}`}>{msg.text}</div>}
