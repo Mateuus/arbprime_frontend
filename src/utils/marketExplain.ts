@@ -28,6 +28,7 @@ const familyOf = (slug: string): string => {
   if (slug === 'half-time-full-time') return 'htft';
   if (slug === 'correct-score') return 'cs';
   if (slug === 'btts-both-halves') return 'btts2h';
+  if (slug.startsWith('win-both-halves')) return 'winbothhalves';
   if (slug.startsWith('win-to-nil')) return 'wintonil';
   if (slug.startsWith('both-teams-to-score')) return 'btts';
   if (slug.startsWith('draw-no-bet')) return 'dnb';
@@ -118,6 +119,30 @@ export function explainMarket(marketId: string, home = 'Casa', away = 'Fora'): M
           }
         ],
         coverage: 'Cobertura completa: ou a equipe vence sem sofrer gols, ou não (qualquer outro placar). Surebet de 2 vias (Sim + Não complementares).'
+      };
+    }
+    case 'winbothhalves': {
+      // "Vence os 2 Tempos" (win-both-halves): a equipe vence o 1º tempo E o 2º
+      // tempo, cada um contado isoladamente (gols do tempo, zerando no intervalo). Sim/Não.
+      const isAway = slug.includes('-away');
+      const team = isAway ? A : H;
+      const opp = isAway ? H : A;
+      return {
+        title: name,
+        summary: `"${team} vence os 2 tempos": ${team} precisa vencer o 1º tempo E o 2º tempo separadamente (cada tempo conta isolado — o placar zera no intervalo). Mercado de 2 vias (Sim/Não).`,
+        rows: [
+          {
+            selection: 'Sim',
+            condition: `${team} faz mais gols que ${opp} no 1º tempo E também no 2º tempo`,
+            examples: 'ex.: 1-0 no 1ºT e 1-0 no 2ºT (final 2-0)'
+          },
+          {
+            selection: 'Não',
+            condition: `${team} empata ou perde em pelo menos um dos tempos`,
+            examples: 'ex.: 0-0 no 1ºT (mesmo vencendo o 2ºT)'
+          }
+        ],
+        coverage: 'Cobertura completa: ou a equipe vence os dois tempos, ou não. Atenção: vencer o JOGO não basta — é preciso ganhar cada tempo isoladamente.'
       };
     }
     case 'dnb':

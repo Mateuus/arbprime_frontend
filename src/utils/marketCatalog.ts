@@ -137,6 +137,10 @@ export const MARKET_NAMES: Record<string, string> = {
   'win-to-nil-away:3907': 'Fora Vence a Zero',
   'win-to-nil-home-1st-half:3908': 'Casa Vence a Zero - 1º Tempo',
   'win-to-nil-away-1st-half:3909': 'Fora Vence a Zero - 1º Tempo',
+  // Vence os 2 Tempos (win-both-halves): a equipe vence o 1º E o 2º tempo
+  // separadamente (cada tempo isolado). Mercado Sim/Não.
+  'win-both-halves-home:3946': 'Casa Vence Ambos os Tempos',
+  'win-both-halves-away:3947': 'Fora Vence Ambos os Tempos',
 };
 
 // Mapa auxiliar por slug (1ª ocorrência) para fallback quando vier sem subId.

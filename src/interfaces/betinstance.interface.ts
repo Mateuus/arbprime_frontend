@@ -4,7 +4,7 @@
 
 export type DesiredState = 'running' | 'paused' | 'stopped';
 export type InstanceStatus =
-  | 'stopped' | 'starting' | 'running' | 'paused' | 'error' | 'login_failed' | 'session_expired';
+  | 'stopped' | 'starting' | 'running' | 'paused' | 'error' | 'login_failed' | 'session_expired' | 'mfa_required';
 export type DedupeScope = 'perEmission' | 'perEventSelection' | 'perEvent';
 export type StakeMode = 'kelly' | 'flat';
 export type RestartPolicy = 'always' | 'on-failure' | 'never';

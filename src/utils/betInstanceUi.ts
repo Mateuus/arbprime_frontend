@@ -18,6 +18,7 @@ export const STATUS_META: Record<string, { label: string; cls: string; dot: stri
   error: { label: 'Erro', cls: 'bg-rose-500/15 text-rose-300 ring-rose-500/40', dot: 'bg-rose-400' },
   login_failed: { label: 'Login falhou', cls: 'bg-rose-500/15 text-rose-300 ring-rose-500/40', dot: 'bg-rose-400' },
   session_expired: { label: 'Sessão caiu', cls: 'bg-amber-500/15 text-amber-300 ring-amber-500/40', dot: 'bg-amber-400' },
+  mfa_required: { label: 'Código MFA', cls: 'bg-orange-500/15 text-orange-300 ring-orange-500/40', dot: 'bg-orange-400 animate-pulse' },
 };
 
 export const statusMeta = (s: InstanceStatus | string) => STATUS_META[s] ?? STATUS_META.stopped;

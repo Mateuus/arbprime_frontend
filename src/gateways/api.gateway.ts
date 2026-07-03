@@ -1673,6 +1673,7 @@ const checkInstanceProxies = async (body: { username?: string; password?: string
 const getInstanceBalance = async (id: string, live = false) =>
   apiClient.get(`/instances/${id}/balance${live ? '?live=1' : ''}`);
 const renewInstanceSession = async (id: string) => apiClient.post(`/instances/${id}/renew`, {});
+const submitInstanceMfa = async (id: string, code: string) => apiClient.post(`/instances/${id}/mfa`, { code });
 const updateBankroll = async (id: string, data: Partial<{ name: string; initialCapital: number; currency: string; unitValue: number; commissionPct: number; isDefault: boolean; isActive: boolean }>) => apiClient.put(`/analytix/bankrolls/${id}`, data);
 const deleteBankroll = async (id: string) => apiClient.delete(`/analytix/bankrolls/${id}`);
 
@@ -1996,7 +1997,8 @@ export const apiGateway = {
     getInstanceProxies,
     checkInstanceProxies,
     getInstanceBalance,
-    renewInstanceSession
+    renewInstanceSession,
+    submitInstanceMfa
 };
     
 export default apiGateway;

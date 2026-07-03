@@ -7,7 +7,7 @@ import { BetInstance, BetInstanceConfig } from '@/interfaces/betinstance.interfa
 import { statusMeta, timeAgo } from '@/utils/betInstanceUi';
 import { ProxySelect } from '@/components/instancias/ProxySelect';
 import { InstanceLog } from '@/components/instancias/InstanceLog';
-import { ArrowLeft, Play, Pause, Square, Save, Loader2, Bot, Trash2, ShieldCheck, ShieldAlert, Wallet, RefreshCw, RotateCw, Clock, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Square, Save, Loader2, Bot, Trash2, ShieldCheck, ShieldAlert, Wallet, RefreshCw, RotateCw, Clock, AlertTriangle, KeyRound, Smartphone } from 'lucide-react';
 
 const errMsg = (e: unknown, fb: string): string =>
   (e as { response?: { data?: { message?: string } } })?.response?.data?.message || fb;
@@ -52,7 +52,9 @@ type BankrollLite = { id: string; name: string; kind: string; currency: string; 
 type AccountLite = { id: string; slug: string; label?: string | null; balance?: number };
 type BalanceInfo = { cash: number; betting: number; bonus: number; total: number; openBetsCount: number; openBetsBalance: number; currency: string; symbol: string; fetchedAt: number };
 type SessionInfo = { loggedAt: string; ageMs: number; maxAgeMs: number; customerId?: number };
-type BalanceResp = { balance: BalanceInfo | null; session: SessionInfo | null; live: boolean; liveError: string | null; hasSession: boolean };
+type MfaChallenge = { method: number; channel: number; maskedTarget: string; options: { code: number; description: string }[] };
+type MfaState = { pending: boolean; challenge?: MfaChallenge; at?: number; ageMs?: number };
+type BalanceResp = { balance: BalanceInfo | null; session: SessionInfo | null; live: boolean; liveError: string | null; hasSession: boolean; mfa?: MfaState };
 
 export default function InstanceDetailPage() {
   const router = useRouter();
@@ -80,6 +82,9 @@ export default function InstanceDetailPage() {
   const [bal, setBal] = useState<BalanceResp | null>(null);
   const [balLoading, setBalLoading] = useState(false);
   const [renewing, setRenewing] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaMsg, setMfaMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -161,6 +166,33 @@ export default function InstanceDetailPage() {
     } catch (e) { setMsg({ type: 'err', text: errMsg(e, 'Falha ao renovar.') }); } finally { setRenewing(false); }
   };
 
+  const doMfaSubmit = async () => {
+    const code = mfaCode.trim();
+    if (!code) return;
+    setMfaBusy(true); setMfaMsg(null);
+    try {
+      const r = await apiGateway.submitInstanceMfa(id, code);
+      const d = r.data?.data as { ok?: boolean; invalidCode?: boolean; expired?: boolean };
+      if (r.data?.result === 1 && d?.ok) {
+        setMfaMsg({ type: 'ok', text: 'Código confirmado — sessão criada. A instância vai retomar.' });
+        setMfaCode(''); await loadBalance(false); await load();
+      } else {
+        setMfaMsg({ type: 'err', text: d?.invalidCode ? 'Código inválido ou expirado.' : d?.expired ? 'Desafio expirou — clique em Reenviar.' : (r.data?.message || 'Falha no MFA.') });
+      }
+    } catch (e) { setMfaMsg({ type: 'err', text: errMsg(e, 'Falha ao enviar código.') }); } finally { setMfaBusy(false); }
+  };
+
+  const doMfaResend = async () => {
+    setMfaBusy(true); setMfaMsg(null);
+    try {
+      const r = await apiGateway.testInstanceLogin({ instanceId: id });
+      const d = r.data?.data as { ok?: boolean; mfaRequired?: boolean; kind?: string };
+      if (d?.ok) { setMfaMsg({ type: 'ok', text: 'Login OK — não precisou de código.' }); await loadBalance(false); await load(); }
+      else if (d?.mfaRequired) { setMfaMsg({ type: 'ok', text: 'Novo código enviado por SMS.' }); await loadBalance(false); }
+      else setMfaMsg({ type: 'err', text: `Não consegui reenviar (${d?.kind || 'erro'}).` });
+    } catch (e) { setMfaMsg({ type: 'err', text: errMsg(e, 'Falha ao reenviar.') }); } finally { setMfaBusy(false); }
+  };
+
   const ensureVbBanca = async () => {
     try {
       const r = await apiGateway.ensureValuebetBankroll();
@@ -183,6 +215,8 @@ export default function InstanceDetailPage() {
   const lowBal = b != null && b.cash < cfg.minStake;
   const renewInH = sess ? Math.max(0, (sess.maxAgeMs - sess.ageMs) / 3600000) : null;
   const ageH = sess ? sess.ageMs / 3600000 : null;
+  const mfaPending = !!bal?.mfa?.pending || status === 'mfa_required';
+  const mfaTarget = bal?.mfa?.challenge?.maskedTarget || '';
 
   return (
     <div className="w-full px-3 sm:px-6 py-6">
@@ -209,7 +243,14 @@ export default function InstanceDetailPage() {
         </div>
       </header>
 
-      {(live?.lastError || inst.lastError) && <div className="mb-4 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300 ring-1 ring-rose-500/30">⚠ {live?.lastError || inst.lastError}</div>}
+      {mfaPending && tab !== 'account' && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-orange-500/10 px-3 py-2.5 text-xs text-orange-200 ring-1 ring-orange-500/30">
+          <span className="flex items-center gap-2"><KeyRound size={15} /> Código de verificação (SMS) necessário{mfaTarget ? ` — enviado p/ ${mfaTarget}` : ''} para logar na casa.</span>
+          <button onClick={() => setTab('account')} className="shrink-0 rounded-md bg-orange-500/20 px-2.5 py-1 font-medium text-orange-100 ring-1 ring-orange-500/40 hover:bg-orange-500/30">Inserir código</button>
+        </div>
+      )}
+
+      {!mfaPending && (live?.lastError || inst.lastError) && <div className="mb-4 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300 ring-1 ring-rose-500/30">⚠ {live?.lastError || inst.lastError}</div>}
 
       <div className="grid gap-5 lg:grid-cols-3">
         {/* CONFIG */}
@@ -346,6 +387,29 @@ export default function InstanceDetailPage() {
 
           {tab === 'account' && (
             <>
+            {mfaPending && (
+              <section className="rounded-xl border border-orange-500/40 bg-orange-500/[0.07] p-4">
+                <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-orange-200"><KeyRound size={15} /> Verificação em duas etapas (MFA)</h2>
+                <p className="mb-3 text-[11px] text-orange-200/70">
+                  A Betano enviou um código {mfaTarget ? <>por SMS para <b>{mfaTarget}</b></> : 'de verificação'}. Digite-o abaixo para completar o login. O código expira em poucos minutos — se demorar, clique em <b>Reenviar</b>.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <Smartphone size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-orange-300/60" />
+                    <input
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                      onKeyDown={(e) => { if (e.key === 'Enter') void doMfaSubmit(); }}
+                      inputMode="numeric" autoComplete="one-time-code" placeholder="Código SMS"
+                      className={`${inputCls} w-40 pl-8 tracking-[0.3em] tabular-nums`}
+                    />
+                  </div>
+                  <button disabled={mfaBusy || !mfaCode.trim()} onClick={doMfaSubmit} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-400 disabled:opacity-50">{mfaBusy ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} Confirmar código</button>
+                  <button disabled={mfaBusy} onClick={doMfaResend} className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-xs font-medium text-orange-200 ring-1 ring-orange-500/30 hover:bg-white/10 disabled:opacity-50"><RefreshCw size={14} /> Reenviar</button>
+                </div>
+                {mfaMsg && <div className={`mt-2 text-xs ${mfaMsg.type === 'ok' ? 'text-emerald-300' : 'text-rose-300'}`}>{mfaMsg.text}</div>}
+              </section>
+            )}
             <Section title="Saldo & sessão da casa">
               {!bal?.hasSession && !balLoading ? (
                 <p className="text-[11px] text-gray-500">Sem sessão ativa. Inicie a instância para logar na casa e ler o saldo real.</p>
