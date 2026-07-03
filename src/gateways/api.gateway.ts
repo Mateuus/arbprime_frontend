@@ -1473,6 +1473,8 @@ export interface BetLegDTO {
   bookmakerSlug: string;
   accountId: string | null;
   houseEventId: string | null;
+  houseSelectionId?: string | null;
+  houseBetId?: string | null; // id da aposta na casa (ex.: betId da betano)
   market: string | null;
   rawMarket: string | null;
   selection: string | null;
@@ -1513,6 +1515,7 @@ export interface BetDTO {
   tags: string[];
   notes: string | null;
   source: string;
+  instanceId?: string | null;
   hidden: boolean;
   legs: BetLegDTO[];
   settledAt: string | null;

@@ -84,6 +84,14 @@ function MarketCell({ leg }: { leg: BetLegDTO }) {
         <span className="truncate">{sel}</span>
       </div>
       {mkt && <div className="text-[11px] text-gray-500 truncate max-w-[200px]">{mkt}</div>}
+      {leg.houseBetId && (
+        <button
+          type="button"
+          onClick={() => { void navigator.clipboard?.writeText(String(leg.houseBetId)); }}
+          title="ID da aposta na casa — clique p/ copiar"
+          className="mt-0.5 font-mono text-[10px] text-gray-600 hover:text-teal-300 transition"
+        >#{leg.houseBetId}</button>
+      )}
     </div>
   );
 }
