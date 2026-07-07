@@ -250,7 +250,14 @@ export default function InstanceDetailPage() {
         </div>
       )}
 
-      {!mfaPending && (live?.lastError || inst.lastError) && <div className="mb-4 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300 ring-1 ring-rose-500/30">⚠ {live?.lastError || inst.lastError}</div>}
+      {status === 'terms_required' && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg bg-orange-500/10 px-3 py-2.5 text-xs text-orange-200 ring-1 ring-orange-500/30">
+          <AlertTriangle size={15} className="shrink-0" />
+          <span>A Betano exige <b>aceitar os termos / aviso de privacidade</b> antes de apostar. Abra a Betano, clique em <b>Aceitar</b> no aviso, e reinicie a instância.</span>
+        </div>
+      )}
+
+      {!mfaPending && status !== 'terms_required' && (live?.lastError || inst.lastError) && <div className="mb-4 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300 ring-1 ring-rose-500/30">⚠ {live?.lastError || inst.lastError}</div>}
 
       <div className="grid gap-5 lg:grid-cols-3">
         {/* CONFIG */}
