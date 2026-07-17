@@ -17,6 +17,13 @@ class WSManager {
   private token = 'anonymous';
   private activeUnsub: (() => void) | null = null;
 
+  // Resiliência de reconexão (mobile: a rede oscila e a aba vai a background).
+  private wantConnected = false;                 // queremos estar conectados?
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private openTimer: ReturnType<typeof setTimeout> | null = null;
+  private retries = 0;                           // p/ backoff exponencial
+  private netListenersBound = false;
+
   /** Base do WS é resolvida pelo servidor ativo (failover/seleção). */
   private get urlBase() {
     return serverManager.getWsBase() || process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'ws://localhost:8080';
@@ -56,10 +63,26 @@ class WSManager {
     }
 
     this.token = token;
+    this.wantConnected = true;
+    this.bindNetListeners();
     const ws = new WebSocket(`${this.urlBase}?token=${encodeURIComponent(token)}`);
     this.ws = ws;
 
+    // Watchdog do handshake: se o socket não ABRIR em 12s (rede móvel presa,
+    // captive portal, servidor mudo), derruba e reagenda — senão a página fica
+    // "Carregando..." pra sempre. Só cobre o handshake: a mensagem grande (5MB
+    // dos surebets) chega DEPOIS do open, então um download lento não dispara.
+    if (this.openTimer) clearTimeout(this.openTimer);
+    this.openTimer = setTimeout(() => {
+      if (this.ws === ws && ws.readyState !== WebSocket.OPEN) {
+        this.closeSocket();
+        this.scheduleReconnect();
+      }
+    }, 12000);
+
     ws.onopen = () => {
+      if (this.openTimer) { clearTimeout(this.openTimer); this.openTimer = null; }
+      this.retries = 0; // conexão boa → zera o backoff
       // (Re)inscreve as assinaturas e descarrega a fila avulsa.
       this.sticky.forEach((msg) => this.rawSend(msg));
       const pending = this.outbox;
@@ -73,8 +96,44 @@ class WSManager {
       this.listeners.forEach((cb) => cb(msg));
     };
 
-    ws.onclose = () => { /* mantém sticky/listeners para reconectar */ };
-    ws.onerror = () => { /* silencioso: o navegador já loga */ };
+    // Caiu (troca wifi↔4G, tela apagou, servidor reiniciou): reconecta com
+    // backoff enquanto quisermos estar conectados. Mantém sticky/listeners.
+    ws.onclose = () => {
+      if (this.ws === ws) this.ws = null;
+      if (this.openTimer) { clearTimeout(this.openTimer); this.openTimer = null; }
+      this.scheduleReconnect();
+    };
+    ws.onerror = () => { /* silencioso: o navegador já loga; o onclose reagenda */ };
+  }
+
+  /** Reagenda a reconexão com backoff exponencial (cap 15s). */
+  private scheduleReconnect() {
+    if (!this.wantConnected || this.reconnectTimer || this.isOpen) return;
+    const delay = Math.min(1000 * 2 ** this.retries, 15000);
+    this.retries++;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.wantConnected && !this.isOpen) this.connect(this.token);
+    }, delay);
+  }
+
+  /** Reconecta JÁ (rede voltou / aba ficou visível), zerando o backoff. */
+  private kick = () => {
+    if (!this.wantConnected || this.isOpen) return;
+    if (this.ws && this.ws.readyState === WebSocket.CONNECTING) return; // já a caminho
+    this.retries = 0;
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    this.connect(this.token);
+  };
+
+  /** Reconecta ao voltar de background (celular) ou quando a rede volta (1x). */
+  private bindNetListeners() {
+    if (this.netListenersBound || typeof window === 'undefined') return;
+    this.netListenersBound = true;
+    window.addEventListener('online', this.kick);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') this.kick();
+    });
   }
 
   public reconnect(newToken: string) {
@@ -127,6 +186,7 @@ class WSManager {
 
   /** Fecha o socket atual mantendo listeners/sticky (para reconexão). */
   private closeSocket() {
+    if (this.openTimer) { clearTimeout(this.openTimer); this.openTimer = null; }
     if (this.ws) {
       this.ws.onopen = this.ws.onmessage = this.ws.onclose = this.ws.onerror = null;
       try { this.ws.close(); } catch { /* noop */ }
@@ -136,6 +196,8 @@ class WSManager {
 
   /** Teardown completo (logout): fecha e limpa tudo. */
   public disconnect() {
+    this.wantConnected = false; // desliga a reconexão automática (logout)
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
     this.closeSocket();
     this.listeners = [];
     this.sticky.clear();

@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { GiHomeGarage, GiWallet, GiCoins, GiSoccerBall } from 'react-icons/gi';
-import { Gift, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags, CreditCard, Receipt, ServerCog, Flag, Wallet, ListChecks, Gem, LineChart, SlidersHorizontal, Handshake, Ticket, ClipboardCheck, Activity, Split, Bot } from 'lucide-react';
+import { Gift, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags, CreditCard, Receipt, ServerCog, Flag, Wallet, ListChecks, Gem, LineChart, SlidersHorizontal, Handshake, Ticket, ClipboardCheck, Activity, Split, Bot, Rocket } from 'lucide-react';
 import { useMemo } from 'react';
 import { ReactNode } from 'react';
 import { useUserContext } from '@/context/UserContext';
@@ -13,6 +13,7 @@ export interface MenuSubItem {
   onClick?: () => void;
   requiresAuth?: boolean;
   adminOnly?: boolean;
+  minLevel?: number; // nível de plano mínimo (ver MenuItem.minLevel)
 }
 
 export interface MenuItem {
@@ -24,6 +25,9 @@ export interface MenuItem {
   requiresAuth?: boolean;
   adminOnly?: boolean;
   affiliateOnly?: boolean; // só aparece para quem é afiliado
+  // Nível de plano mínimo p/ ver o item (user.level, que vem do plano ativo).
+  // Só ESCONDE o menu — quem protege o recurso é o backend (requireLevel).
+  minLevel?: number;
   button?: boolean;
   header?: boolean; // rótulo de seção (não clicável), ex.: "PLATAFORMA"
   subItems?: MenuSubItem[];
@@ -34,6 +38,10 @@ export const useMenuItems = (): MenuItem[] => {
   const { isAuthenticated, user } = useUserContext();
   const isAdmin = user?.role === 'admin';
   const isAffiliate = !!user?.isAffiliate;
+  // Nível do plano ativo (0 = sem plano). O backend o mantém sincronizado em
+  // /user/info (resolveUserAccess), e o UserProvider repolla a cada 5min — ou
+  // seja, um upgrade libera o item sem precisar relogar.
+  const level = user?.level ?? 0;
 
   return useMemo(() => {
     const allItems: MenuItem[] = [
@@ -258,6 +266,15 @@ export const useMenuItems = (): MenuItem[] => {
         requiresAuth: true,
         onClick: () => router.push('/instancias')
       },
+      {
+        id: 'nodelay',
+        name: 'NoDelay',
+        path: '/nodelay',
+        icon: <Rocket size={22} />,
+        requiresAuth: true,
+        minLevel: 3, // exclusivo do nível 3 (backend valida em requireLevel)
+        onClick: () => router.push('/nodelay')
+      },
 
       // ===================== ADMIN =====================
       {
@@ -471,17 +488,20 @@ export const useMenuItems = (): MenuItem[] => {
       },
     ];
 
+    // Admin enxerga tudo: o nível é sobre plano pago, não sobre permissão.
+    const hasLevel = (min?: number) => !min || isAdmin || level >= min;
+
     return allItems
-      .filter(item => (!item.requiresAuth || isAuthenticated) && (!item.adminOnly || isAdmin) && (!item.affiliateOnly || isAffiliate))
+      .filter(item => (!item.requiresAuth || isAuthenticated) && (!item.adminOnly || isAdmin) && (!item.affiliateOnly || isAffiliate) && hasLevel(item.minLevel))
       .map(item => {
         if (item.subItems) {
           const filteredSubItems = item.subItems.filter(
-            sub => (!sub.requiresAuth || isAuthenticated) && (!sub.adminOnly || isAdmin)
+            sub => (!sub.requiresAuth || isAuthenticated) && (!sub.adminOnly || isAdmin) && hasLevel(sub.minLevel)
           );
           return { ...item, subItems: filteredSubItems };
         }
         return item;
       });
 
-  }, [isAuthenticated, isAdmin, isAffiliate, router]);
+  }, [isAuthenticated, isAdmin, isAffiliate, level, router]);
 };

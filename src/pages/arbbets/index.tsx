@@ -35,6 +35,13 @@ const fieldBase =
   'focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500/50 transition';
 const inputClass = `w-full ${fieldBase}`;
 
+// Quantos cards renderizar por vez. O feed de surebets passa de 1500 itens
+// (5MB+ no fio a cada 5s); montar TODOS de uma vez trava a main thread no
+// celular ("aperta e a página não abre"). Renderizamos em blocos e o usuário
+// puxa o resto com "Carregar mais". A lista completa segue alimentando
+// alertas/contadores — o corte é só de RENDER.
+const PAGE_SIZE = 60;
+
 // Ícone do "mercado na casa" (rawMarket). Hover mostra o nome cru; CLIQUE copia
 // p/ colar e achar o mercado rápido no site da casa. Vira ✓ por 1s ao copiar.
 function CopyRawButton({ rawMarket, rawSelection }: { rawMarket: string; rawSelection?: string }) {
@@ -802,6 +809,14 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
   );
 
   const totalSurebets = flat.length;
+
+  // Paginação de RENDER: monta só `visibleCount` cards por vez. "Carregar mais"
+  // aumenta o bloco. Sem isso, os ~1600 cards de uma vez congelam o celular.
+  // (Não zeramos ao trocar filtro de propósito: `flat` já reordena e re-fatia do
+  // topo, então manter a contagem é inofensivo e evita render/efeito extra.)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const visible = useMemo(() => flat.slice(0, visibleCount), [flat, visibleCount]);
+
   const activeFilters = [sport, country, league, selectedMarkets.size > 0, bookmaker, (parseFloat(profitMin) || 0) > 0, legCounts.size > 0].filter(Boolean).length;
   const clearFilters = () => { setSport(''); setCountry(''); setLeague(''); setSelectedMarkets(new Set()); setBookmaker(''); setProfitMin(profitDefault); setLegCounts(new Set()); };
 
@@ -1086,8 +1101,9 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
           <p className="text-gray-400">Nenhuma {isDG ? 'oportunidade Duplo Green' : `surebet ${type === 'live' ? 'ao vivo' : 'pré-jogo'}`} para os filtros aplicados.</p>
         </div>
       ) : (view === 'surebets' || isDG) ? (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-2">
-          {flat.map(({ event, sb }, i) => {
+          {visible.map(({ event, sb }, i) => {
             const key = surebetKey(event, sb);
             const isNew = newKeys.has(key);
             const led = isNew && notif.settings.ledEffect;
@@ -1114,6 +1130,19 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
             );
           })}
         </div>
+        {visibleCount < flat.length && (
+          <div className="mt-4 flex flex-col items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              className="rounded-lg border border-teal-500/40 bg-teal-500/15 px-5 py-2 text-sm font-medium text-teal-200 hover:bg-teal-500/25 transition"
+            >
+              Carregar mais
+            </button>
+            <span className="text-[11px] text-gray-500">Mostrando {visible.length} de {flat.length}</span>
+          </div>
+        )}
+        </>
       ) : (
         // Por evento: lista compacta mostrando só a MELHOR surebet; +N abre modal com todas.
         // TODO: respeitar o plano da conta (não-pago: só surebets >= 1%). Desativado por enquanto.

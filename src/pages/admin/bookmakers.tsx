@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiGateway, BookmakerDTO, UpsertBookmakerDTO } from '@/gateways/api.gateway';
-import { Store, Plus, RefreshCcw, Pencil, Trash2, X, Search, CheckCircle2, XCircle, ChevronRight, ChevronLeft, ImagePlus } from 'lucide-react';
+import { Store, Plus, RefreshCcw, Pencil, Trash2, X, Search, CheckCircle2, XCircle, ChevronRight, ChevronLeft, ImagePlus, Rocket } from 'lucide-react';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
 import { CommissionBadge } from '@/components/bookmaker/CommissionBadge';
 import { Select } from '@/components/ui/Select';
@@ -21,8 +21,27 @@ interface BookmakerForm {
   cloneOf: string;
   sortOrder: string;
   commissionPct: string;
+  // NoDelay: liga a casa na aposta rápida + como o browser conecta nela.
+  noDelayEnabled: boolean;
+  noDelayPlatform: string;
+  noDelayWssUrl: string;
+  noDelayRogueUrl: string;
+  noDelayOrigin: string;
+  noDelaySiteId: string;
+  noDelaySource: string;
+  noDelayLanguage: string;
 }
-const emptyForm: BookmakerForm = { slug: '', name: '', logoUrl: '', color: '', url: '', cloneOf: '', sortOrder: '0', commissionPct: '' };
+const emptyForm: BookmakerForm = {
+  slug: '', name: '', logoUrl: '', color: '', url: '', cloneOf: '', sortOrder: '0', commissionPct: '',
+  noDelayEnabled: false, noDelayPlatform: '', noDelayWssUrl: '', noDelayRogueUrl: '', noDelayOrigin: '', noDelaySiteId: '', noDelaySource: '', noDelayLanguage: ''
+};
+
+// Famílias de login suportadas pelo NoDelay. Casas da mesma família falam o
+// mesmo protocolo e só mudam a wssUrl — por isso é uma lista, não um campo livre.
+const NODELAY_PLATFORMS = [
+  { value: '', label: 'Nenhuma' },
+  { value: 'swarm', label: 'WebSocket (swarm) — 7games, betão, 7k, apostatudo' }
+];
 
 const errorMessage = (e: unknown, fallback: string): string => {
   const resp = (e as { response?: { data?: { message?: string } } })?.response;
@@ -74,7 +93,19 @@ const AdminBookmakersPage = () => {
   const openAdd = () => { setEditing(null); setForm(emptyForm); setModalOpen(true); };
   const openEdit = (b: BookmakerDTO) => {
     setEditing(b);
-    setForm({ slug: b.slug, name: b.name, logoUrl: b.logoUrl || '', color: b.color || '', url: b.url || '', cloneOf: b.cloneOf || '', sortOrder: String(b.sortOrder ?? 0), commissionPct: b.commissionPct != null ? String(b.commissionPct) : '' });
+    const nd = b.noDelayConfig || {};
+    setForm({
+      slug: b.slug, name: b.name, logoUrl: b.logoUrl || '', color: b.color || '', url: b.url || '', cloneOf: b.cloneOf || '',
+      sortOrder: String(b.sortOrder ?? 0), commissionPct: b.commissionPct != null ? String(b.commissionPct) : '',
+      noDelayEnabled: !!b.noDelayEnabled,
+      noDelayPlatform: b.noDelayPlatform || '',
+      noDelayWssUrl: nd.wssUrl || '',
+      noDelayRogueUrl: nd.rogueUrl || '',
+      noDelayOrigin: nd.origin || '',
+      noDelaySiteId: nd.siteId || '',
+      noDelaySource: nd.source != null ? String(nd.source) : '',
+      noDelayLanguage: nd.language || ''
+    });
     setModalOpen(true);
   };
 
@@ -86,6 +117,7 @@ const AdminBookmakersPage = () => {
     setSaving(true);
     try {
       const comm = parseFloat(form.commissionPct.replace(',', '.'));
+      const src = parseInt(form.noDelaySource, 10);
       const payload: UpsertBookmakerDTO = {
         slug: form.slug.trim(),
         name: form.name.trim(),
@@ -94,6 +126,18 @@ const AdminBookmakersPage = () => {
         url: form.url.trim() || null,
         cloneOf: form.cloneOf.trim() || null,
         commissionPct: Number.isFinite(comm) ? comm : null,
+        noDelayEnabled: form.noDelayEnabled,
+        noDelayPlatform: form.noDelayPlatform || null,
+        noDelayConfig: form.noDelayPlatform
+          ? {
+              wssUrl: form.noDelayWssUrl.trim() || null,
+              rogueUrl: form.noDelayRogueUrl.trim() || null,
+              origin: form.noDelayOrigin.trim() || null,
+              siteId: form.noDelaySiteId.trim() || null,
+              source: Number.isFinite(src) ? src : null,
+              language: form.noDelayLanguage.trim() || null
+            }
+          : null,
         sortOrder: Number(form.sortOrder) || 0
       };
       if (editing) {
@@ -237,6 +281,11 @@ const AdminBookmakersPage = () => {
           {!!cloneCount && (
             <span className="shrink-0 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-300 ring-1 ring-violet-500/30">
               {cloneCount} {cloneCount === 1 ? 'clone' : 'clones'}
+            </span>
+          )}
+          {b.noDelayEnabled && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-lime-500/15 px-1.5 py-0.5 text-[10px] font-medium text-lime-300 ring-1 ring-lime-500/30" title="Liberada no NoDelay">
+              <Rocket size={9} /> NoDelay
             </span>
           )}
         </div>
@@ -389,16 +438,23 @@ const AdminBookmakersPage = () => {
       {/* Modal Adicionar/Editar */}
       {modalOpen && (
         <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div onPaste={handleLogoPaste} className="bg-brand-dark border border-white/10 w-full max-w-md rounded-2xl p-6 relative shadow-2xl">
-            <button onClick={() => setModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-rose-400"><X size={20} /></button>
-            <h2 className="text-lg font-bold text-white mb-5">{editing ? 'Editar casa' : 'Cadastrar casa'}</h2>
+          {/* Altura travada + só o miolo rola: com a seção do NoDelay o form
+              passou da tela e o "Salvar" ficava inalcançável. */}
+          <div onPaste={handleLogoPaste} className="bg-brand-dark border border-white/10 w-full max-w-md rounded-2xl relative shadow-2xl flex flex-col max-h-[90dvh]">
+            <button onClick={() => setModalOpen(false)} className="absolute top-4 right-4 z-10 text-gray-400 hover:text-rose-400"><X size={20} /></button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <BookmakerLogo name={form.name} slug={form.slug} logoUrl={form.logoUrl || null} color={form.color || null} size={48} />
-              <span className="font-bold" style={{ color: form.color || '#ffffff' }}>{form.name || 'Pré-visualização'}</span>
+            {/* Cabeçalho fixo */}
+            <div className="shrink-0 px-6 pt-6 pb-4">
+              <h2 className="text-lg font-bold text-white mb-4">{editing ? 'Editar casa' : 'Cadastrar casa'}</h2>
+              <div className="flex items-center gap-3">
+                <BookmakerLogo name={form.name} slug={form.slug} logoUrl={form.logoUrl || null} color={form.color || null} size={48} />
+                <span className="font-bold" style={{ color: form.color || '#ffffff' }}>{form.name || 'Pré-visualização'}</span>
+              </div>
             </div>
 
-            <div className="space-y-3">
+            {/* Miolo rolável */}
+            <div className="flex-1 overflow-y-auto px-6 pb-1">
+              <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-xs text-gray-400">
                   Slug <span className="text-gray-600">(arbbetting)</span>
@@ -480,9 +536,81 @@ const AdminBookmakersPage = () => {
                   ]}
                 />
               </div>
+
+              {/* ---- NoDelay ---- */}
+              <div className="rounded-xl border border-lime-500/20 bg-lime-500/[0.04] p-3">
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-sm font-semibold text-lime-200">
+                      <Rocket size={14} /> NoDelay
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-gray-500">
+                      Libera esta casa na aposta rápida (nível 3). O login roda no navegador do usuário.
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, noDelayEnabled: !form.noDelayEnabled })}
+                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${form.noDelayEnabled ? 'bg-lime-500' : 'bg-white/15'}`}
+                    title={form.noDelayEnabled ? 'Desativar NoDelay' : 'Ativar NoDelay'}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${form.noDelayEnabled ? 'translate-x-4' : 'translate-x-1'}`} />
+                  </button>
+                </label>
+
+                {form.noDelayEnabled && (
+                  <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
+                    <div className="block text-xs text-gray-400">
+                      Plataforma de login
+                      <Select
+                        className="mt-1"
+                        value={form.noDelayPlatform}
+                        onChange={(v) => setForm({ ...form, noDelayPlatform: v })}
+                        options={NODELAY_PLATFORMS}
+                      />
+                    </div>
+
+                    {form.noDelayPlatform === 'swarm' && (
+                      <>
+                        <label className="block text-xs text-gray-400">
+                          Endereço do WebSocket <span className="text-gray-600">(conta/login)</span>
+                          <input value={form.noDelayWssUrl} onChange={(e) => setForm({ ...form, noDelayWssUrl: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="wss://swarm.7games.bet.br/" />
+                        </label>
+                        <label className="block text-xs text-gray-400">
+                          Host da rogue/FSB <span className="text-gray-600">(odds + place)</span>
+                          <input value={form.noDelayRogueUrl} onChange={(e) => setForm({ ...form, noDelayRogueUrl: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="https://prod20563.fssb.io" />
+                          <span className="mt-1 block text-[11px] text-gray-500">É POR CASA (7games=prod20563, betão=prod20562). E o <b>Origin</b> abaixo = operador (ex.: https://betao.bet.br) — dele sai o token.</span>
+                        </label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className="text-xs text-gray-400">
+                            site_id <span className="text-gray-600">(obrigatório)</span>
+                            <input value={form.noDelaySiteId} onChange={(e) => setForm({ ...form, noDelaySiteId: e.target.value })} inputMode="numeric" className={`${inputClass} mt-1 font-mono`} placeholder="ex.: 18751367" />
+                          </label>
+                          <label className="text-xs text-gray-400">
+                            source <span className="text-gray-600">(padrão 42)</span>
+                            <input value={form.noDelaySource} onChange={(e) => setForm({ ...form, noDelaySource: e.target.value })} inputMode="numeric" className={`${inputClass} mt-1 font-mono`} placeholder="42" />
+                          </label>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className="text-xs text-gray-400">
+                            Idioma <span className="text-gray-600">(padrão pt-br)</span>
+                            <input value={form.noDelayLanguage} onChange={(e) => setForm({ ...form, noDelayLanguage: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="pt-br" />
+                          </label>
+                          <label className="text-xs text-gray-400">
+                            Origin <span className="text-gray-600">(informativo)</span>
+                            <input value={form.noDelayOrigin} onChange={(e) => setForm({ ...form, noDelayOrigin: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="https://7games.bet.br" />
+                          </label>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+              </div>
             </div>
 
-            <div className="flex justify-end gap-2 mt-6">
+            {/* Rodapé fixo — o Salvar nunca sai da tela */}
+            <div className="shrink-0 flex justify-end gap-2 border-t border-white/10 px-6 py-4">
               <button onClick={() => setModalOpen(false)} className="text-sm px-4 py-2 rounded-lg text-gray-300 hover:bg-white/5">Cancelar</button>
               <button onClick={handleSave} disabled={saving} className="text-sm px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-slate-900 font-semibold">
                 {saving ? 'Salvando...' : 'Salvar'}

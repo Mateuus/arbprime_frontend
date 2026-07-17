@@ -325,6 +325,16 @@ const getExternalEventOdds = async (bookmaker: string, eventId: string) => {
 
 // ==================== BOOKMAKERS (casas de aposta) ====================
 
+/** Config do NoDelay por casa (admin). Casas da mesma plataforma só mudam a wssUrl. */
+export interface NoDelayBookmakerConfigDTO {
+  wssUrl?: string | null;
+  rogueUrl?: string | null;
+  origin?: string | null;
+  siteId?: string | null;
+  source?: number | null;
+  language?: string | null;
+}
+
 export interface BookmakerDTO {
   id: string;
   slug: string;
@@ -335,6 +345,9 @@ export interface BookmakerDTO {
   cloneOf: string | null;
   commissionPct: number | null;
   isActive: boolean;
+  noDelayEnabled: boolean;
+  noDelayPlatform: string | null;
+  noDelayConfig: NoDelayBookmakerConfigDTO | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -382,6 +395,9 @@ export interface UpsertBookmakerDTO {
   cloneOf?: string | null;
   commissionPct?: number | null;
   isActive?: boolean;
+  noDelayEnabled?: boolean;
+  noDelayPlatform?: string | null;
+  noDelayConfig?: NoDelayBookmakerConfigDTO | null;
   sortOrder?: number;
 }
 
@@ -1677,6 +1693,38 @@ const getInstanceBalance = async (id: string, live = false) =>
   apiClient.get(`/instances/${id}/balance${live ? '?live=1' : ''}`);
 const renewInstanceSession = async (id: string) => apiClient.post(`/instances/${id}/renew`, {});
 const submitInstanceMfa = async (id: string, code: string) => apiClient.post(`/instances/${id}/mfa`, { code });
+
+// ---- NoDelay (aposta rápida multi-conta) ----
+// Só cofre/registro: quem conecta na casa é o browser (services/nodelay/swarmClient).
+const getNoDelayBookmakers = async () => apiClient.get('/nodelay/bookmakers');
+const getNoDelayAccounts = async (bookmakerSlug?: string) =>
+  apiClient.get(`/nodelay/accounts${bookmakerSlug ? `?bookmakerSlug=${encodeURIComponent(bookmakerSlug)}` : ''}`);
+const createNoDelayAccount = async (body: { bookmakerSlug: string; username: string; password: string; label?: string }) =>
+  apiClient.post('/nodelay/accounts', body);
+const updateNoDelayAccount = async (id: string, body: Partial<{ label: string | null; username: string; password: string; isActive: boolean }>) =>
+  apiClient.put(`/nodelay/accounts/${id}`, body);
+const deleteNoDelayAccount = async (id: string) => apiClient.delete(`/nodelay/accounts/${id}`);
+// Senha em claro p/ o browser logar — só chamar na hora de conectar.
+const getNoDelayCredentials = async (id: string) => apiClient.get(`/nodelay/accounts/${id}/credentials`);
+// Tokens de todas as contas p/ revalidar via restore_login (botão Atualizar).
+const getNoDelaySessions = async () => apiClient.get('/nodelay/sessions');
+// Token anônimo da rogue p/ o browser ler odds ao vivo direto da casa (por casa).
+const getRogueToken = async (slug: string) => apiClient.get(`/nodelay/rogue/token?slug=${encodeURIComponent(slug)}`);
+// Instâncias (workspace do NoDelay).
+const getNoDelayInstances = async () => apiClient.get('/nodelay/instances');
+const getNoDelayInstance = async (id: string) => apiClient.get(`/nodelay/instances/${id}`);
+const createNoDelayInstance = async (body: { name?: string; houseSlugs?: string[] }) => apiClient.post('/nodelay/instances', body);
+const updateNoDelayInstance = async (id: string, body: { name?: string; houseSlugs?: string[] }) => apiClient.put(`/nodelay/instances/${id}`, body);
+const deleteNoDelayInstance = async (id: string) => apiClient.delete(`/nodelay/instances/${id}`);
+// Token LOGADO da conta p/ o browser apostar direto na rogue (placeBets).
+const getAccountRogueToken = async (id: string) => apiClient.get(`/nodelay/accounts/${id}/rogue-token`);
+const saveNoDelaySession = async (id: string, body: { externalUserId?: string; authToken: string; jweToken?: string | null; balance?: number; currency?: string }) =>
+  apiClient.post(`/nodelay/accounts/${id}/session`, body);
+const clearNoDelaySession = async (id: string) => apiClient.delete(`/nodelay/accounts/${id}/session`);
+const setNoDelayStatus = async (id: string, status: string, error?: string) =>
+  apiClient.post(`/nodelay/accounts/${id}/status`, { status, error });
+const saveNoDelayBalance = async (id: string, balance: number, currency?: string) =>
+  apiClient.post(`/nodelay/accounts/${id}/balance`, { balance, currency });
 const updateBankroll = async (id: string, data: Partial<{ name: string; initialCapital: number; currency: string; unitValue: number; commissionPct: number; isDefault: boolean; isActive: boolean }>) => apiClient.put(`/analytix/bankrolls/${id}`, data);
 const deleteBankroll = async (id: string) => apiClient.delete(`/analytix/bankrolls/${id}`);
 
@@ -2001,7 +2049,26 @@ export const apiGateway = {
     checkInstanceProxies,
     getInstanceBalance,
     renewInstanceSession,
-    submitInstanceMfa
+    submitInstanceMfa,
+    // NoDelay
+    getNoDelayBookmakers,
+    getNoDelayInstances,
+    getNoDelayInstance,
+    createNoDelayInstance,
+    updateNoDelayInstance,
+    deleteNoDelayInstance,
+    getNoDelayAccounts,
+    createNoDelayAccount,
+    updateNoDelayAccount,
+    deleteNoDelayAccount,
+    getNoDelayCredentials,
+    getNoDelaySessions,
+    getRogueToken,
+    getAccountRogueToken,
+    saveNoDelaySession,
+    clearNoDelaySession,
+    setNoDelayStatus,
+    saveNoDelayBalance
 };
     
 export default apiGateway;
