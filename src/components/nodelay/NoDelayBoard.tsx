@@ -44,7 +44,9 @@ export function NoDelayBoard({ markets, changed, k, onFire }: Props) {
   };
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-2">
+    // Grid que ENVELOPA (não slide lateral): 1 col no celular, 2 no tablet, 4 no
+    // desktop. items-start = cada coluna com altura do próprio conteúdo.
+    <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {board.columns.map((col, idx) => (
         <Column
           key={col.id}
@@ -101,7 +103,7 @@ function Column({
 
   return (
     <div
-      className={`flex w-72 shrink-0 flex-col rounded-xl border bg-white/[0.02] transition ${over ? 'border-lime-500/60 bg-lime-500/[0.06]' : 'border-white/10'}`}
+      className={`flex flex-col rounded-xl border bg-white/[0.02] transition ${over ? 'border-lime-500/60 bg-lime-500/[0.06]' : 'border-white/10'}`}
       onDragOver={(e) => { e.preventDefault(); onDragOverCol(); }}
       onDrop={(e) => { e.preventDefault(); onDropCol(); }}
     >
@@ -243,7 +245,7 @@ function AddColumn({ onAdd }: { onAdd: (name: string) => void }) {
   const [name, setName] = useState('');
   const save = () => { const v = name.trim(); if (v) onAdd(v); setName(''); setAdding(false); };
   return (
-    <div className="w-56 shrink-0">
+    <div className="self-start">
       {adding ? (
         <div className="rounded-xl border border-lime-500/40 bg-white/[0.03] p-2">
           <input
