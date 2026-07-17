@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { NoDelayBookmaker } from '@/interfaces/nodelay.interface';
 import { openEventStream, RogueOp } from '@/services/nodelay/rogueClient';
 import {
-  eventToDetail, applyRogueDelta, applyEventDelta, LiveGameDetail,
+  eventToDetail, applyRogueDelta, applyEventDelta, removeMarket, LiveGameDetail,
 } from '@/services/nodelay/rogueModel';
 
 /**
@@ -113,6 +113,13 @@ export function useInstanceLiveEvent(houses: NoDelayBookmaker[], eventId: string
             continue;
           }
           if (!cur) continue;
+
+          // Mercado removido pela casa (encerrou/some) → tira do detalhe, não deixa preso.
+          if (op.Operation === 'delete' && type === 'market') {
+            const mid = String((op.Reference as Rec | undefined)?.MarketId ?? cs?._id ?? '');
+            if (mid) cur = removeMarket(cur, mid);
+            continue;
+          }
 
           if (type === 'market') {
             const { next, changed: ids } = applyRogueDelta(cur, op);

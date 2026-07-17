@@ -286,6 +286,13 @@ export function applyRogueDelta(
   return { next: { ...detail, markets }, changed };
 }
 
+/** Remove um mercado do detalhe (op `delete` de market — mercado encerrado/some). */
+export function removeMarket(detail: LiveGameDetail, marketId: string): LiveGameDetail {
+  if (!marketId) return detail;
+  const markets = detail.markets.filter((m) => m.id !== marketId);
+  return markets.length === detail.markets.length ? detail : { ...detail, markets };
+}
+
 /**
  * Aplica um delta de EVENTO (placar/relógio). A rogue manda updates de
  * `Type:"event"` com o LiveGameState/Score no Changeset.

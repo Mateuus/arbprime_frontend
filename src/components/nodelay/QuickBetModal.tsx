@@ -105,11 +105,14 @@ export function QuickBetModal({
   const score = scoreOf(detail);
   const clock = clockOf(detail);
   const eventName = `${detail.home} x ${detail.away}`;
+  // No cockpit de disparo só entram mercados APOSTÁVEIS AGORA: suspenso, sem odd
+  // ou encerrado NÃO fica preso ocupando espaço — some e volta sozinho quando a
+  // odd reabre. (O cadeado do lance perigoso continua no board do evento.)
   const favMarkets = useMemo(
     () => filterMarkets(detail.markets.filter((m) => favorites.has(m.name)), {
       delayTradeOnly: settings.delayTradeOnly,
       hidePriceless: settings.hidePriceless,
-    }),
+    }).filter((m) => !m.suspended && m.selections.some((s) => !s.disabled && s.price > 0)),
     [detail.markets, favorites, settings.delayTradeOnly, settings.hidePriceless],
   );
 
@@ -401,10 +404,19 @@ export function QuickBetModal({
             {favMarkets.length === 0 ? (
               <div className="grid place-items-center py-10 text-center">
                 <Star className="text-gray-600" size={30} />
-                <p className="mt-3 text-sm text-gray-400">Nenhum mercado favoritado ainda.</p>
-                <p className="mx-auto mt-1 max-w-xs text-xs text-gray-600">
-                  Toque na <Star size={11} className="inline text-lime-300" /> de um mercado (nas odds) para deixá-lo aqui.
-                </p>
+                {favorites.size > 0 ? (
+                  <>
+                    <p className="mt-3 text-sm text-gray-400">Favoritos suspensos ou sem odd agora.</p>
+                    <p className="mx-auto mt-1 max-w-xs text-xs text-gray-600">Voltam sozinhos assim que a casa reabrir a odd.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-3 text-sm text-gray-400">Nenhum mercado favoritado ainda.</p>
+                    <p className="mx-auto mt-1 max-w-xs text-xs text-gray-600">
+                      Toque na <Star size={11} className="inline text-lime-300" /> de um mercado (nas odds) para deixá-lo aqui.
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="gap-3 [column-fill:_balance] columns-1 sm:columns-2 lg:columns-3 xl:columns-4">
