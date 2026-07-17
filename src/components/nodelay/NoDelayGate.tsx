@@ -41,7 +41,7 @@ export function NoDelayGate({ authLoading, isAuthenticated, denied, children }: 
     return (
       <Card
         icon={<Lock className="mx-auto text-lime-300" size={28} />}
-        title="Exclusivo do Nível 3"
+        title="Exclusivo do Nível 2+"
         text="O NoDelay mantém suas contas logadas e prontas para disparar em várias casas ao mesmo tempo. Faça upgrade para liberar."
         action={
           <button

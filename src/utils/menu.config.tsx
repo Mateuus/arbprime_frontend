@@ -272,7 +272,7 @@ export const useMenuItems = (): MenuItem[] => {
         path: '/nodelay',
         icon: <Rocket size={22} />,
         requiresAuth: true,
-        minLevel: 3, // exclusivo do nível 3 (backend valida em requireLevel)
+        minLevel: 2, // nível 2+ (backend valida em requireLevel / NODELAY_MIN_LEVEL)
         onClick: () => router.push('/nodelay')
       },
 

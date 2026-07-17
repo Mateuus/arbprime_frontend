@@ -51,7 +51,7 @@ export default function NoDelayInstancesPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-white">NoDelay</h1>
-                <span className="rounded-full bg-lime-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-lime-300 ring-1 ring-lime-500/30">Nível 3</span>
+                <span className="rounded-full bg-lime-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-lime-300 ring-1 ring-lime-500/30">Nível 2</span>
               </div>
               <p className="text-sm text-gray-400">Suas instâncias — cada uma agrupa casas e contas prontas para disparar.</p>
             </div>
