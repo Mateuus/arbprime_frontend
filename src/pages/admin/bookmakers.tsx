@@ -235,16 +235,33 @@ const AdminBookmakersPage = () => {
   // Mapa slug -> casa (para resolver clones cuja "mãe" existe na lista).
   const bySlug = new Map(items.map((b) => [b.slug, b]));
 
-  // Agrupa as casas: cada "mãe" (top-level) com seus clones aninhados.
-  // Clone órfão (cloneOf aponta p/ slug inexistente) vira top-level p/ não sumir.
+  // Sobe a cadeia de clone até o ANCESTRAL top-level (a "mãe" raiz). É isto que
+  // evita o clone-de-clone (neto) sumir: sem isto, um clone cuja mãe é OUTRO clone
+  // ficava aninhado numa folha e nunca era renderizado (invisível e sem como
+  // editar). Guarda contra ciclo. Mãe fora da lista → o próprio slug é a raiz.
+  const rootOf = (slug: string): string => {
+    let cur = slug;
+    const seen = new Set<string>();
+    for (let i = 0; i < 20; i++) {
+      const parent = bySlug.get(cur)?.cloneOf;
+      if (!parent || !bySlug.has(parent) || seen.has(cur)) break;
+      seen.add(cur);
+      cur = parent;
+    }
+    return cur;
+  };
+
+  // Agrupa: cada "mãe" top-level com TODOS os seus clones (qualquer profundidade)
+  // achatados sob ela. Clone órfão (mãe não cadastrada) vira top-level p/ não sumir.
   const clonesByParent = new Map<string, BookmakerDTO[]>();
   const parents: BookmakerDTO[] = [];
   for (const b of items) {
-    const parentSlug = b.cloneOf && bySlug.has(b.cloneOf) ? b.cloneOf : null;
-    if (parentSlug) {
-      const arr = clonesByParent.get(parentSlug) || [];
+    const isClone = !!(b.cloneOf && bySlug.has(b.cloneOf));
+    const root = isClone ? rootOf(b.slug) : b.slug;
+    if (isClone && root !== b.slug) {
+      const arr = clonesByParent.get(root) || [];
       arr.push(b);
-      clonesByParent.set(parentSlug, arr);
+      clonesByParent.set(root, arr);
     } else {
       parents.push(b);
     }
@@ -293,8 +310,9 @@ const AdminBookmakersPage = () => {
           <span className="text-[11px] text-gray-500 font-mono truncate">{b.slug}</span>
           <CommissionBadge pct={b.commissionPct} />
         </div>
-        {/* Linha do clone já fica aninhada na mãe; "clone de X" só p/ clone órfão (mãe não cadastrada). */}
-        {!isClone && b.cloneOf && (
+        {/* "↳ clone de X": p/ clone órfão (mãe não cadastrada, top-level) OU clone-de-clone
+            (neto achatado sob a raiz) — mostra a mãe REAL. Clone direto não precisa. */}
+        {b.cloneOf && (!isClone || !!bySlug.get(b.cloneOf)?.cloneOf) && (
           <div className="text-[10px] text-violet-300/80 truncate">↳ clone de {b.cloneOf}</div>
         )}
       </div>
