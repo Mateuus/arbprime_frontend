@@ -8,7 +8,8 @@ import { placeBetReal, warmAccountTokens, tokensWarm } from '@/services/nodelay/
 import { maxStakeOf, cachedK, getAccountK, pickCalibrationSample } from '@/services/nodelay/maxStake';
 import { SlipView } from '@/components/nodelay/BetSlipCard';
 import { BetSlipDrawer } from '@/components/nodelay/BetSlipDrawer';
-import { selectionLabel, scoreOf, clockOf, fmtOdd, fmtMaxStake, filterMarkets } from '@/utils/nodelayLive';
+import { NoDelayBoard } from '@/components/nodelay/NoDelayBoard';
+import { selectionLabel, scoreOf, clockOf, fmtOdd, filterMarkets } from '@/utils/nodelayLive';
 import { formatMoney } from '@/utils/nodelayUi';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
 import { X, Zap, Star, Minus, Plus, Users, Settings, Check, ChevronDown, Lock, RefreshCw, Loader2 } from 'lucide-react';
@@ -419,57 +420,7 @@ export function QuickBetModal({
                 )}
               </div>
             ) : (
-              <div className="gap-3 [column-fill:_balance] columns-1 sm:columns-2 lg:columns-3 xl:columns-4">
-                {favMarkets.map((m) => (
-                  <div key={m.id} className={`mb-3 break-inside-avoid rounded-xl border bg-white/[0.03] p-3 ${m.suspended ? 'border-rose-500/40' : 'border-white/10'}`}>
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className="text-xs font-semibold text-gray-200">{m.name}</span>
-                      {m.suspended && (
-                        <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-300 ring-1 ring-rose-500/40">
-                          <Lock size={8} /> Suspenso
-                        </span>
-                      )}
-                    </div>
-                    <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${gridCols(m.selections.length)}, minmax(0,1fr))` }}>
-                      {m.selections.map((s) => {
-                        const susp = m.suspended;
-                        const dead = susp || s.disabled || s.price <= 0;
-                        const flash = changed.has(s.id);
-                        const msRaw = !dead && k ? maxStakeOf(s, m, k) : null;
-                        const ms = msRaw != null && msRaw >= 1 ? msRaw : null;
-                        return (
-                          <button
-                            key={s.id}
-                            disabled={dead}
-                            onClick={() => fire(m, s)}
-                            className={`flex flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-left ring-1 transition ${
-                              susp
-                                ? 'cursor-not-allowed bg-rose-500/10 ring-rose-500/30'
-                                : dead
-                                  ? 'cursor-not-allowed bg-black/20 text-gray-600 ring-white/5'
-                                  : flash
-                                    ? 'bg-lime-500/30 ring-lime-400/70'
-                                    : 'bg-black/25 ring-white/10 hover:bg-lime-500/15 hover:ring-lime-500/40 active:scale-[0.98]'
-                            }`}
-                          >
-                            <span className={`w-full truncate text-[11px] ${susp ? 'text-rose-300/80' : 'text-gray-300'}`}>{selectionLabel(s.name, s.points)}</span>
-                            <span className="flex w-full items-center justify-between gap-1">
-                              <span className="text-sm font-bold tabular-nums text-white">
-                                {susp ? <Lock size={14} className="text-rose-400" /> : dead ? '—' : fmtOdd(s.price)}
-                              </span>
-                              {ms != null && ms > 0 && (
-                                <span className="rounded bg-lime-500/10 px-1 py-px text-[9px] font-bold tabular-nums text-lime-300/90 ring-1 ring-lime-500/25">
-                                  máx {fmtMaxStake(ms)}
-                                </span>
-                              )}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <NoDelayBoard markets={favMarkets} changed={changed} k={k} onFire={fire} />
             )}
           </div>
       </div>
@@ -510,7 +461,6 @@ function SettingToggle({ label, hint, on, onToggle }: { label: string; hint: str
   );
 }
 
-const gridCols = (n: number): number => (n % 3 === 0 ? 3 : n % 2 === 0 ? 2 : n <= 3 ? n : 3);
 
 /**
  * Confirmação da aposta real. A odd é RECALCULADA do feed vivo (`detail`) a cada
