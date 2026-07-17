@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { NoDelayBookmaker } from '@/interfaces/nodelay.interface';
 import { openEventStream, RogueOp } from '@/services/nodelay/rogueClient';
 import {
-  eventToDetail, applyRogueDelta, applyEventDelta, removeMarket, LiveGameDetail,
+  eventToDetail, applyRogueDelta, applyEventDelta, LiveGameDetail,
 } from '@/services/nodelay/rogueModel';
 
 /**
@@ -114,12 +114,11 @@ export function useInstanceLiveEvent(houses: NoDelayBookmaker[], eventId: string
           }
           if (!cur) continue;
 
-          // Mercado removido pela casa (encerrou/some) → tira do detalhe, não deixa preso.
-          if (op.Operation === 'delete' && type === 'market') {
-            const mid = String((op.Reference as Rec | undefined)?.MarketId ?? cs?._id ?? '');
-            if (mid) cur = removeMarket(cur, mid);
-            continue;
-          }
+          // NÃO removemos mercado no delete: o reducer só ATUALIZA mercado existente
+          // (não readiciona), então remover encolheria o detalhe até esvaziar sem
+          // volta (só F5 traz). O mercado morto/encerrado some do PAINEL pelo
+          // filterMarkets (odd 0) e do cockpit pelo filtro do QuickBet — sem sumir
+          // do estado. (Ver removeMarket em rogueModel: reservado p/ add+remove.)
 
           if (type === 'market') {
             const { next, changed: ids } = applyRogueDelta(cur, op);
