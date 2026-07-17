@@ -261,11 +261,21 @@ async function tryPlace(
       return { result: { ok: false, elapsedMs: performance.now() - startedAt, stake: opts.stake, odds: sel.trueOdds, partial: false, oddsChanged, error: 'Sem resposta da casa no envio — confira o histórico da casa.' } };
     }
 
-    lastErr = `placeBets ${place.status}: ${JSON.stringify(place.json)?.slice(0, 160)}`;
+    const bodyStr = JSON.stringify(place.json || '');
+
+    // Recusa DEFINITIVA da casa (2002 / "declined"): a seleção suspendeu ou a
+    // linha mudou entre o clique e o envio (corrida do ao vivo). calculateBets não
+    // adianta — encerra claro, sem gastar round-trip. Extrai o motivo se vier.
+    const declineReason = place.json?.Data?.[0]?.declineReasons?.[0]?.name;
+    if (place.json?.ErrorCode === 2002 || /declined|bet was declined/i.test(bodyStr)) {
+      return { result: { ok: false, elapsedMs: performance.now() - startedAt, stake: opts.stake, odds: sel.trueOdds, partial: false, oddsChanged, error: declineReason ? `Recusada: ${declineReason}` : 'Recusada — seleção suspensa ou a linha mudou' } };
+    }
+
+    lastErr = `placeBets ${place.status}: ${bodyStr.slice(0, 160)}`;
     // Só re-posta o MESMO cupom para erro de arredondamento/hash (troca o
     // PotentialReturns). Qualquer outro erro (não-200) → deixa o chamador tentar
     // o calculateBets UMA vez; nunca re-posta às cegas.
-    if (!/potentialreturn|hash/i.test(JSON.stringify(place.json || ''))) {
+    if (!/potentialreturn|hash/i.test(bodyStr)) {
       return { error: lastErr };
     }
   }

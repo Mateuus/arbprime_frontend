@@ -54,15 +54,19 @@ export interface MarketFilterOpts {
  * Como as odds chegam pelo SSE, quando um preço aparece o item volta sozinho.
  */
 export function filterMarkets(markets: LiveMarket[], opts: MarketFilterOpts): LiveMarket[] {
-  if (!opts.delayTradeOnly && !opts.hidePriceless) return markets;
   const out: LiveMarket[] = [];
   for (const m of markets) {
     let sels = m.selections;
     if (opts.delayTradeOnly) sels = sels.filter((s) => !isUnder(s));
-    // Só corta os sem-odd quando o mercado NÃO está suspenso (senão perderíamos
-    // o cadeado, que é o sinal do lance perigoso).
-    if (opts.hidePriceless && !m.suspended) sels = sels.filter((s) => s.price > 0);
-    if (sels.length === 0) continue; // mercado sem seleção visível → some
+    // Seleção MORTA (odd 0 / IsDisabled = a linha saiu/fechou) NUNCA fica no painel
+    // de mercado não suspenso: some sozinha e reaparece quando a odd volta. Isso
+    // deixa o painel só com o que dá pra apostar (evita mis-tap → recusa 2002).
+    // Mercado SUSPENSO mantém as seleções — o cadeado é o sinal do lance perigoso.
+    if (!m.suspended) sels = sels.filter((s) => !s.disabled && s.price > 0);
+    if (sels.length === 0) {
+      if (m.suspended) out.push(m); // suspenso sem seleção viva ainda mostra o cadeado
+      continue;
+    }
     out.push(sels === m.selections ? m : { ...m, selections: sels });
   }
   return out;
