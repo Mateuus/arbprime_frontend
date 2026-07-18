@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { LiveGameDetail, LiveMarket, LiveSelection } from '@/services/nodelay/rogueModel';
 import { maxStakeOf } from '@/services/nodelay/maxStake';
+import { useNowTick } from '@/hooks/useNowTick';
 import { categorize, filterMarkets, marketTitle, selectionLabel, fmtOdd, fmtMaxStake } from '@/utils/nodelayLive';
 import { Lock, ChevronDown, Search, Star } from 'lucide-react';
 
@@ -26,9 +27,11 @@ interface Props {
 }
 
 export function MarketBoard({ detail, changed, onPick, favorites, onToggleFavorite, delayTradeOnly, hidePriceless, k }: Props) {
+  const tick = useNowTick(2000); // reavalia o "suspenso >10s some" sem depender de delta
   const tabs = useMemo(
     () => categorize(detail.groups, filterMarkets(detail.markets, { delayTradeOnly, hidePriceless })),
-    [detail, delayTradeOnly, hidePriceless],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [detail, delayTradeOnly, hidePriceless, tick],
   );
   const [tabId, setTabId] = useState<string | null>(null);
   const [q, setQ] = useState('');

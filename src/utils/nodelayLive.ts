@@ -53,9 +53,16 @@ export interface MarketFilterOpts {
  *
  * Como as odds chegam pelo SSE, quando um preço aparece o item volta sozinho.
  */
+/** Suspenso por mais que isto → some do painel (reaparece quando a odd voltar). */
+export const SUSPEND_HIDE_MS = 10_000;
+
 export function filterMarkets(markets: LiveMarket[], opts: MarketFilterOpts): LiveMarket[] {
+  const now = Date.now();
   const out: LiveMarket[] = [];
   for (const m of markets) {
+    // Mantém o mercado suspenso à vista (cadeado) por SUSPEND_HIDE_MS; passado
+    // disso, some (ficou preso/encerrou) — volta sozinho no próximo tick de odd.
+    if (m.suspended && m.suspendedAt != null && now - m.suspendedAt > SUSPEND_HIDE_MS) continue;
     let sels = m.selections;
     if (opts.delayTradeOnly) sels = sels.filter((s) => !isUnder(s));
     // Seleção MORTA (odd 0 / IsDisabled = a linha saiu/fechou) NUNCA fica no painel

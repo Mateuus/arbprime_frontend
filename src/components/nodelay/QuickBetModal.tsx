@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { LiveGameDetail, LiveMarket, LiveSelection } from '@/services/nodelay/rogueModel';
 import { NoDelayAccount, NoDelayBookmaker } from '@/interfaces/nodelay.interface';
 import { HousePrice } from '@/hooks/useInstanceLiveEvent';
+import { useNowTick } from '@/hooks/useNowTick';
 import { NoDelaySettings } from '@/hooks/useNoDelaySettings';
 import { placeBet, BetTicket } from '@/services/nodelay/placeBet';
 import { placeBetReal, warmAccountTokens, tokensWarm } from '@/services/nodelay/placeBetReal';
@@ -106,15 +107,18 @@ export function QuickBetModal({
   const score = scoreOf(detail);
   const clock = clockOf(detail);
   const eventName = `${detail.home} x ${detail.away}`;
-  // No cockpit de disparo só entram mercados APOSTÁVEIS AGORA: suspenso, sem odd
-  // ou encerrado NÃO fica preso ocupando espaço — some e volta sozinho quando a
-  // odd reabre. (O cadeado do lance perigoso continua no board do evento.)
+  // Tick de tempo p/ reavaliar o "suspenso há >10s some" sem depender de delta.
+  const tick = useNowTick(2000);
+  // Favoritos: mostra o mercado suspenso com cadeado (por até 10s, via
+  // filterMarkets); passado disso some e volta sozinho quando a odd reabre.
   const favMarkets = useMemo(
     () => filterMarkets(detail.markets.filter((m) => favorites.has(m.name)), {
       delayTradeOnly: settings.delayTradeOnly,
       hidePriceless: settings.hidePriceless,
-    }).filter((m) => !m.suspended && m.selections.some((s) => !s.disabled && s.price > 0)),
-    [detail.markets, favorites, settings.delayTradeOnly, settings.hidePriceless],
+    }),
+    // tick força reavaliar o corte por tempo; detail cobre os deltas de odd.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [detail.markets, favorites, settings.delayTradeOnly, settings.hidePriceless, tick],
   );
 
   const setStake = (v: number) => onUpdateSettings({ defaultStake: Math.max(HOUSE_MIN, +v.toFixed(2)) });

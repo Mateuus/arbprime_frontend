@@ -71,6 +71,8 @@ export interface LiveMarket {
   groups: MarketGroupRef[];
   order: number;
   suspended: boolean;
+  /** epoch ms de quando entrou em suspenso (p/ sumir depois de X s). null = ativo. */
+  suspendedAt: number | null;
   selections: LiveSelection[];
   /** TemplateGroupSettings do mercado (1-2 entradas). Resolver por sel.tplIndex. */
   tplGroups: TplGroup[];
@@ -204,13 +206,15 @@ function toMarket(m: AnyRec): LiveMarket {
     sortingKey: num(g.SortingKey, 9999),
   }));
   const mt = m.MarketType as AnyRec | undefined;
+  const suspended = m.IsSuspended === true;
   return {
     id: str(m._id),
     name: str(m.Name),
     marketTypeId: str(mt?._id),
     groups,
     order: num(m.MarketOrder, 9999),
-    suspended: m.IsSuspended === true,
+    suspended,
+    suspendedAt: suspended ? Date.now() : null,
     selections: ((m.Selections as AnyRec[]) || []).map(toSelection),
     tplGroups: parseTplGroups(m.TemplateGroupSettings),
   };
@@ -279,7 +283,17 @@ export function applyRogueDelta(
       }
       return s;
     });
-    return { ...m, selections, suspended: suspendedFlag ?? m.suspended, ...(tplGroups ? { tplGroups } : {}) };
+    // DES-SUSPENDE SOZINHO quando a odd volta: mercado com seleção viva (odd>0) é
+    // apostável, logo não está suspenso — mesmo que o delta de reabrir não traga
+    // IsSuspended=false (às vezes só as odds voltam; sem isto ficava preso em
+    // suspenso até o F5). Sem seleção viva: o flag explícito manda, senão preserva
+    // (não deixa um tick de odd 0 apagar o cadeado do lance perigoso).
+    const nowHasActive = selections.some((s) => !s.disabled && s.price > 0);
+    const nextSuspended = nowHasActive ? false : (suspendedFlag ?? m.suspended);
+    // Carimba QUANDO entrou em suspenso (p/ sumir após X s). Mantém o carimbo se
+    // continua suspenso; zera ao voltar a ativar.
+    const nextSuspendedAt = nextSuspended ? (m.suspended ? m.suspendedAt : Date.now()) : null;
+    return { ...m, selections, suspended: nextSuspended, suspendedAt: nextSuspendedAt, ...(tplGroups ? { tplGroups } : {}) };
   });
 
   if (!hit) return { next: detail, changed };
