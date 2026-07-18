@@ -7,6 +7,7 @@ import { useNoDelaySessionKeeper } from '@/hooks/useNoDelaySessionKeeper';
 import { useNoDelayMaxStake } from '@/hooks/useNoDelayMaxStake';
 import { useNoDelaySettings, effectiveSelected } from '@/hooks/useNoDelaySettings';
 import { useNoDelayFavorites } from '@/hooks/useNoDelayFavorites';
+import { useNoDelayAntiProtect } from '@/hooks/useNoDelayAntiProtect';
 import { refreshAllAccounts, errorText } from '@/services/nodelay/connect';
 import { apiGateway } from '@/gateways/api.gateway';
 import { NoDelayInstance, NoDelayBookmaker } from '@/interfaces/nodelay.interface';
@@ -63,13 +64,14 @@ export default function NoDelayEventPage() {
     return primary?.ready && primary.rogueUrl ? [primary, ...rest] : inst;
   }, [bookmakers, houseSlugs, slug, primary]);
 
-  const { detail, loading, error, changed, live, getHousePrice } = useInstanceLiveEvent(subHouses, gameId);
+  const { favorites, toggle: toggleFavorite } = useNoDelayFavorites();
+  const { antiProtect, toggle: toggleAntiProtect } = useNoDelayAntiProtect();
+  const { detail, loading, error, changed, live, getHousePrice } = useInstanceLiveEvent(subHouses, gameId, antiProtect);
 
   // Mantém as sessões vivas + reconecta as que caírem, sozinho.
   useNoDelaySessionKeeper(subHouses, reloadNd, isAuthenticated);
 
   const { settings, update, toggleAccount } = useNoDelaySettings();
-  const { favorites, toggle: toggleFavorite } = useNoDelayFavorites();
   const [quickOpen, setQuickOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -265,6 +267,8 @@ export default function NoDelayEventPage() {
             refreshing={refreshing}
             k={maxStakeK}
             changed={changed}
+            antiProtect={antiProtect}
+            onToggleAntiProtect={toggleAntiProtect}
           />
         )}
       </div>

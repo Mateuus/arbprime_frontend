@@ -3,7 +3,12 @@ import { LiveMarket, LiveSelection } from '@/services/nodelay/rogueModel';
 import { maxStakeOf } from '@/services/nodelay/maxStake';
 import { selectionLabel, fmtOdd, fmtMaxStake } from '@/utils/nodelayLive';
 import { useNoDelayBoard, marketKeyOf, BoardColumn } from '@/hooks/useNoDelayBoard';
-import { Lock, Plus, Trash2, GripVertical, ChevronLeft, ChevronRight, X, Check, FolderInput } from 'lucide-react';
+import { Lock, Plus, Trash2, GripVertical, ChevronLeft, ChevronRight, X, Check, FolderInput, ShieldCheck } from 'lucide-react';
+import { Tooltip } from '@/components/ui/Tooltip';
+
+/** Mercado sendo FORNECIDO agora pela casa (odd viva, não suspenso/retirado). */
+const isFeeding = (m: LiveMarket): boolean =>
+  !m.suspended && !m.houseRemoved && m.selections.some((s) => !s.disabled && s.price > 0);
 
 /**
  * Quadro estilo Trello da Aposta Rápida: colunas nomeadas (o cabeçalho é o "card
@@ -17,11 +22,14 @@ interface Props {
   changed: Set<string>;
   k?: number | null;
   onFire: (m: LiveMarket, s: LiveSelection) => void;
+  /** Mercados com Anti Proteção (marketKeyOf) + toggle. */
+  antiProtect: Set<string>;
+  onToggleAntiProtect: (key: string) => void;
 }
 
 const gridCols = (n: number): number => (n % 3 === 0 ? 3 : n % 2 === 0 ? 2 : n <= 3 ? n : 3);
 
-export function NoDelayBoard({ markets, changed, k, onFire }: Props) {
+export function NoDelayBoard({ markets, changed, k, onFire, antiProtect, onToggleAntiProtect }: Props) {
   const board = useNoDelayBoard();
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
@@ -57,6 +65,8 @@ export function NoDelayBoard({ markets, changed, k, onFire }: Props) {
           changed={changed}
           k={k}
           onFire={onFire}
+          antiProtect={antiProtect}
+          onToggleAntiProtect={onToggleAntiProtect}
           over={overCol === col.id}
           onDragOverCol={() => setOverCol(col.id)}
           onDropCol={() => drop(col.id)}
@@ -80,12 +90,13 @@ export function NoDelayBoard({ markets, changed, k, onFire }: Props) {
 }
 
 function Column({
-  col, idx, total, markets, changed, k, onFire, over, onDragOverCol, onDropCol,
+  col, idx, total, markets, changed, k, onFire, antiProtect, onToggleAntiProtect, over, onDragOverCol, onDropCol,
   onDragStartCard, onDragEndCard, menuColumns, menuFor, setMenuFor, onMove, onRemoveCard,
   onRename, onDelete, onMoveCol,
 }: {
   col: BoardColumn; idx: number; total: number; markets: LiveMarket[];
   changed: Set<string>; k?: number | null; onFire: Props['onFire'];
+  antiProtect: Set<string>; onToggleAntiProtect: (key: string) => void;
   over: boolean; onDragOverCol: () => void; onDropCol: () => void;
   onDragStartCard: (key: string) => void; onDragEndCard: () => void;
   menuColumns: BoardColumn[]; menuFor: string | null; setMenuFor: (k: string | null) => void;
@@ -146,6 +157,8 @@ function Column({
               changed={changed}
               k={k}
               onFire={onFire}
+              antiOn={antiProtect.has(marketKeyOf(m))}
+              onToggleAnti={() => onToggleAntiProtect(marketKeyOf(m))}
               onDragStart={() => onDragStartCard(marketKeyOf(m))}
               onDragEnd={onDragEndCard}
               menuOpen={menuFor === marketKeyOf(m)}
@@ -163,28 +176,59 @@ function Column({
 }
 
 function BoardMarketCard({
-  market, changed, k, onFire, onDragStart, onDragEnd, menuOpen, onToggleMenu, columns, currentCol, onMove, onRemove,
+  market, changed, k, onFire, antiOn, onToggleAnti, onDragStart, onDragEnd, menuOpen, onToggleMenu, columns, currentCol, onMove, onRemove,
 }: {
   market: LiveMarket; changed: Set<string>; k?: number | null; onFire: Props['onFire'];
+  antiOn: boolean; onToggleAnti: () => void;
   onDragStart: () => void; onDragEnd: () => void;
   menuOpen: boolean; onToggleMenu: () => void; columns: BoardColumn[]; currentCol: string;
   onMove: (toCol: string) => void; onRemove: () => void;
 }) {
   const m = market;
+  const feeding = isFeeding(m);
   return (
     <div
       draggable
       onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart(); }}
       onDragEnd={onDragEnd}
-      className={`rounded-xl border bg-white/[0.03] ${m.suspended ? 'border-rose-500/40' : 'border-white/10'}`}
+      className={`rounded-xl border bg-white/[0.03] ${antiOn ? 'border-amber-500/40' : m.suspended ? 'border-rose-500/40' : 'border-white/10'}`}
     >
       <div className="flex items-center gap-1 px-2 py-1.5">
         <GripVertical size={13} className="shrink-0 cursor-grab text-gray-600" />
         <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-gray-200">{m.name}</span>
-        {m.suspended && <Lock size={11} className="shrink-0 text-rose-400" />}
+        {m.suspended && !antiOn && <Lock size={11} className="shrink-0 text-rose-400" />}
+        {/* Anti Proteção: trava o mercado na tela mesmo se a casa suspender/retirar.
+            Ligado → bolinha de status: verde (a casa fornece) / vermelha (protegido). */}
+        {antiOn && (
+          <Tooltip
+            className="shrink-0"
+            label={feeding
+              ? 'A casa está fornecendo este mercado agora (odd ao vivo).'
+              : 'A casa retirou ou está protegendo este mercado — travado na tela até a odd voltar.'}
+          >
+            <span
+              className={`h-2 w-2 rounded-full ring-1 ring-black/40 ${feeding ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.75)]' : 'bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.7)]'}`}
+            />
+          </Tooltip>
+        )}
+        <Tooltip
+          className="shrink-0"
+          label={antiOn
+            ? 'Anti Proteção LIGADA — o mercado não some se a casa suspender ou retirar. Toque para desligar.'
+            : 'Anti Proteção — segura o mercado na tela mesmo se a casa suspender/retirar (a proteção da casa no lance perigoso).'}
+        >
+          <button
+            onClick={onToggleAnti}
+            className={`grid h-5 w-5 place-items-center rounded transition ${antiOn ? 'text-amber-300' : 'text-gray-600 hover:text-gray-300'}`}
+          >
+            <ShieldCheck size={13} className={antiOn ? 'fill-amber-400/20' : ''} />
+          </button>
+        </Tooltip>
         {/* Menu "mover para" — funciona no toque (mobile) */}
         <div className="relative">
-          <button onClick={onToggleMenu} className="grid h-5 w-5 place-items-center rounded text-gray-500 hover:bg-white/10 hover:text-gray-200" title="Mover para coluna"><FolderInput size={12} /></button>
+          <Tooltip label="Mover para outra coluna">
+            <button onClick={onToggleMenu} className="grid h-5 w-5 place-items-center rounded text-gray-500 hover:bg-white/10 hover:text-gray-200"><FolderInput size={12} /></button>
+          </Tooltip>
           {menuOpen && (
             <div className="absolute right-0 top-6 z-20 w-40 rounded-lg border border-white/10 bg-brand-dark p-1 shadow-2xl">
               <div className="px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">Mover para</div>

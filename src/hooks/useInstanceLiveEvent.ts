@@ -2,8 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { NoDelayBookmaker } from '@/interfaces/nodelay.interface';
 import { openEventStream, RogueOp } from '@/services/nodelay/rogueClient';
 import {
-  eventToDetail, applyRogueDelta, applyEventDelta, removeMarket, upsertMarket, LiveGameDetail,
+  eventToDetail, applyRogueDelta, applyEventDelta, removeMarket, upsertMarket, freezeMarket, LiveGameDetail,
 } from '@/services/nodelay/rogueModel';
+
+/** Chave estável do mercado (= marketKeyOf do quadro): MarketTypeId ou nome. */
+const marketKey = (m: { marketTypeId?: string; name: string }): string => m.marketTypeId || m.name;
 
 /**
  * O MESMO evento ao vivo assinado em TODAS as casas prontas da instância.
@@ -40,7 +43,7 @@ function indexPrices(detail: LiveGameDetail | null): Map<string, HousePrice> {
   return m;
 }
 
-export function useInstanceLiveEvent(houses: NoDelayBookmaker[], eventId: string) {
+export function useInstanceLiveEvent(houses: NoDelayBookmaker[], eventId: string, antiProtect?: Set<string>) {
   const ready = houses.filter((h) => h.ready && h.rogueUrl);
   const primarySlug = ready[0]?.slug ?? '';
   // Inclui o HOST na chave: se o rogueUrl da casa mudar, re-assina (senão a SSE
@@ -59,6 +62,10 @@ export function useInstanceLiveEvent(houses: NoDelayBookmaker[], eventId: string
   const detailRef = useRef<LiveGameDetail | null>(null); // = primária
   const flashTimers = useRef<Map<string, number>>(new Map());
   const aliveRef = useRef(true);
+  // Anti Proteção corrente num REF (lido dentro do onOps sem re-assinar a SSE ao
+  // ligar/desligar num mercado — re-assinar dropava o stream).
+  const stickyRef = useRef<Set<string>>(antiProtect ?? new Set());
+  useEffect(() => { stickyRef.current = antiProtect ?? new Set(); }, [antiProtect]);
 
   /** Preço da seleção NAQUELA casa (undefined = ainda não chegou → usar fallback). */
   const getHousePrice = useCallback((slug: string, selId: string): HousePrice | undefined => {
@@ -120,10 +127,26 @@ export function useInstanceLiveEvent(houses: NoDelayBookmaker[], eventId: string
           // ⚠️ delete SEM add (o que eu tinha antes) encolhia o detalhe até esvaziar.
           if (op.Operation === 'delete' && type === 'market') {
             const mid = String((op.Reference as Rec | undefined)?.MarketId ?? cs?._id ?? '');
-            if (mid) cur = removeMarket(cur, mid);
+            if (mid) {
+              // Anti Proteção: se o usuário marcou ESTE mercado, não some — congela
+              // o último snapshot (travado) até a odd voltar; senão, remove normal.
+              const target = cur.markets.find((m) => m.id === mid);
+              const sticky = target ? stickyRef.current.has(marketKey(target)) : false;
+              cur = sticky ? freezeMarket(cur, mid) : removeMarket(cur, mid);
+            }
             continue;
           }
           if (op.Operation === 'add' && type === 'market' && cs) {
+            // Troca de linha = delete(velho)+add(novo) do MESMO tipo. O MarketTypeId é
+            // único por evento, então tiro QUALQUER mercado do mesmo tipo antes de
+            // inserir o novo — assim o placeholder congelado (Anti Proteção) ou a
+            // linha velha some, sem depender da ordem delete/add no lote.
+            const mt = (cs.MarketType as Rec | undefined)?._id;
+            const newKey = String(mt ?? cs.Name ?? '');
+            const newId = String(cs._id ?? '');
+            if (newKey) {
+              cur = { ...cur, markets: cur.markets.filter((m) => m.id === newId || marketKey(m) !== newKey) };
+            }
             cur = upsertMarket(cur, cs);
             continue;
           }

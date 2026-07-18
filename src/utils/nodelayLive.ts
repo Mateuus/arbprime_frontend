@@ -41,7 +41,12 @@ export function isUnder(sel: LiveSelection): boolean {
 export interface MarketFilterOpts {
   delayTradeOnly?: boolean; // esconde as seleções "Menos de"
   hidePriceless?: boolean;  // esconde seleções sem odd ("—")
+  /** Mercados com Anti Proteção (marketKeyOf) — não somem no suspenso/retirada. */
+  stickyKeys?: Set<string>;
 }
+
+/** Chave estável do mercado (= marketKeyOf do quadro): MarketTypeId ou nome. */
+const keyOf = (m: LiveMarket): string => m.marketTypeId || m.name;
 
 /**
  * Aplica os filtros de Delay Trade aos mercados.
@@ -60,9 +65,14 @@ export function filterMarkets(markets: LiveMarket[], opts: MarketFilterOpts): Li
   const now = Date.now();
   const out: LiveMarket[] = [];
   for (const m of markets) {
+    const sticky = opts.stickyKeys?.has(keyOf(m)) ?? false;
+    // Congelado pela casa (delete) só fica à vista se o Anti Proteção estiver
+    // ligado; desligou → some (limpa o placeholder travado).
+    if (m.houseRemoved && !sticky) continue;
     // Mantém o mercado suspenso à vista (cadeado) por SUSPEND_HIDE_MS; passado
     // disso, some (ficou preso/encerrou) — volta sozinho no próximo tick de odd.
-    if (m.suspended && m.suspendedAt != null && now - m.suspendedAt > SUSPEND_HIDE_MS) continue;
+    // Anti Proteção EXENTA do corte por tempo: fica travado até a odd voltar.
+    if (!sticky && m.suspended && m.suspendedAt != null && now - m.suspendedAt > SUSPEND_HIDE_MS) continue;
     let sels = m.selections;
     if (opts.delayTradeOnly) sels = sels.filter((s) => !isUnder(s));
     // Seleção MORTA (odd 0 / IsDisabled = a linha saiu/fechou) NUNCA fica no painel

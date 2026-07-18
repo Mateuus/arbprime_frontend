@@ -10,6 +10,7 @@ import { maxStakeOf, cachedK, getAccountK, pickCalibrationSample } from '@/servi
 import { SlipView } from '@/components/nodelay/BetSlipCard';
 import { BetSlipDrawer } from '@/components/nodelay/BetSlipDrawer';
 import { NoDelayBoard } from '@/components/nodelay/NoDelayBoard';
+import { LiveStatsPanel } from '@/components/nodelay/LiveStatsPanel';
 import { selectionLabel, scoreOf, clockOf, fmtOdd, filterMarkets } from '@/utils/nodelayLive';
 import { formatMoney } from '@/utils/nodelayUi';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
@@ -45,6 +46,9 @@ interface Props {
   k?: number | null;
   /** ids de seleção que acabaram de mudar de preço (piscam ao vivo). */
   changed: Set<string>;
+  /** Mercados com Anti Proteção (marketKeyOf) + toggle — segura o mercado na tela. */
+  antiProtect: Set<string>;
+  onToggleAntiProtect: (key: string) => void;
 }
 
 type Panel = 'none' | 'accounts' | 'settings';
@@ -55,7 +59,7 @@ const MAX_STAKE_DRIFT = 0.02;
 const HOUSE_MIN = 1;
 
 export function QuickBetModal({
-  detail, houseBySlug, getHousePrice, favorites, connected, selectedIds, onToggleAccount, settings, onUpdateSettings, onClose, onRefresh, refreshing, k, changed,
+  detail, houseBySlug, getHousePrice, favorites, connected, selectedIds, onToggleAccount, settings, onUpdateSettings, onClose, onRefresh, refreshing, k, changed, antiProtect, onToggleAntiProtect,
 }: Props) {
   const [slips, setSlips] = useState<SlipView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,10 +119,11 @@ export function QuickBetModal({
     () => filterMarkets(detail.markets.filter((m) => favorites.has(m.name)), {
       delayTradeOnly: settings.delayTradeOnly,
       hidePriceless: settings.hidePriceless,
+      stickyKeys: antiProtect, // Anti Proteção: não some no suspenso/retirada
     }),
     // tick força reavaliar o corte por tempo; detail cobre os deltas de odd.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [detail.markets, favorites, settings.delayTradeOnly, settings.hidePriceless, tick],
+    [detail.markets, favorites, settings.delayTradeOnly, settings.hidePriceless, antiProtect, tick],
   );
 
   const setStake = (v: number) => onUpdateSettings({ defaultStake: Math.max(HOUSE_MIN, +v.toFixed(2)) });
@@ -399,6 +404,9 @@ export function QuickBetModal({
             </div>
           )}
 
+          {/* Estatística ao vivo (placar + escanteios/cartões/chutes) — colapsável */}
+          <LiveStatsPanel game={detail} />
+
           {/* Favoritos — sempre à vista (as odds continuam). Quando a gaveta de
               bilhetes abre, o padding no fim deixa rolar acima dela. */}
           <div className={`flex-1 overflow-y-auto p-3 sm:p-4 ${slips ? 'pb-[48dvh]' : ''}`}>
@@ -424,7 +432,7 @@ export function QuickBetModal({
                 )}
               </div>
             ) : (
-              <NoDelayBoard markets={favMarkets} changed={changed} k={k} onFire={fire} />
+              <NoDelayBoard markets={favMarkets} changed={changed} k={k} onFire={fire} antiProtect={antiProtect} onToggleAntiProtect={onToggleAntiProtect} />
             )}
           </div>
       </div>

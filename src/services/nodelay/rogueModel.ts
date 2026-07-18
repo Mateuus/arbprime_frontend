@@ -73,15 +73,44 @@ export interface LiveMarket {
   suspended: boolean;
   /** epoch ms de quando entrou em suspenso (p/ sumir depois de X s). null = ativo. */
   suspendedAt: number | null;
+  /** A casa RETIROU o mercado (delete/market) mas o Anti Proteção segura na tela.
+   * = mostra o último snapshot travado até a odd voltar (add) ou o user desligar. */
+  houseRemoved?: boolean;
   selections: LiveSelection[];
   /** TemplateGroupSettings do mercado (1-2 entradas). Resolver por sel.tplIndex. */
   tplGroups: TplGroup[];
 }
 
+/** Par de valores home/away de uma estatística (escanteios, cartões, chutes…). */
+export interface StatPair {
+  home: number;
+  away: number;
+}
+
+/**
+ * Estatística AO VIVO do jogo — vem de `Score.AdditionalScores` (futebol). Cada
+ * campo é um par time1/time2. Usada no painel central da Aposta Rápida p/ decidir
+ * entrada (mais escanteio/pressão de um lado, cartão que muda o jogo, etc.).
+ */
+export interface LiveStats {
+  corners: StatPair;
+  yellowCards: StatPair;
+  redCards: StatPair;
+  shots: StatPair;
+  shotsOnTarget: StatPair;
+  fouls: StatPair;
+  throwIns: StatPair;
+  goalKicks: StatPair;
+  penalties: StatPair;
+  firstHalf: StatPair; // gols do 1º tempo
+  secondHalf: StatPair; // gols do 2º tempo
+}
+
 export interface LiveGameDetail extends LiveGame {
   /** Abas na ordem do site (MarketGroups do evento). */
   groups: { id: string; name: string; order: number }[];
-  stats: Record<string, { team1_value?: number | string; team2_value?: number | string }> | null;
+  /** Estatística ao vivo (escanteios/cartões/chutes…) ou null (esporte sem stats). */
+  liveStats: LiveStats | null;
   markets: LiveMarket[];
 }
 
@@ -121,6 +150,37 @@ export function gameStateToInfo(ev: AnyRec): LiveGameInfo {
     if (secs > 0) info.current_game_time = String(Math.floor(secs / 60));
   }
   return info;
+}
+
+const intOf = (v: unknown): number => {
+  const n = parseInt(String(v ?? ''), 10);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/**
+ * Estatística ao vivo a partir de `Score.AdditionalScores`. A rogue reenvia o
+ * Score COMPLETO em TODO update (validado ao vivo: os 32 campos vêm sempre), então
+ * dá pra reconstruir o objeto inteiro a cada mudança — sem merge parcial. Só
+ * futebol traz AdditionalScores; outros esportes → null (o painel some sozinho).
+ */
+export function parseLiveStats(ev: AnyRec): LiveStats | null {
+  const score = ev.Score as AnyRec | undefined;
+  const a = score?.AdditionalScores as AnyRec | undefined;
+  if (!a) return null;
+  const pair = (k1: string, k2: string): StatPair => ({ home: intOf(a[k1]), away: intOf(a[k2]) });
+  return {
+    corners: pair('cornersTeam1', 'cornersTeam2'),
+    yellowCards: pair('yellowCardsTeam1', 'yellowCardsTeam2'),
+    redCards: pair('redCardsTeam1', 'redCardsTeam2'),
+    shots: pair('shotsTeam1', 'shotsTeam2'),
+    shotsOnTarget: pair('shotsOnTargetTeam1', 'shotsOnTargetTeam2'),
+    fouls: pair('foulsTeam1', 'foulsTeam2'),
+    throwIns: pair('throwInsTeam1', 'throwInsTeam2'),
+    goalKicks: pair('goalKicksTeam1', 'goalKicksTeam2'),
+    penalties: pair('penaltiesTeam1', 'penaltiesTeam2'),
+    firstHalf: pair('firstHalfScore1', 'firstHalfScore2'),
+    secondHalf: pair('secondHalfScore1', 'secondHalfScore2'),
+  };
 }
 
 /**
@@ -234,7 +294,7 @@ export function eventToDetail(ev: AnyRec): LiveGameDetail | null {
   return {
     ...base,
     groups,
-    stats: null, // rogue traz stats fora do market; ligamos depois se precisar
+    liveStats: parseLiveStats(ev),
     markets,
   };
 }
@@ -308,6 +368,24 @@ export function removeMarket(detail: LiveGameDetail, marketId: string): LiveGame
 }
 
 /**
+ * CONGELA um mercado em vez de removê-lo (Anti Proteção). Quando a casa faz
+ * `delete/market` de um mercado que o usuário marcou como Anti Proteção, não
+ * tiramos da tela: travamos como suspenso (`houseRemoved`) mantendo o último
+ * snapshot de odds. Some quando o usuário desliga (filterMarkets) ou é
+ * substituído quando a odd volta (`add/market` do mesmo tipo).
+ */
+export function freezeMarket(detail: LiveGameDetail, marketId: string): LiveGameDetail {
+  if (!marketId) return detail;
+  let hit = false;
+  const markets = detail.markets.map((m) => {
+    if (m.id !== marketId) return m;
+    hit = true;
+    return { ...m, suspended: true, houseRemoved: true, suspendedAt: m.suspendedAt ?? Date.now() };
+  });
+  return hit ? { ...detail, markets } : detail;
+}
+
+/**
  * Adiciona/substitui um mercado (op `add` de market). A fssb move a LINHA
  * trocando o mercado inteiro: deleta o velho (ex.: Total 2.5) e envia um `add`
  * com o novo COMPLETO (ex.: Total 3.5) — mesmos campos do initial, então
@@ -330,5 +408,12 @@ export function applyEventDelta(detail: LiveGameDetail, op: AnyRec): LiveGameDet
   if (!cs) return detail;
   const ev = (cs.event as AnyRec) ?? cs;
   if (!ev.Score && !ev.LiveGameState) return detail;
-  return { ...detail, info: { ...detail.info, ...gameStateToInfo(ev) } };
+  // Score vem completo → reconstrói a estatística inteira. Sem Score no delta
+  // (só relógio) → preserva a última (parseLiveStats devolveria null e apagaria).
+  const nextStats = ev.Score ? parseLiveStats(ev) : null;
+  return {
+    ...detail,
+    info: { ...detail.info, ...gameStateToInfo(ev) },
+    liveStats: nextStats ?? detail.liveStats,
+  };
 }
