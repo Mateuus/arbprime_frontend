@@ -308,6 +308,20 @@ export function removeMarket(detail: LiveGameDetail, marketId: string): LiveGame
 }
 
 /**
+ * Adiciona/substitui um mercado (op `add` de market). A fssb move a LINHA
+ * trocando o mercado inteiro: deleta o velho (ex.: Total 2.5) e envia um `add`
+ * com o novo COMPLETO (ex.: Total 3.5) — mesmos campos do initial, então
+ * toMarket parseia direto. Sem tratar isto, a linha velha ficava travada.
+ */
+export function upsertMarket(detail: LiveGameDetail, cs: AnyRec): LiveGameDetail {
+  const m = toMarket(cs);
+  if (!m.id) return detail;
+  const has = detail.markets.some((x) => x.id === m.id);
+  const markets = has ? detail.markets.map((x) => (x.id === m.id ? m : x)) : [...detail.markets, m];
+  return { ...detail, markets };
+}
+
+/**
  * Aplica um delta de EVENTO (placar/relógio). A rogue manda updates de
  * `Type:"event"` com o LiveGameState/Score no Changeset.
  */

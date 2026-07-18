@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { NoDelayBookmaker } from '@/interfaces/nodelay.interface';
 import { openEventStream, RogueOp } from '@/services/nodelay/rogueClient';
 import {
-  eventToDetail, applyRogueDelta, applyEventDelta, LiveGameDetail,
+  eventToDetail, applyRogueDelta, applyEventDelta, removeMarket, upsertMarket, LiveGameDetail,
 } from '@/services/nodelay/rogueModel';
 
 /**
@@ -114,11 +114,19 @@ export function useInstanceLiveEvent(houses: NoDelayBookmaker[], eventId: string
           }
           if (!cur) continue;
 
-          // NÃO removemos mercado no delete: o reducer só ATUALIZA mercado existente
-          // (não readiciona), então remover encolheria o detalhe até esvaziar sem
-          // volta (só F5 traz). O mercado morto/encerrado some do PAINEL pelo
-          // filterMarkets (odd 0) e do cockpit pelo filtro do QuickBet — sem sumir
-          // do estado. (Ver removeMarket em rogueModel: reservado p/ add+remove.)
+          // A fssb move a LINHA trocando o mercado inteiro (delete do velho + add do
+          // novo completo). Tratamos os DOIS juntos: o add repõe o delete (contagem
+          // fica estável — validado ao vivo) e a linha 2.5→3.5 atualiza sozinha.
+          // ⚠️ delete SEM add (o que eu tinha antes) encolhia o detalhe até esvaziar.
+          if (op.Operation === 'delete' && type === 'market') {
+            const mid = String((op.Reference as Rec | undefined)?.MarketId ?? cs?._id ?? '');
+            if (mid) cur = removeMarket(cur, mid);
+            continue;
+          }
+          if (op.Operation === 'add' && type === 'market' && cs) {
+            cur = upsertMarket(cur, cs);
+            continue;
+          }
 
           if (type === 'market') {
             const { next, changed: ids } = applyRogueDelta(cur, op);
