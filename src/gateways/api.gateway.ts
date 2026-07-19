@@ -1,6 +1,7 @@
 import axios from "axios";
 
 import { CreateOrUpdateFilterDTO } from '@/interfaces/FilterDTO';
+import { UpsertPrimeRadioDTO } from '@/interfaces/primeradio.interface';
 import { serverManager } from '@/services/serverManager';
 
 const getPreferredLanguage = () => {
@@ -323,6 +324,19 @@ const getExternalEventOdds = async (bookmaker: string, eventId: string) => {
   return apiClient.get(`/external/events/${encodeURIComponent(bookmaker)}/${encodeURIComponent(eventId)}/odds`);
 };
 
+// ==================== DISCORD (vínculo da conta + cargos) ====================
+
+// Situação do vínculo do usuário logado (linked, inGuild, handle).
+const getDiscordStatus = async () => apiClient.get('/discord/status');
+
+// Devolve a authUrl do OAuth2 — o front redireciona o navegador para lá.
+const getDiscordLinkUrl = async () => apiClient.get('/discord/link');
+
+const unlinkDiscord = async () => apiClient.post('/discord/unlink');
+
+// Reaplica os cargos do plano atual (botão "sincronizar" na aba).
+const syncDiscordRoles = async () => apiClient.post('/discord/sync');
+
 // ==================== PRIMETV (transmissões ao vivo) ====================
 
 // Lista pública (oculta os eventos escondidos/removidos pelo admin).
@@ -341,6 +355,35 @@ const setPrimeTvOverride = async (id: string, body: { hidden?: boolean; removed?
 
 const clearPrimeTvOverride = async (id: string) =>
   apiClient.delete(`/primetv/admin/events/${encodeURIComponent(id)}/override`);
+
+// ==================== PRIMERÁDIO (narração em áudio) ====================
+// Transmissões de áudio cadastradas por nós. Sem WebRTC/SFU — o player é um
+// <audio> com o link do stream, que só vem no endpoint autenticado de escuta.
+
+// Lista pública (SEM a URL do stream).
+const getPrimeRadioEvents = async () => apiClient.get('/primeradio/events');
+
+// Dados p/ ouvir (requer login) — aqui vem a streamUrl.
+const getPrimeRadioListen = async (id: string) =>
+  apiClient.get(`/primeradio/listen/${encodeURIComponent(id)}`);
+
+// --- admin ---
+const getPrimeRadioAdmin = async () => apiClient.get('/primeradio/admin/events');
+
+const createPrimeRadioEvent = async (data: UpsertPrimeRadioDTO) =>
+  apiClient.post('/primeradio/admin/events', data);
+
+const updatePrimeRadioEvent = async (id: string, data: UpsertPrimeRadioDTO) =>
+  apiClient.patch(`/primeradio/admin/events/${encodeURIComponent(id)}`, data);
+
+const endPrimeRadioEvent = async (id: string) =>
+  apiClient.post(`/primeradio/admin/events/${encodeURIComponent(id)}/end`, {});
+
+const reopenPrimeRadioEvent = async (id: string) =>
+  apiClient.post(`/primeradio/admin/events/${encodeURIComponent(id)}/reopen`, {});
+
+const deletePrimeRadioEvent = async (id: string) =>
+  apiClient.delete(`/primeradio/admin/events/${encodeURIComponent(id)}`);
 
 // ==================== BOOKMAKERS (casas de aposta) ====================
 
@@ -1900,11 +1943,24 @@ export const apiGateway = {
     getExternalEventOdds,
     getExternalEventHistory,
     // PrimeTV
+    getDiscordStatus,
+    getDiscordLinkUrl,
+    unlinkDiscord,
+    syncDiscordRoles,
     getPrimeTvEvents,
     getPrimeTvStream,
     getPrimeTvEventsAdmin,
     setPrimeTvOverride,
     clearPrimeTvOverride,
+    // PrimeRádio
+    getPrimeRadioEvents,
+    getPrimeRadioListen,
+    getPrimeRadioAdmin,
+    createPrimeRadioEvent,
+    updatePrimeRadioEvent,
+    endPrimeRadioEvent,
+    reopenPrimeRadioEvent,
+    deletePrimeRadioEvent,
     // Proxies
     getProxies,
     syncProxies,

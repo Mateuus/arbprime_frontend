@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { GiHomeGarage, GiWallet, GiCoins, GiSoccerBall } from 'react-icons/gi';
-import { Gift, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags, CreditCard, Receipt, ServerCog, Flag, Wallet, ListChecks, Gem, LineChart, SlidersHorizontal, Handshake, Ticket, ClipboardCheck, Activity, Split, Bot, Rocket, MonitorPlay, Layers } from 'lucide-react';
+import { Gift, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags, CreditCard, Receipt, ServerCog, Flag, Wallet, ListChecks, Gem, LineChart, SlidersHorizontal, Handshake, Ticket, ClipboardCheck, Activity, Split, Bot, Rocket, MonitorPlay, Layers, Radio, RadioTower } from 'lucide-react';
 import { useMemo } from 'react';
 import { ReactNode } from 'react';
 import { useUserContext } from '@/context/UserContext';
@@ -62,12 +62,30 @@ export const useMenuItems = (): MenuItem[] => {
         onClick: () => router.push('/events')
       },
       {
-        id: 'primetv',
-        name: 'PrimeTV',
-        path: '/primetv',
-        icon: <MonitorPlay size={22} />,
+        // Vídeo (PrimeTV) e áudio (PrimeRádio) vivem juntos: são a mesma ideia
+        // pro usuário — acompanhar o jogo enquanto opera.
+        id: 'transmissoes',
+        name: 'Transmissões',
+        icon: <RadioTower size={22} />,
         requiresAuth: false,
-        onClick: () => router.push('/primetv')
+        subItems: [
+          {
+            id: 'primetv',
+            name: 'PrimeTV',
+            path: '/primetv',
+            icon: <MonitorPlay size={18} />,
+            requiresAuth: false,
+            onClick: () => router.push('/primetv')
+          },
+          {
+            id: 'primeradio',
+            name: 'PrimeRádio',
+            path: '/primeradio',
+            icon: <Radio size={18} />,
+            requiresAuth: false,
+            onClick: () => router.push('/primeradio')
+          },
+        ]
       },
       {
         id: 'plans',
@@ -401,6 +419,15 @@ export const useMenuItems = (): MenuItem[] => {
         header: true,
         requiresAuth: true,
         adminOnly: true
+      },
+      {
+        id: 'admin-primeradio',
+        name: 'PrimeRádio',
+        path: '/admin/primeradio',
+        icon: <Radio size={22} />,
+        requiresAuth: true,
+        adminOnly: true,
+        onClick: () => router.push('/admin/primeradio')
       },
       {
         id: 'admin-bookmakers',
