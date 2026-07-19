@@ -307,7 +307,7 @@ const EventRow = ({
       <div className="flex items-center gap-1.5 shrink-0">
         {isAdmin && (
           hidden ? (
-            <Tooltip label="Reexibir (admin)">
+            <Tooltip label="Reexibir">
               <button
                 onClick={() => onOverride(event.id, { hidden: false, removed: false })}
                 disabled={busy}
@@ -318,7 +318,7 @@ const EventRow = ({
             </Tooltip>
           ) : (
             <>
-              <Tooltip label="Ocultar (admin)" className="hidden sm:inline-flex">
+              <Tooltip label="Ocultar" className="hidden sm:inline-flex">
                 <button
                   onClick={() => onOverride(event.id, { hidden: true })}
                   disabled={busy}
@@ -327,7 +327,7 @@ const EventRow = ({
                   <EyeOff size={15} />
                 </button>
               </Tooltip>
-              <Tooltip label="Remover do cálculo (admin)" className="hidden sm:inline-flex">
+              <Tooltip label="Remover da lista" className="hidden sm:inline-flex">
                 <button
                   onClick={() => onOverride(event.id, { removed: true })}
                   disabled={busy}
