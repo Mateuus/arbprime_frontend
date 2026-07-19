@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { GiHomeGarage, GiWallet, GiCoins, GiSoccerBall } from 'react-icons/gi';
-import { Gift, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags, CreditCard, Receipt, ServerCog, Flag, Wallet, ListChecks, Gem, LineChart, SlidersHorizontal, Handshake, Ticket, ClipboardCheck, Activity, Split, Bot, Rocket } from 'lucide-react';
+import { Gift, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags, CreditCard, Receipt, ServerCog, Flag, Wallet, ListChecks, Gem, LineChart, SlidersHorizontal, Handshake, Ticket, ClipboardCheck, Activity, Split, Bot, Rocket, MonitorPlay } from 'lucide-react';
 import { useMemo } from 'react';
 import { ReactNode } from 'react';
 import { useUserContext } from '@/context/UserContext';
@@ -60,6 +60,14 @@ export const useMenuItems = (): MenuItem[] => {
         icon: <GiSoccerBall size={22} />,
         requiresAuth: false,
         onClick: () => router.push('/events')
+      },
+      {
+        id: 'primetv',
+        name: 'PrimeTV',
+        path: '/primetv',
+        icon: <MonitorPlay size={22} />,
+        requiresAuth: false,
+        onClick: () => router.push('/primetv')
       },
       {
         id: 'plans',

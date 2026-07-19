@@ -323,6 +323,25 @@ const getExternalEventOdds = async (bookmaker: string, eventId: string) => {
   return apiClient.get(`/external/events/${encodeURIComponent(bookmaker)}/${encodeURIComponent(eventId)}/odds`);
 };
 
+// ==================== PRIMETV (transmissões ao vivo) ====================
+
+// Lista pública (oculta os eventos escondidos/removidos pelo admin).
+const getPrimeTvEvents = async () => apiClient.get('/primetv/events');
+
+// Dados do evento + conexão do WSS (player). Requer login.
+const getPrimeTvStream = async (id: string) =>
+  apiClient.get(`/primetv/tv/${encodeURIComponent(id)}`);
+
+// Lista admin (inclui ocultos, com o estado do override anexado).
+const getPrimeTvEventsAdmin = async () => apiClient.get('/primetv/admin/events');
+
+// Ocultar/remover/reexibir um evento. hidden e removed ambos false → reexibe.
+const setPrimeTvOverride = async (id: string, body: { hidden?: boolean; removed?: boolean; note?: string | null }) =>
+  apiClient.patch(`/primetv/admin/events/${encodeURIComponent(id)}`, body);
+
+const clearPrimeTvOverride = async (id: string) =>
+  apiClient.delete(`/primetv/admin/events/${encodeURIComponent(id)}/override`);
+
 // ==================== BOOKMAKERS (casas de aposta) ====================
 
 /** Config do NoDelay por casa (admin). Casas da mesma plataforma só mudam a wssUrl. */
@@ -1867,6 +1886,12 @@ export const apiGateway = {
     getExternalEvent,
     getExternalEventOdds,
     getExternalEventHistory,
+    // PrimeTV
+    getPrimeTvEvents,
+    getPrimeTvStream,
+    getPrimeTvEventsAdmin,
+    setPrimeTvOverride,
+    clearPrimeTvOverride,
     // Proxies
     getProxies,
     syncProxies,
