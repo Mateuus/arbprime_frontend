@@ -28,6 +28,10 @@ import { formatEventDateParts } from '@/utils/eventTime';
 type LoadState = 'loading' | 'ok' | 'auth' | 'notfound' | 'error';
 type PlayStatus = 'idle' | 'connecting' | 'signaling' | 'playing' | 'waiting' | 'no-session' | 'closed' | 'ended' | 'error';
 
+// Alvo do jitter buffer do browser (ms): segura ~meio segundo pra suavizar a travadinha
+// (troca latência por fluidez + dá tempo pro NACK recuperar pacote perdido). Fácil de tunar.
+const JITTER_MS = 500;
+
 export default function PrimeTvPlayerPage() {
   const router = useRouter();
   const id = typeof router.query.id === 'string' ? router.query.id : '';
@@ -92,6 +96,13 @@ export default function PrimeTvPlayerPage() {
     const setupPc = () => {
       const conn = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
       conn.ontrack = (e) => {
+        // Aumenta o jitter buffer → menos travadinha (mais tempo p/ reordenar + NACK).
+        // jitterBufferTarget (ms, API nova) ou playoutDelayHint (s, fallback antigo).
+        try {
+          const r = e.receiver as RTCRtpReceiver & { jitterBufferTarget?: number | null; playoutDelayHint?: number };
+          if ('jitterBufferTarget' in r) r.jitterBufferTarget = JITTER_MS;
+          else if ('playoutDelayHint' in r) r.playoutDelayHint = JITTER_MS / 1000;
+        } catch { /* browser sem suporte — ignora */ }
         remoteStream.addTrack(e.track);
         if (videoEl && videoEl.srcObject !== remoteStream) {
           videoEl.srcObject = remoteStream;
