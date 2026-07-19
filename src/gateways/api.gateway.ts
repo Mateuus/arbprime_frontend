@@ -384,6 +384,9 @@ const reopenPrimeRadioEvent = async (id: string) =>
 
 // Testa um link de stream (o navegador nao consegue: a resposta do Icecast
 // nao manda CORS e cabecalho icy-* nao e exposto ao JS).
+// Puxa os jogos do radios.com.br sob demanda (o backend tambem roda de hora em hora).
+const importPrimeRadio = async () => apiClient.post('/primeradio/admin/import');
+
 const probePrimeRadioStream = async (url: string) =>
   apiClient.post('/primeradio/admin/probe', { url });
 
@@ -1967,6 +1970,7 @@ export const apiGateway = {
     reopenPrimeRadioEvent,
     deletePrimeRadioEvent,
     probePrimeRadioStream,
+    importPrimeRadio,
     // Proxies
     getProxies,
     syncProxies,

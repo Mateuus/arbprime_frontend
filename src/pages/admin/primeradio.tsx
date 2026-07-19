@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import Head from 'next/head';
-import { Radio, RefreshCcw, Plus, Pencil, Trash2, X, Search, Square, RotateCcw, Loader2, Activity } from 'lucide-react';
+import { Radio, RefreshCcw, Plus, Pencil, Trash2, X, Search, Square, RotateCcw, Loader2, Activity, DownloadCloud } from 'lucide-react';
 import { apiGateway } from '@/gateways/api.gateway';
 import { formatEventDateParts } from '@/utils/eventTime';
 import { PrimeRadioAdminEvent, UpsertPrimeRadioDTO } from '@/interfaces/primeradio.interface';
@@ -138,6 +138,7 @@ export default function AdminPrimeRadioPage() {
   const [matches, setMatches] = useState<MatchedEvent[]>([]);
   const [probes, setProbes] = useState<Record<number, StreamProbe>>({});
   const [probingIdx, setProbingIdx] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -156,6 +157,21 @@ export default function AdminPrimeRadioPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
+
+  /** Puxa os jogos do radios.com.br agora (o cron já roda de hora em hora). */
+  const runImport = async () => {
+    setImporting(true);
+    setMsg(null);
+    try {
+      const res = await apiGateway.importPrimeRadio();
+      setMsg({ type: res.data?.result === 1 ? 'ok' : 'err', text: res.data?.message || 'Importação concluída.' });
+      await load();
+    } catch (e: unknown) {
+      setMsg({ type: 'err', text: errorMessage(e, 'Erro ao importar.') });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -351,6 +367,14 @@ export default function AdminPrimeRadioPage() {
           </button>
           <button onClick={openCreate} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-400 text-slate-900 font-semibold text-sm transition">
             <Plus size={16} /> Nova transmissão
+          </button>
+          <button
+            onClick={runImport}
+            disabled={importing}
+            title="Puxa os jogos de futebol do radios.com.br"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-sm text-white transition disabled:opacity-50"
+          >
+            {importing ? <Loader2 size={16} className="animate-spin" /> : <DownloadCloud size={16} />} Importar
           </button>
         </div>
       </header>
