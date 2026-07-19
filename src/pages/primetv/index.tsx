@@ -1,11 +1,13 @@
 import { useMemo, useState, useCallback } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { MonitorPlay, RefreshCcw, Search, Volume2, PlayCircle, Signal, EyeOff, Eye, Ban } from 'lucide-react';
 import { usePrimeTv } from '@/hooks/usePrimeTv';
 import { useUserContext } from '@/context/UserContext';
 import { formatEventDateParts } from '@/utils/eventTime';
 import { apiGateway } from '@/gateways/api.gateway';
 import { PrimeTvAdminEvent, PrimeTvEvent } from '@/interfaces/primetv.interface';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 const fieldBase =
   'bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 ' +
@@ -59,8 +61,19 @@ const asAdmin = (e: PrimeTvEvent): PrimeTvAdminEvent | null =>
   'override' in e ? (e as PrimeTvAdminEvent) : null;
 
 export default function PrimeTvPage() {
+  const router = useRouter();
   const { user } = useUserContext();
   const isAdmin = user?.role === 'admin';
+
+  // Assistir exige login: deslogado abre o modal de auth SOBRE o /primetv (shallow,
+  // não perde a lista) em vez de abrir o player e ele bater no 401.
+  const watch = useCallback(
+    (id: string) => {
+      if (user) openPlayer(id);
+      else router.push('/primetv?modal=auth&page=login', undefined, { shallow: true });
+    },
+    [user, router],
+  );
 
   const [autoUpdate, setAutoUpdate] = useState(true);
   const [showHidden, setShowHidden] = useState(false); // admin: usa endpoint admin p/ ver ocultos
@@ -206,7 +219,7 @@ export default function PrimeTvPage() {
       ) : (
         <div className="rounded-xl border border-white/10 bg-white/[0.02] divide-y divide-white/5 overflow-hidden">
           {items.map((e) => (
-            <EventRow key={e.id} event={e} isAdmin={isAdmin} busy={busyId === e.id} onWatch={() => openPlayer(e.id)} onOverride={runOverride} />
+            <EventRow key={e.id} event={e} isAdmin={isAdmin} busy={busyId === e.id} onWatch={() => watch(e.id)} onOverride={runOverride} />
           ))}
         </div>
       )}
@@ -277,12 +290,16 @@ const EventRow = ({
       </div>
 
       {/* badges (some no mobile) */}
-      <div className="hidden md:flex items-center gap-3 text-[11px] text-gray-400 shrink-0">
+      <div className="hidden md:flex items-center gap-2.5 text-[11px] text-gray-400 shrink-0">
         {event.hasAudio && (
-          <span className="inline-flex items-center gap-1 text-red-300" title="Com áudio/narração"><Volume2 size={12} /> áudio</span>
+          <Tooltip label="Com áudio / narração">
+            <span className="inline-flex items-center text-red-300"><Volume2 size={15} /></span>
+          </Tooltip>
         )}
         {event.channels > 0 && (
-          <span className="inline-flex items-center gap-1" title="Canais disponíveis"><Signal size={12} /> {event.channels}</span>
+          <Tooltip label={`${event.channels} ${event.channels > 1 ? 'canais disponíveis' : 'canal disponível'}`}>
+            <span className="inline-flex items-center gap-1"><Signal size={13} /> {event.channels}</span>
+          </Tooltip>
         )}
       </div>
 
@@ -290,32 +307,35 @@ const EventRow = ({
       <div className="flex items-center gap-1.5 shrink-0">
         {isAdmin && (
           hidden ? (
-            <button
-              onClick={() => onOverride(event.id, { hidden: false, removed: false })}
-              disabled={busy}
-              className="grid place-items-center h-8 w-8 rounded-lg border border-white/10 bg-white/5 text-gray-400 hover:text-emerald-300 hover:border-emerald-500/40 transition disabled:opacity-50"
-              title="Reexibir"
-            >
-              <Eye size={15} />
-            </button>
+            <Tooltip label="Reexibir (admin)">
+              <button
+                onClick={() => onOverride(event.id, { hidden: false, removed: false })}
+                disabled={busy}
+                className="grid place-items-center h-8 w-8 rounded-lg border border-white/10 bg-white/5 text-gray-400 hover:text-emerald-300 hover:border-emerald-500/40 transition disabled:opacity-50"
+              >
+                <Eye size={15} />
+              </button>
+            </Tooltip>
           ) : (
             <>
-              <button
-                onClick={() => onOverride(event.id, { hidden: true })}
-                disabled={busy}
-                className="hidden sm:grid place-items-center h-8 w-8 rounded-lg border border-white/10 bg-white/5 text-gray-400 hover:text-amber-300 hover:border-amber-500/40 transition disabled:opacity-50"
-                title="Ocultar"
-              >
-                <EyeOff size={15} />
-              </button>
-              <button
-                onClick={() => onOverride(event.id, { removed: true })}
-                disabled={busy}
-                className="hidden sm:grid place-items-center h-8 w-8 rounded-lg border border-white/10 bg-white/5 text-gray-400 hover:text-rose-300 hover:border-rose-500/40 transition disabled:opacity-50"
-                title="Remover"
-              >
-                <Ban size={15} />
-              </button>
+              <Tooltip label="Ocultar (admin)" className="hidden sm:inline-flex">
+                <button
+                  onClick={() => onOverride(event.id, { hidden: true })}
+                  disabled={busy}
+                  className="grid place-items-center h-8 w-8 rounded-lg border border-white/10 bg-white/5 text-gray-400 hover:text-amber-300 hover:border-amber-500/40 transition disabled:opacity-50"
+                >
+                  <EyeOff size={15} />
+                </button>
+              </Tooltip>
+              <Tooltip label="Remover do cálculo (admin)" className="hidden sm:inline-flex">
+                <button
+                  onClick={() => onOverride(event.id, { removed: true })}
+                  disabled={busy}
+                  className="grid place-items-center h-8 w-8 rounded-lg border border-white/10 bg-white/5 text-gray-400 hover:text-rose-300 hover:border-rose-500/40 transition disabled:opacity-50"
+                >
+                  <Ban size={15} />
+                </button>
+              </Tooltip>
             </>
           )
         )}
