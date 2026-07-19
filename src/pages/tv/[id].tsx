@@ -26,11 +26,14 @@ import { formatEventDateParts } from '@/utils/eventTime';
  */
 
 type LoadState = 'loading' | 'ok' | 'auth' | 'notfound' | 'error';
-type PlayStatus = 'idle' | 'connecting' | 'signaling' | 'playing' | 'waiting' | 'no-session' | 'closed' | 'error';
+type PlayStatus = 'idle' | 'connecting' | 'signaling' | 'playing' | 'waiting' | 'no-session' | 'closed' | 'ended' | 'error';
 
 export default function PrimeTvPlayerPage() {
   const router = useRouter();
   const id = typeof router.query.id === 'string' ? router.query.id : '';
+  // ?src=proxy → modo DIAGNÓSTICO/fallback: mediasoup-client REAL no browser via
+  // MsProxy (1 view por conta no fornecedor). Sem query → SFU (padrão).
+  const proxyMode = router.query.src === 'proxy';
 
   const [state, setState] = useState<LoadState>('loading');
   const [data, setData] = useState<PrimeTvStreamResult | null>(null);
@@ -73,10 +76,11 @@ export default function PrimeTvPlayerPage() {
   // backend manda um OFFER, a gente responde com ANSWER, troca ICE, e toca o
   // vídeo que chega via `ontrack`.
   useEffect(() => {
-    if (state !== 'ok' || !data) return;
+    if (state !== 'ok' || !data || proxyMode) return;
     const eventId = data.connection.eventId;
     const videoEl = videoRef.current; // capturado p/ o cleanup (o elemento é estável)
     let alive = true;
+    let ended = false; // evento encerrado → não tratar como erro de conexão
     let ws: WebSocket | null = null;
     let pc: RTCPeerConnection | null = null;
     const remoteStream = new MediaStream();
@@ -99,7 +103,7 @@ export default function PrimeTvPlayerPage() {
       conn.onconnectionstatechange = () => {
         const s = conn.connectionState;
         console.log('[PrimeTV][player] pc', s);
-        if (s === 'failed') setPlay({ status: 'error', error: 'conexão WebRTC falhou' });
+        if (s === 'failed' && !ended) setPlay({ status: 'error', error: 'conexão WebRTC falhou' });
       };
       pc = conn;
       return conn;
@@ -132,8 +136,10 @@ export default function PrimeTvPlayerPage() {
         if (msg.action === 'ice' && msg.candidate) { try { await pc?.addIceCandidate(msg.candidate); } catch { /* ignore */ } return; }
         if (msg.action === 'no-session') { setPlay({ status: 'no-session' }); return; }
         if (msg.action === 'no-media') { setPlay({ status: 'waiting' }); return; }
+        if (msg.action === 'ended') { ended = true; setPlay({ status: 'ended' }); try { pc?.close(); } catch { /* ignore */ } return; }
       };
-      ws.onclose = () => { if (alive) setPlay((p) => (p.status === 'playing' ? p : { status: 'closed' })); };
+      // Se o evento encerrou (ended), NÃO rebaixa pra 'closed' genérico no onclose.
+      ws.onclose = () => { if (alive) setPlay((p) => (p.status === 'playing' || p.status === 'ended' ? p : { status: 'closed' })); };
       ws.onerror = () => { /* onclose trata */ };
     })();
 
@@ -147,7 +153,117 @@ export default function PrimeTvPlayerPage() {
         videoEl.srcObject = null;
       }
     };
-  }, [state, data]);
+  }, [state, data, proxyMode]);
+
+  // 2b) MODO PROXY (?src=proxy) — diagnóstico/fallback: o consume mediasoup REAL roda
+  // AQUI no browser (mediasoup-client via esm.sh); a sinalização passa pelo nosso WSS
+  // ({action:'ms'}, backend injeta o msToken) e a MÍDIA flui direto browser↔ms via ICE.
+  // É o caminho que já tocava vídeo antes do SFU — se aqui toca e no SFU não, o problema
+  // é o consumer werift; se nem aqui tocar, o problema é o fornecedor/canal.
+  useEffect(() => {
+    if (state !== 'ok' || !data || !proxyMode) return;
+    const eventId = data.connection.eventId;
+    const videoEl = videoRef.current;
+    let alive = true;
+    let ws: WebSocket | null = null;
+    let gen = 0; // reconexão do proxy invalida o fluxo anterior
+    let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    let recvTransport: any = null;
+    const waiters = new Map<string, (data: any) => void>();
+
+    const sendMs = (payload: Record<string, unknown>) => {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'primetv', action: 'ms', eventId, payload }));
+    };
+    const waitMs = (type: string) => new Promise<any>((resolve) => waiters.set(type, resolve));
+
+    const runFlow = async (myGen: number) => {
+      setPlay({ status: 'signaling' });
+      // @ts-expect-error — import remoto em runtime (esm.sh), fora do bundle
+      const ms: any = await import(/* webpackIgnore: true */ 'https://esm.sh/mediasoup-client@3');
+      if (!alive || myGen !== gen) return;
+      sendMs({ type: 'getRouterRtpCapabilities' });
+      const routerCap = await waitMs('routerCap');
+      if (!alive || myGen !== gen) return;
+      const device = new ms.Device();
+      await device.load({ routerRtpCapabilities: routerCap });
+      sendMs({ type: 'createConsumerTransport', forceTcp: false });
+      const transportData = await waitMs('subTransportCreated');
+      if (!alive || myGen !== gen) return;
+      recvTransport = device.createRecvTransport(transportData);
+      recvTransport.on('connect', ({ dtlsParameters }: any, callback: () => void) => {
+        sendMs({ type: 'connectConsumerTransport', transportId: recvTransport.id, dtlsParameters });
+        waitMs('subConnected').then(() => callback());
+      });
+      recvTransport.on('connectionstatechange', (s: string) => {
+        console.log('[PrimeTV][proxy-player] transport', s);
+        if (s === 'connected') sendMs({ type: 'resume' }); // igual ao apiMS de referência
+        if (s === 'failed') setPlay({ status: 'error', error: 'conexão WebRTC falhou (proxy)' });
+      });
+      sendMs({ type: 'consume', rtpCapabilities: device.rtpCapabilities });
+      const sub = await waitMs('subscribed');
+      if (!alive || myGen !== gen) return;
+      if (!sub?.video && !sub?.audio) { setPlay({ status: 'waiting' }); return; }
+      const stream = new MediaStream();
+      for (const item of [sub.video, sub.audio]) {
+        if (!item) continue;
+        const consumer = await recvTransport.consume({ id: item.id, producerId: item.producerId, kind: item.kind, rtpParameters: item.rtpParameters });
+        stream.addTrack(consumer.track);
+        console.log('[PrimeTV][proxy-player] consumindo', item.kind);
+      }
+      if (!alive || myGen !== gen) return;
+      if (videoEl) {
+        videoEl.srcObject = stream;
+        videoEl.play().catch(() => { videoEl.muted = true; setNeedsTap(true); videoEl.play().catch(() => {}); });
+      }
+      setPlay({ status: 'playing' });
+      await waitMs('resumed');
+      if (keepAliveTimer) clearInterval(keepAliveTimer);
+      keepAliveTimer = setInterval(() => sendMs({ type: 'keepAlive' }), 5000);
+    };
+
+    (async () => {
+      let token = 'anonymous';
+      try { token = await apiGateway.getUserAuth(); } catch { /* anônimo */ }
+      if (!alive) return;
+      serverManager.init();
+      const base = serverManager.getWsBase();
+      console.log('[PrimeTV][proxy-player] WSS', base, 'evento', eventId);
+      setPlay({ status: 'connecting' });
+      ws = new WebSocket(`${base}?token=${encodeURIComponent(token)}`);
+      ws.onopen = () => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'primetv', action: 'join', eventId })); };
+      ws.onmessage = (evt) => {
+        let msg: any;
+        try { msg = JSON.parse(evt.data); } catch { return; }
+        if (msg?.type !== 'primetv') return;
+        if (msg.action === 'no-session') { setPlay({ status: 'no-session' }); return; }
+        if (msg.msClosed) { setPlay({ status: 'closed' }); return; }
+        if (msg.ready) { gen++; runFlow(gen).catch((e) => { if (alive) console.log('[PrimeTV][proxy-player] fluxo erro:', (e as Error).message); }); return; }
+        const inner = msg.ms;
+        if (inner?.type) {
+          const w = waiters.get(inner.type);
+          if (w) { waiters.delete(inner.type); w(inner.data); }
+          else if (inner.type === 'keepAlive') { /* ok */ }
+          else console.log('[PrimeTV][proxy-player] ms →', inner.type);
+        }
+      };
+      ws.onclose = () => { if (alive) setPlay((p) => (p.status === 'playing' ? p : { status: 'closed' })); };
+    })();
+
+    return () => {
+      alive = false;
+      gen++;
+      if (keepAliveTimer) clearInterval(keepAliveTimer);
+      try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'primetv', action: 'leave', eventId })); } catch { /* ignore */ }
+      try { recvTransport?.close(); } catch { /* ignore */ }
+      try { ws?.close(); } catch { /* ignore */ }
+      if (videoEl?.srcObject) {
+        (videoEl.srcObject as MediaStream).getTracks().forEach((tr) => tr.stop());
+        videoEl.srcObject = null;
+      }
+    };
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }, [state, data, proxyMode]);
 
   const ev = data?.event;
   const parts = ev ? formatEventDateParts(ev.startTime) : { day: '', time: '' };
@@ -215,7 +331,13 @@ export default function PrimeTvPlayerPage() {
             )}
             {state === 'ok' && (
               <div className="flex flex-col items-center gap-2 text-gray-400 max-w-md">
-                {play.status === 'no-session' ? (
+                {play.status === 'ended' ? (
+                  <>
+                    <Radio className="text-red-400" size={30} />
+                    <span className="text-base font-semibold text-gray-200">Transmissão encerrada</span>
+                    <span className="text-xs text-gray-500">O evento chegou ao fim. Você já pode fechar esta janela.</span>
+                  </>
+                ) : play.status === 'no-session' ? (
                   <><AlertTriangle className="text-amber-300" size={26} /> <span className="text-sm">Transmissão não está ativa no servidor. Tente reabrir.</span></>
                 ) : play.status === 'error' ? (
                   <><AlertTriangle className="text-rose-300" size={26} /> <span className="text-sm">Falha no player: {play.error}</span></>
