@@ -36,6 +36,16 @@ export interface NoDelayBookmaker {
   rogueUrl: string | null;
   /** Operador (site do BFF) — origem do mint de token. */
   operatorSite: string | null;
+  /** biahosted: BFF de login da casa (o login roda no BACKEND, não no browser). */
+  bffUrl: string | null;
+  /** biahosted: campo `domain` do corpo do login. */
+  loginDomain: string | null;
+  /** biahosted: host de odds Altenar (análogo do rogueUrl do swarm). */
+  oddsUrl: string | null;
+  /** biahosted: nome da integração Altenar (ex.: 'estrelabet'). */
+  integration: string | null;
+  /** biahosted: gateway de apostas Altenar (vazio = deriva do oddsUrl). */
+  betUrl: string | null;
   /** Chave do widget de radar por esporte ('default' = futebol). */
   radarProfiles: Record<string, string> | null;
   /** Origem que serve o match-tracker-map (cai no `url` da casa). */

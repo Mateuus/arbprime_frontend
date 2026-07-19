@@ -20,11 +20,12 @@ export function useInstanceLiveGames(houses: NoDelayBookmaker[]) {
   const [loading, setLoading] = useState(houses.length > 0);
   const [liveCount, setLiveCount] = useState(0);
 
-  // chave de dependência estável (só os slugs prontos importam)
-  const readyKey = houses.filter((h) => h.ready).map((h) => h.slug).sort().join(',');
+  // chave de dependência estável (só os slugs prontos DA ROGUE importam — casa
+  // biahosted não tem rogueUrl e é lida por outro caminho, não por SSE aqui).
+  const readyKey = houses.filter((h) => h.ready && h.rogueUrl).map((h) => h.slug).sort().join(',');
 
   useEffect(() => {
-    const ready = houses.filter((h) => h.ready);
+    const ready = houses.filter((h) => h.ready && h.rogueUrl);
     if (ready.length === 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);

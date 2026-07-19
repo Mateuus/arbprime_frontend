@@ -47,6 +47,8 @@ export interface LiveSelection {
   order: number;
   outcomeType: string; // "Over" / "Under" / "Home" … (p/ filtro Delay Trade)
   tplIndex: number | null; // TemplateGroupSettingsIndex → aponta pro limite do mercado
+  /** biahosted/Altenar: typeId cru da odd (= selectionTypeId no placeWidget). fssb: undefined. */
+  selectionTypeId?: number;
 }
 
 /** Limite de aposta do mercado (TemplateGroupSettings). MaxBet = teto de LUCRO/K. */

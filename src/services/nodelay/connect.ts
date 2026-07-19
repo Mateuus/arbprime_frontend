@@ -78,11 +78,26 @@ async function loginAndSave(house: NoDelayBookmaker, accountId: string): Promise
 }
 
 /**
+ * biahosted: o login roda no BACKEND (o BFF exige Origin spoofado). O front só
+ * pede pro servidor conectar; ele lê a credencial do cofre, loga e salva a sessão.
+ */
+async function connectBiahosted(accountId: string): Promise<void> {
+  const res = await apiGateway.connectNoDelayAccount(accountId);
+  if (res.data?.result !== 1) {
+    throw new Error(res.data?.message || 'Falha ao conectar a conta.');
+  }
+}
+
+/**
  * Loga uma conta JÁ cadastrada. Reporta o resultado ao backend nos dois
  * caminhos (sucesso e falha) — assim o painel mostra o porquê sem adivinhar.
  */
-export async function connectAccount(house: NoDelayBookmaker, account: NoDelayAccount): Promise<SwarmLoginResult> {
-  return loginAndSave(house, account.id);
+export async function connectAccount(house: NoDelayBookmaker, account: NoDelayAccount): Promise<void> {
+  if (house.platform === 'biahosted') {
+    await connectBiahosted(account.id);
+    return;
+  }
+  await loginAndSave(house, account.id);
 }
 
 /**
@@ -93,6 +108,26 @@ export async function addAndConnectAccount(
   house: NoDelayBookmaker,
   input: { username: string; password: string; label?: string },
 ): Promise<NoDelayAccount> {
+  // biahosted: o login é server-side e lê a credencial do cofre — então salva
+  // PRIMEIRO e conecta depois. Se o login falhar, apaga (credencial ruim não
+  // fica no cofre, igual ao swarm).
+  if (house.platform === 'biahosted') {
+    const created = await apiGateway.createNoDelayAccount({
+      bookmakerSlug: house.slug, username: input.username, password: input.password, label: input.label,
+    });
+    if (created.data?.result !== 1) {
+      throw new Error(created.data?.message || 'Não foi possível salvar a conta.');
+    }
+    const account = created.data.data as NoDelayAccount;
+    try {
+      await connectBiahosted(account.id);
+    } catch (e) {
+      try { await apiGateway.deleteNoDelayAccount(account.id); } catch { /* ignora */ }
+      throw e;
+    }
+    return account;
+  }
+
   const config = houseToSwarmConfig(house);
 
   const res = await swarmLoginOnce(config, input.username, input.password);
@@ -156,6 +191,19 @@ export async function refreshAllAccounts(
     if (!house?.ready) {
       tick();
       return { ...base, state: 'error', message: 'Casa indisponível' };
+    }
+
+    // biahosted: sem restore_login por WSS — revalida logando de novo no backend
+    // (token ~1h). (Otimizar p/ só relogar perto de vencer fica p/ o session keeper.)
+    if (house.platform === 'biahosted') {
+      try {
+        await connectBiahosted(s.id);
+        tick();
+        return { ...base, state: 'alive' };
+      } catch (e) {
+        tick();
+        return { ...base, state: 'error', message: errorText(e, 'Falha ao revalidar') };
+      }
     }
 
     const client = new SwarmClient(houseToSwarmConfig(house));

@@ -30,17 +30,25 @@ interface BookmakerForm {
   noDelaySiteId: string;
   noDelaySource: string;
   noDelayLanguage: string;
+  // biahosted (Altenar)
+  noDelayBffUrl: string;
+  noDelayLoginDomain: string;
+  noDelayOddsUrl: string;
+  noDelayIntegration: string;
+  noDelayBetUrl: string;
 }
 const emptyForm: BookmakerForm = {
   slug: '', name: '', logoUrl: '', color: '', url: '', cloneOf: '', sortOrder: '0', commissionPct: '',
-  noDelayEnabled: false, noDelayPlatform: '', noDelayWssUrl: '', noDelayRogueUrl: '', noDelayOrigin: '', noDelaySiteId: '', noDelaySource: '', noDelayLanguage: ''
+  noDelayEnabled: false, noDelayPlatform: '', noDelayWssUrl: '', noDelayRogueUrl: '', noDelayOrigin: '', noDelaySiteId: '', noDelaySource: '', noDelayLanguage: '',
+  noDelayBffUrl: '', noDelayLoginDomain: '', noDelayOddsUrl: '', noDelayIntegration: '', noDelayBetUrl: ''
 };
 
 // Famílias de login suportadas pelo NoDelay. Casas da mesma família falam o
-// mesmo protocolo e só mudam a wssUrl — por isso é uma lista, não um campo livre.
+// mesmo protocolo e só mudam o endpoint — por isso é uma lista, não campo livre.
 const NODELAY_PLATFORMS = [
   { value: '', label: 'Nenhuma' },
-  { value: 'swarm', label: 'WebSocket (swarm) — 7games, betão, 7k, apostatudo' }
+  { value: 'swarm', label: 'WebSocket (swarm) — 7games, betão, 7k, apostatudo' },
+  { value: 'biahosted', label: 'Altenar (biahosted) — estrelabet' }
 ];
 
 const errorMessage = (e: unknown, fallback: string): string => {
@@ -104,7 +112,12 @@ const AdminBookmakersPage = () => {
       noDelayOrigin: nd.origin || '',
       noDelaySiteId: nd.siteId || '',
       noDelaySource: nd.source != null ? String(nd.source) : '',
-      noDelayLanguage: nd.language || ''
+      noDelayLanguage: nd.language || '',
+      noDelayBffUrl: nd.bffUrl || '',
+      noDelayLoginDomain: nd.loginDomain || '',
+      noDelayOddsUrl: nd.oddsUrl || '',
+      noDelayIntegration: nd.integration || '',
+      noDelayBetUrl: nd.betUrl || ''
     });
     setModalOpen(true);
   };
@@ -135,7 +148,12 @@ const AdminBookmakersPage = () => {
               origin: form.noDelayOrigin.trim() || null,
               siteId: form.noDelaySiteId.trim() || null,
               source: Number.isFinite(src) ? src : null,
-              language: form.noDelayLanguage.trim() || null
+              language: form.noDelayLanguage.trim() || null,
+              bffUrl: form.noDelayBffUrl.trim() || null,
+              loginDomain: form.noDelayLoginDomain.trim() || null,
+              oddsUrl: form.noDelayOddsUrl.trim() || null,
+              integration: form.noDelayIntegration.trim() || null,
+              betUrl: form.noDelayBetUrl.trim() || null
             }
           : null,
         sortOrder: Number(form.sortOrder) || 0
@@ -617,6 +635,41 @@ const AdminBookmakersPage = () => {
                           <label className="text-xs text-gray-400">
                             Origin <span className="text-gray-600">(informativo)</span>
                             <input value={form.noDelayOrigin} onChange={(e) => setForm({ ...form, noDelayOrigin: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="https://7games.bet.br" />
+                          </label>
+                        </div>
+                      </>
+                    )}
+
+                    {form.noDelayPlatform === 'biahosted' && (
+                      <>
+                        <label className="block text-xs text-gray-400">
+                          BFF de login <span className="text-gray-600">(POR CASA — o login varia)</span>
+                          <input value={form.noDelayBffUrl} onChange={(e) => setForm({ ...form, noDelayBffUrl: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="https://bff-estrelabet.estrelabet.bet.br" />
+                          <span className="mt-1 block text-[11px] text-gray-500">POST <code>{'{bff}/login'}</code> com Origin abaixo → devolve o token (JWT ~1h). Cada casa biahosted loga diferente.</span>
+                        </label>
+                        <label className="block text-xs text-gray-400">
+                          Host de odds Altenar <span className="text-gray-600">(odds)</span>
+                          <input value={form.noDelayOddsUrl} onChange={(e) => setForm({ ...form, noDelayOddsUrl: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="https://sb2frontend-altenar2.biahosted.com" />
+                          <span className="mt-1 block text-[11px] text-gray-500">Comum às casas biahosted; consome com Origin + token do login.</span>
+                        </label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className="text-xs text-gray-400">
+                            integration <span className="text-gray-600">(place — por casa)</span>
+                            <input value={form.noDelayIntegration} onChange={(e) => setForm({ ...form, noDelayIntegration: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="estrelabet" />
+                          </label>
+                          <label className="text-xs text-gray-400">
+                            Gateway de apostas <span className="text-gray-600">(vazio = auto)</span>
+                            <input value={form.noDelayBetUrl} onChange={(e) => setForm({ ...form, noDelayBetUrl: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="https://sb2betgateway-altenar2.biahosted.com" />
+                          </label>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className="text-xs text-gray-400">
+                            domain <span className="text-gray-600">(corpo do login)</span>
+                            <input value={form.noDelayLoginDomain} onChange={(e) => setForm({ ...form, noDelayLoginDomain: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="www.estrelabet.bet.br" />
+                          </label>
+                          <label className="text-xs text-gray-400">
+                            Origin <span className="text-gray-600">(obrigatório)</span>
+                            <input value={form.noDelayOrigin} onChange={(e) => setForm({ ...form, noDelayOrigin: e.target.value })} className={`${inputClass} mt-1 font-mono`} placeholder="https://www.estrelabet.bet.br" />
                           </label>
                         </div>
                       </>

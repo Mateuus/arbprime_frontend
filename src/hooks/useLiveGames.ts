@@ -15,13 +15,13 @@ import { eventToLiveGame, isFullEvent, patchLiveGame, LiveGame } from '@/service
  */
 export function useLiveGames(house: NoDelayBookmaker | undefined) {
   const [games, setGames] = useState<LiveGame[]>([]);
-  const [loading, setLoading] = useState(!!house?.ready);
+  const [loading, setLoading] = useState(!!(house?.ready && house.rogueUrl));
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const gamesRef = useRef<Map<string, LiveGame>>(new Map());
 
   useEffect(() => {
-    if (!house?.ready) return;
+    if (!house?.ready || !house.rogueUrl) return; // sem rogueUrl = não é fssb (ex.: biahosted)
 
     gamesRef.current = new Map();
     let alive = true;

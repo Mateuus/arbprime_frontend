@@ -352,6 +352,12 @@ export interface NoDelayBookmakerConfigDTO {
   siteId?: string | null;
   source?: number | null;
   language?: string | null;
+  // biahosted (Altenar): login por BFF + odds no host Altenar.
+  bffUrl?: string | null;
+  loginDomain?: string | null;
+  oddsUrl?: string | null;
+  integration?: string | null;
+  betUrl?: string | null;
 }
 
 export interface BookmakerDTO {
@@ -1740,6 +1746,13 @@ const getAccountRogueToken = async (id: string) => apiClient.get(`/nodelay/accou
 const saveNoDelaySession = async (id: string, body: { externalUserId?: string; authToken: string; jweToken?: string | null; balance?: number; currency?: string }) =>
   apiClient.post(`/nodelay/accounts/${id}/session`, body);
 const clearNoDelaySession = async (id: string) => apiClient.delete(`/nodelay/accounts/${id}/session`);
+// biahosted: login SERVER-SIDE (o backend loga no BFF e salva a sessão).
+const connectNoDelayAccount = async (id: string) => apiClient.post(`/nodelay/accounts/${id}/connect`, {});
+// biahosted: JWT da conta p/ o BROWSER apostar direto no betgateway (client-side).
+const getNoDelayBetToken = async (id: string) => apiClient.get(`/nodelay/accounts/${id}/bet-token`);
+// biahosted: disparo SERVER-SIDE (fallback — hoje o disparo é client-side).
+const placeNoDelayBet = async (id: string, body: { stake: number; market: unknown }) =>
+  apiClient.post(`/nodelay/accounts/${id}/bet`, body);
 const setNoDelayStatus = async (id: string, status: string, error?: string) =>
   apiClient.post(`/nodelay/accounts/${id}/status`, { status, error });
 const saveNoDelayBalance = async (id: string, balance: number, currency?: string) =>
@@ -2092,6 +2105,9 @@ export const apiGateway = {
     getAccountRogueToken,
     saveNoDelaySession,
     clearNoDelaySession,
+    connectNoDelayAccount,
+    getNoDelayBetToken,
+    placeNoDelayBet,
     setNoDelayStatus,
     saveNoDelayBalance
 };

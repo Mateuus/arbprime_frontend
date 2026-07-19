@@ -6,6 +6,7 @@ import { useNowTick } from '@/hooks/useNowTick';
 import { NoDelaySettings } from '@/hooks/useNoDelaySettings';
 import { placeBet, BetTicket } from '@/services/nodelay/placeBet';
 import { placeBetReal, warmAccountTokens, tokensWarm } from '@/services/nodelay/placeBetReal';
+import { buildAltenarTicket, placeBetAltenar, AltenarTicket } from '@/services/nodelay/placeBetAltenar';
 import { maxStakeOf, cachedK, getAccountK, pickCalibrationSample } from '@/services/nodelay/maxStake';
 import { SlipView } from '@/components/nodelay/BetSlipCard';
 import { BetSlipDrawer } from '@/components/nodelay/BetSlipDrawer';
@@ -75,8 +76,15 @@ export function QuickBetModal({
   // está perto de vencer). Assim o disparo é SÓ o placeBets — zero latência de
   // mint no caminho crítico. Cada ms conta.
   useEffect(() => {
-    const ids = betting.map((a) => a.id);
-    if (ids.length === 0) return;
+    // SÓ o swarm (fssb) pré-aquece rogue token; biahosted (Altenar) aposta com a
+    // sessão/JWT própria — sem rogue token. Sem esse filtro, o warming batia no
+    // rogue-token da conta biahosted em loop (495) e o chip ficava "preparando".
+    const ids = betting.filter((a) => houseBySlug.get(a.bookmakerSlug)?.platform === 'swarm').map((a) => a.id);
+    if (ids.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTokensReady(true);
+      return;
+    }
     let alive = true;
     const tick = async () => {
       await warmAccountTokens(ids);
@@ -85,7 +93,7 @@ export function QuickBetModal({
     void tick();
     const iv = window.setInterval(() => { void tick(); }, 15_000);
     return () => { alive = false; window.clearInterval(iv); };
-  }, [betting]);
+  }, [betting, houseBySlug]);
 
   // Calibra o K (max stake) de CADA conta marcada ao abrir + a cada 5min — assim
   // "os limites das contas" já ficam prontos na abertura (getAccountK cacheia por
@@ -171,9 +179,8 @@ export function QuickBetModal({
   // com odd 0). Slips montados e submetidos numa passada só.
   const doFire = useCallback((m: LiveMarket, s: LiveSelection) => {
     const round = ++fireSeq.current;
-    const submit = settings.realBets ? placeBetReal : placeBet;
     const slips: SlipView[] = [];
-    const toSubmit: { key: string; a: NoDelayAccount; ticket: BetTicket; stake: number; rogueUrl?: string }[] = [];
+    const toSubmit: { key: string; a: NoDelayAccount; ticket: BetTicket; stake: number; rogueUrl?: string; isBia: boolean; altenarTicket: AltenarTicket | null; house?: NoDelayBookmaker }[] = [];
 
     for (const a of betting) {
       const key = `${round}:${a.id}`;
@@ -193,24 +200,28 @@ export function QuickBetModal({
         slips.push({ key, accountId: a.id, accountLabel: label, ticket, stakeRequested: stake, status: 'done', result: { ok: false, elapsedMs: 0, stake: 0, odds: 0, partial: false, oddsChanged: false, error: 'Abaixo do mínimo da casa (R$ 1)' } });
         continue;
       }
+      // biahosted (Altenar) → disparo server-side com ticket próprio; swarm → rogue.
+      const isBia = house?.platform === 'biahosted';
+      const altenarTicket = isBia ? buildAltenarTicket(detail, m, s, ticket.odds) : null;
       slips.push({ key, accountId: a.id, accountLabel: label, ticket, stakeRequested: stake, status: 'placing' });
-      toSubmit.push({ key, a, ticket, stake, rogueUrl: house?.rogueUrl || undefined });
+      toSubmit.push({ key, a, ticket, stake, rogueUrl: house?.rogueUrl || undefined, isBia, altenarTicket, house });
     }
     setSlips(slips);
 
+    const opts = { allowPartial: settings.allowPartial, acceptOddsChange: settings.acceptOddsChange };
     for (const it of toSubmit) {
-      submit(it.a, it.ticket, {
-        stake: it.stake,
-        allowPartial: settings.allowPartial,
-        acceptOddsChange: settings.acceptOddsChange,
-        rogueUrl: it.rogueUrl,
-      })
+      // biahosted + REAL → placeBetAltenar (CLIENT-SIDE: browser faz a cadeia SB2 +
+      // posta o placeWidget direto); senão mock/placeBetReal (fssb).
+      const p = it.isBia && settings.realBets && it.altenarTicket && it.house
+        ? placeBetAltenar(it.a, it.house, it.altenarTicket, it.stake)
+        : (settings.realBets && !it.isBia ? placeBetReal : placeBet)(it.a, it.ticket, { stake: it.stake, ...opts, rogueUrl: it.rogueUrl });
+      p
         .then((result) => {
           setSlips((prev) => prev && prev.map((sl) => (sl.key === it.key ? { ...sl, status: 'done', result } : sl)));
         })
         .catch(() => failSlip(it.key, it.ticket, 'Falha de rede — confira o histórico da casa.'));
     }
-  }, [betting, houseBySlug, ticketFor, getHousePrice, stakeForAccount, settings]);
+  }, [betting, houseBySlug, ticketFor, getHousePrice, stakeForAccount, settings, detail]);
 
   // Porteiro: valida contas e decide se confirma (modal) ou dispara direto.
   const fire = useCallback((m: LiveMarket, s: LiveSelection) => {

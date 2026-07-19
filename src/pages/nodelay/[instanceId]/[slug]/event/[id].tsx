@@ -15,6 +15,7 @@ import { NoDelayGate } from '@/components/nodelay/NoDelayGate';
 import { LiveScoreboard } from '@/components/nodelay/LiveScoreboard';
 import { MatchRadar } from '@/components/nodelay/MatchRadar';
 import { MarketBoard } from '@/components/nodelay/MarketBoard';
+import { useAltenarLiveEvent } from '@/hooks/useAltenarLiveEvent';
 import { BetSettingsPopover } from '@/components/nodelay/BetSettingsPopover';
 import { QuickBetModal } from '@/components/nodelay/QuickBetModal';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
@@ -51,6 +52,10 @@ export default function NoDelayEventPage() {
   }, [isAuthenticated, instanceId]);
 
   const primary = useMemo(() => bookmakers.find((b) => b.slug === slug), [bookmakers, slug]);
+  // Casa primária é biahosted (Altenar)? → renderiza o branch de polling (odds via
+  // REST), não o fluxo fssb/SSE. As duas árvores de hooks convivem (a fssb no-opa
+  // sem casa rogue), então dá pra fazer early-return depois de TODOS os hooks.
+  const isBiaPrimary = primary?.platform === 'biahosted' && !!primary?.oddsUrl;
   const houseBySlug = useMemo(() => {
     const m = new Map<string, NoDelayBookmaker>();
     for (const b of bookmakers) m.set(b.slug, b);
@@ -66,7 +71,12 @@ export default function NoDelayEventPage() {
 
   const { favorites, toggle: toggleFavorite } = useNoDelayFavorites();
   const { antiProtect, toggle: toggleAntiProtect } = useNoDelayAntiProtect();
-  const { detail, loading, error, changed, live, getHousePrice } = useInstanceLiveEvent(subHouses, gameId, antiProtect);
+  // Fonte do evento POR PLATAFORMA, mesmo layout embaixo: fssb (SSE) ou biahosted
+  // (Altenar/polling). As duas rodam (a inativa recebe input vazio e no-opa) e a
+  // gente escolhe o resultado — assim a página do evento é IGUAL nas duas.
+  const fssbEvent = useInstanceLiveEvent(isBiaPrimary ? [] : subHouses, gameId, antiProtect);
+  const biaEvent = useAltenarLiveEvent(isBiaPrimary ? primary : undefined, gameId);
+  const { detail, loading, error, changed, live, getHousePrice } = isBiaPrimary ? biaEvent : fssbEvent;
 
   // Mantém as sessões vivas + reconecta as que caírem, sozinho.
   useNoDelaySessionKeeper(subHouses, reloadNd, isAuthenticated);
@@ -139,7 +149,7 @@ export default function NoDelayEventPage() {
           <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
             {/* Coluna principal */}
             <div className="min-w-0 space-y-4">
-              {primary && (
+              {primary && !isBiaPrimary && (
                 <MatchRadar house={primary} fsbEventId={detail.fsbEventId} sportId={detail.sportId} />
               )}
               <LiveScoreboard game={detail} />
