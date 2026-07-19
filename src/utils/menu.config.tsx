@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { GiHomeGarage, GiWallet, GiCoins, GiSoccerBall } from 'react-icons/gi';
-import { Gift, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags, CreditCard, Receipt, ServerCog, Flag, Wallet, ListChecks, Gem, LineChart, SlidersHorizontal, Handshake, Ticket, ClipboardCheck, Activity, Split, Bot, Rocket, MonitorPlay } from 'lucide-react';
+import { Gift, CalendarClock, LayoutDashboard, Settings, Users, Users2, Zap, Clock, Network, Store, Trophy, Tags, CreditCard, Receipt, ServerCog, Flag, Wallet, ListChecks, Gem, LineChart, SlidersHorizontal, Handshake, Ticket, ClipboardCheck, Activity, Split, Bot, Rocket, MonitorPlay, Layers } from 'lucide-react';
 import { useMemo } from 'react';
 import { ReactNode } from 'react';
 import { useUserContext } from '@/context/UserContext';
@@ -220,6 +220,14 @@ export const useMenuItems = (): MenuItem[] => {
             icon: <Zap size={18} />,
             requiresAuth: true,
             onClick: () => router.push('/arbbets/duas-vidas')
+          },
+          {
+            id: 'multipla',
+            name: 'Múltiplas',
+            path: '/arbbets/multipla',
+            icon: <Layers size={18} />,
+            requiresAuth: true,
+            onClick: () => router.push('/arbbets/multipla')
           }
         ]
       },
