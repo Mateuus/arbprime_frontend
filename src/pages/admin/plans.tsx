@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiGateway, PlanDTO, UpsertPlanDTO } from '@/gateways/api.gateway';
+import { apiGateway, DiscordRoleDTO, PlanDTO, UpsertPlanDTO } from '@/gateways/api.gateway';
 import {
-  CreditCard, Plus, RefreshCcw, Pencil, Trash2, X, Loader2, Gift, EyeOff, Clock, Tag, Layers
+  CreditCard, Plus, RefreshCcw, Pencil, Trash2, X, Loader2, Gift, EyeOff, Clock, Tag, Layers, AlertTriangle
 } from 'lucide-react';
+import { FaDiscord } from 'react-icons/fa';
 
 const errorMessage = (e: unknown, fallback: string): string => {
   const resp = (e as { response?: { data?: { message?: string } } })?.response;
@@ -26,11 +27,12 @@ interface FormState {
   isTrial: boolean;
   isActive: boolean;
   sortOrder: string;
+  discordRoleId: string;
 }
 
 const emptyForm: FormState = {
   name: '', description: '', price: '0', promotionType: 'none', promotionValue: '0',
-  durationInDays: '30', level: '1', isTrial: false, isActive: true, sortOrder: '0',
+  durationInDays: '30', level: '1', isTrial: false, isActive: true, sortOrder: '0', discordRoleId: '',
 };
 
 const fromPlan = (p: PlanDTO): FormState => ({
@@ -44,6 +46,7 @@ const fromPlan = (p: PlanDTO): FormState => ({
   isTrial: p.isTrial,
   isActive: p.isActive,
   sortOrder: String(p.sortOrder),
+  discordRoleId: p.discordRoleId || '',
 });
 
 const computeFinal = (f: FormState): number => {
@@ -66,9 +69,20 @@ const toPayload = (f: FormState): UpsertPlanDTO => ({
   isTrial: f.isTrial,
   isActive: f.isActive,
   sortOrder: Number(f.sortOrder) || 0,
+  discordRoleId: f.discordRoleId || null,
 });
 
-const PlanForm = ({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) => (
+const PlanForm = ({
+  form,
+  setForm,
+  roles,
+  rolesError,
+}: {
+  form: FormState;
+  setForm: (f: FormState) => void;
+  roles: DiscordRoleDTO[];
+  rolesError: string | null;
+}) => (
   <div className="space-y-4">
     <label className="block text-xs text-gray-400">
       Nome
@@ -123,6 +137,31 @@ const PlanForm = ({ form, setForm }: { form: FormState; setForm: (f: FormState) 
       </label>
     </div>
 
+    <label className="block text-xs text-gray-400">
+      <span className="inline-flex items-center gap-1.5"><FaDiscord size={13} className="text-[#5865F2]" /> Cargo no Discord</span>
+      <select
+        value={form.discordRoleId}
+        onChange={(e) => setForm({ ...form, discordRoleId: e.target.value })}
+        className={`${inputClass} mt-1`}
+      >
+        <option value="">Nenhum cargo</option>
+        {roles.map((r) => (
+          <option key={r.id} value={r.id} disabled={!r.assignable}>
+            {r.name}{r.assignable ? '' : '  (o bot nao alcanca)'}
+          </option>
+        ))}
+      </select>
+      {rolesError ? (
+        <span className="mt-1 flex items-start gap-1 text-[11px] text-amber-300">
+          <AlertTriangle size={11} className="mt-0.5 shrink-0" /> {rolesError}
+        </span>
+      ) : (
+        <span className="mt-1 block text-[11px] text-gray-500">
+          Concedido enquanto a assinatura estiver ativa e removido quando vencer.
+        </span>
+      )}
+    </label>
+
     <div className="flex flex-wrap gap-4 pt-1">
       <label className="inline-flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
         <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="accent-teal-500" />
@@ -149,6 +188,11 @@ const AdminPlansPage = () => {
   const [editForm, setEditForm] = useState<FormState>(emptyForm);
   const [editSaving, setEditSaving] = useState(false);
 
+  // Cargos da guild p/ o seletor. Falha aqui nao impede editar o plano — o
+  // campo so fica sem opcoes, com o aviso do porque.
+  const [roles, setRoles] = useState<DiscordRoleDTO[]>([]);
+  const [rolesError, setRolesError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -162,10 +206,25 @@ const AdminPlansPage = () => {
     }
   }, []);
 
+  const loadRoles = useCallback(async () => {
+    try {
+      const res = await apiGateway.getDiscordGuildRoles();
+      if (res.data?.result === 1) {
+        setRoles(res.data.data || []);
+        setRolesError(null);
+      } else {
+        setRolesError(res.data?.message || 'Bot do Discord indisponivel.');
+      }
+    } catch {
+      setRolesError('Nao foi possivel carregar os cargos do Discord.');
+    }
+  }, []);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
-  }, [load]);
+    loadRoles();
+  }, [load, loadRoles]);
 
   const handleCreate = async () => {
     if (!addForm.name.trim()) { setMsg({ type: 'err', text: 'Informe o nome do plano.' }); return; }
@@ -275,6 +334,11 @@ const AdminPlansPage = () => {
                 {p.hasPromotion && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 ring-1 ring-emerald-500/30 px-2 py-0.5 text-emerald-300">promo</span>}
                 {p.isTrial && <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 ring-1 ring-violet-500/30 px-2 py-0.5 text-violet-300">teste</span>}
                 {!p.isActive && <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 ring-1 ring-rose-500/30 px-2 py-0.5 text-rose-300"><EyeOff size={11} /> inativo</span>}
+                {p.discordRoleId && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#5865F2]/15 ring-1 ring-[#5865F2]/40 px-2 py-0.5 text-[#a6adf5]">
+                    <FaDiscord size={11} /> {roles.find((r) => r.id === p.discordRoleId)?.name || p.discordRoleId}
+                  </span>
+                )}
               </div>
             </div>
           ))}
@@ -287,7 +351,7 @@ const AdminPlansPage = () => {
           <div className="bg-brand-dark border border-white/10 w-full max-w-md rounded-2xl p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
             <button onClick={() => setAddOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-rose-400"><X size={20} /></button>
             <h2 className="text-lg font-bold text-white mb-5">Novo plano</h2>
-            <PlanForm form={addForm} setForm={setAddForm} />
+            <PlanForm form={addForm} setForm={setAddForm} roles={roles} rolesError={rolesError} />
             <div className="flex justify-end gap-2 mt-6">
               <button onClick={() => setAddOpen(false)} className="text-sm px-4 py-2 rounded-lg text-gray-300 hover:bg-white/5">Cancelar</button>
               <button onClick={handleCreate} disabled={saving} className="text-sm px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-slate-900 font-semibold inline-flex items-center gap-1.5">
@@ -304,7 +368,7 @@ const AdminPlansPage = () => {
           <div className="bg-brand-dark border border-white/10 w-full max-w-md rounded-2xl p-6 relative shadow-2xl max-h-[90vh] overflow-y-auto">
             <button onClick={() => setEditPlan(null)} className="absolute top-4 right-4 text-gray-400 hover:text-rose-400"><X size={20} /></button>
             <h2 className="text-lg font-bold text-white mb-5">Editar plano</h2>
-            <PlanForm form={editForm} setForm={setEditForm} />
+            <PlanForm form={editForm} setForm={setEditForm} roles={roles} rolesError={rolesError} />
             <div className="flex justify-end gap-2 mt-6">
               <button onClick={() => setEditPlan(null)} className="text-sm px-4 py-2 rounded-lg text-gray-300 hover:bg-white/5">Cancelar</button>
               <button onClick={handleEdit} disabled={editSaving} className="text-sm px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-slate-900 font-semibold inline-flex items-center gap-1.5">

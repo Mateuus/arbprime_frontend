@@ -327,7 +327,19 @@ const getExternalEventOdds = async (bookmaker: string, eventId: string) => {
 // ==================== DISCORD (vínculo da conta + cargos) ====================
 
 // Situação do vínculo do usuário logado (linked, inGuild, handle).
+export interface DiscordRoleDTO {
+  id: string;
+  name: string;
+  position: number;
+  color: number;
+  /** false = acima do bot na hierarquia; ele nao consegue aplicar o cargo. */
+  assignable: boolean;
+}
+
 const getDiscordStatus = async () => apiClient.get('/discord/status');
+
+// Cargos da guild p/ o seletor de plano (admin).
+const getDiscordGuildRoles = async () => apiClient.get('/discord/admin/roles');
 
 // Devolve a authUrl do OAuth2 — o front redireciona o navegador para lá.
 const getDiscordLinkUrl = async () => apiClient.get('/discord/link');
@@ -874,6 +886,8 @@ export interface PlanDTO {
   isTrial: boolean;
   isActive: boolean;
   sortOrder: number;
+  /** Cargo do Discord concedido enquanto a assinatura estiver ativa. */
+  discordRoleId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -889,6 +903,7 @@ export interface UpsertPlanDTO {
   isTrial?: boolean;
   isActive?: boolean;
   sortOrder?: number;
+  discordRoleId?: string | null;
 }
 
 export interface UserPlanDTO {
@@ -1952,6 +1967,7 @@ export const apiGateway = {
     getExternalEventHistory,
     // PrimeTV
     getDiscordStatus,
+    getDiscordGuildRoles,
     getDiscordLinkUrl,
     unlinkDiscord,
     syncDiscordRoles,

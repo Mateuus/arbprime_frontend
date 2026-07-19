@@ -55,9 +55,10 @@ export default function ArbCrypto({ Component, pageProps }: AppProps) {
     };
   }, [router]);
 
-  // Rotas sem layout (sem sidebar/navbar). O player do PrimeTV abre em popup e
-  // deve ocupar a janela inteira, sem o header/login.
-  const noLayoutRoutes = ['/arbcrypto/calculator', '/tv/[id]'];
+  // Rotas sem layout (sem sidebar/navbar). Os players do PrimeTV e do
+  // PrimeRádio abrem em popup e devem ocupar a janela inteira, sem
+  // header/menu — a popup é só o player.
+  const noLayoutRoutes = ['/arbcrypto/calculator', '/tv/[id]', '/radio/[id]'];
 
   if (noLayoutRoutes.includes(router.pathname)) {
     return <Component {...pageProps} />;

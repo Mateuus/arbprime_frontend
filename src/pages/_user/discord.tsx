@@ -49,6 +49,7 @@ const DiscordSettings = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -57,6 +58,7 @@ const DiscordSettings = () => {
   useEffect(() => {
     const result = router.query.discord as string | undefined;
     if (!result) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFeedback(CALLBACK_MESSAGES[result] ?? CALLBACK_MESSAGES.erro);
     const { discord, ...rest } = router.query;
     router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true });
