@@ -45,6 +45,8 @@ export interface PrimeRadioEvent {
   station: string | null; // nome da rádio/narrador (legado)
   /** Emissoras disponíveis (sem URL). O ouvinte escolhe qual tocar. */
   stations: PrimeRadioStation[];
+  /** Imagem de fundo da página do jogo (null = gradiente padrão). */
+  coverUrl: string | null;
 }
 
 /** Item do painel admin: o público + gestão. */
@@ -93,6 +95,7 @@ export interface UpsertPrimeRadioDTO {
   endTime?: string;
   streamUrl?: string;
   station?: string | null;
+  coverUrl?: string | null;
   isActive?: boolean;
   /** Quando enviado, SUBSTITUI a lista inteira de emissoras. */
   stations?: UpsertPrimeRadioStationDTO[];

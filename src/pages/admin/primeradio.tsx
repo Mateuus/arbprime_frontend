@@ -53,6 +53,7 @@ interface Form {
   sport: string;
   startTime: string; // valor do input (local, sem Z)
   endTime: string;
+  coverUrl: string;
   stations: StationRow[];
 }
 
@@ -64,7 +65,7 @@ const emptyStation = (): StationRow => ({ name: '', streamUrl: '', city: '' });
 const emptyForm: Form = {
   homeName: '', awayName: '', homeSofaId: '', awaySofaId: '', title: '',
   competition: '', country: '', countryCode: '', sport: 'futebol',
-  startTime: '', endTime: '', stations: [emptyStation()],
+  startTime: '', endTime: '', coverUrl: '', stations: [emptyStation()],
 };
 
 /**
@@ -173,6 +174,7 @@ export default function AdminPrimeRadioPage() {
       competition: ev.competition === 'Outros' ? '' : ev.competition,
       country: ev.country || '', countryCode: ev.countryCode || '',
       sport: ev.sport, startTime: toLocalInput(ev.startTime), endTime: toLocalInput(ev.endTime),
+      coverUrl: ev.coverUrl || '',
       stations: ev.adminStations?.length
         ? ev.adminStations.map((st) => ({ name: st.name, streamUrl: st.streamUrl, city: st.city || '' }))
         : [{ name: ev.station || '', streamUrl: ev.streamUrl || '', city: '' }],
@@ -295,6 +297,7 @@ export default function AdminPrimeRadioPage() {
         sport: form.sport.trim() || 'futebol',
         startTime: toWallclockIso(form.startTime),
         endTime: toWallclockIso(form.endTime),
+        coverUrl: form.coverUrl.trim() || null,
         stations,
       };
       if (editing) {
@@ -512,6 +515,14 @@ export default function AdminPrimeRadioPage() {
                 <input type="datetime-local" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} className={`${inputClass} mt-1`} />
               </label>
             </div>
+
+            <label className="block text-xs text-gray-400 mb-1">Imagem de fundo da página (opcional)
+              <input value={form.coverUrl} onChange={(e) => setForm({ ...form, coverUrl: e.target.value })} placeholder="https://.../arte-do-jogo.jpg" className={`${inputClass} mt-1`} />
+            </label>
+            {form.coverUrl.trim() && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={form.coverUrl.trim()} alt="" referrerPolicy="no-referrer" className="mb-4 h-24 w-full object-cover rounded-lg ring-1 ring-white/10" />
+            )}
 
             {/* Emissoras: um jogo costuma ter várias rádios narrando ao mesmo tempo. */}
             <div className="mb-4">

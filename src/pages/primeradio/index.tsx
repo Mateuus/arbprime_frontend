@@ -51,13 +51,24 @@ const TeamAvatar = ({ name, url }: { name: string; url: string | null }) => {
   return <img src={url} alt="" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="h-7 w-7 rounded-full object-contain bg-white/5 ring-1 ring-white/10 shrink-0" />;
 };
 
+/**
+ * Abre a página do jogo em popup (mesmo padrão do PrimeTV): o ouvinte segue
+ * operando na aba principal enquanto escuta.
+ */
+const openPlayer = (id: string) => {
+  const w = 560;
+  const h = 640;
+  const left = typeof window !== 'undefined' ? window.screenX + Math.max(0, (window.outerWidth - w) / 2) : 0;
+  const top = typeof window !== 'undefined' ? window.screenY + Math.max(0, (window.outerHeight - h) / 2) : 0;
+  window.open(
+    `/radio/${encodeURIComponent(id)}`,
+    `primeradio_${id}`,
+    `width=${w},height=${h},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`,
+  );
+};
+
 type Filter = 'all' | 'live' | 'upcoming';
 
-interface NowPlaying {
-  event: PrimeRadioEvent;
-  streamUrl: string | null;
-  stations: PrimeRadioStationListen[];
-}
 
 export default function PrimeRadioPage() {
   const router = useRouter();
@@ -69,10 +80,6 @@ export default function PrimeRadioPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [competition, setCompetition] = useState<string>('all');
-  const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null);
-  const [openingId, setOpeningId] = useState<string | null>(null);
-  // qual emissora está tocando (índice na lista do jogo aberto)
-  const [stationIdx, setStationIdx] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -100,30 +107,15 @@ export default function PrimeRadioPage() {
 
   /** Ouvir exige login: deslogado abre o modal de auth SOBRE a página (shallow). */
   const listen = useCallback(
-    async (ev: PrimeRadioEvent) => {
+    (ev: PrimeRadioEvent) => {
       if (!user) {
         router.push('/primeradio?modal=auth&page=login', undefined, { shallow: true });
         return;
       }
-      setOpeningId(ev.id);
-      try {
-        const res = await apiGateway.getPrimeRadioListen(ev.id);
-        if (res.data?.result === 1) {
-          setStationIdx(0);
-          setNowPlaying(res.data.data as NowPlaying);
-        }
-        else setErr(res.data?.message || 'Não foi possível abrir a transmissão.');
-      } catch {
-        setErr('Não foi possível abrir a transmissão.');
-      } finally {
-        setOpeningId(null);
-      }
+      openPlayer(ev.id);
     },
     [user, router],
   );
-
-  // Emissora tocando agora (guarda o índice fora da faixa após trocar de jogo).
-  const current = nowPlaying?.stations?.[stationIdx] || nowPlaying?.stations?.[0] || null;
 
   const events = useMemo(() => {
     const all = data?.events || [];
@@ -228,7 +220,6 @@ export default function PrimeRadioPage() {
           <ul className="divide-y divide-white/5">
             {events.map((ev) => {
               const parts = formatEventDateParts(ev.startTime);
-              const playing = nowPlaying?.event.id === ev.id;
 
   return (
                 <li key={ev.id} className="flex items-center gap-3 px-3 sm:px-4 py-3 hover:bg-white/5 transition">
@@ -264,13 +255,10 @@ export default function PrimeRadioPage() {
                   {ev.isLive && (
                     <button
                       onClick={() => listen(ev)}
-                      disabled={openingId === ev.id}
-                      className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-sm font-semibold transition disabled:opacity-60 ${
-                        playing ? 'bg-white/10 text-orange-300 ring-1 ring-orange-500/40' : 'bg-orange-500 hover:bg-orange-400 text-slate-900'
-                      }`}
+                      className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-sm font-semibold transition bg-orange-500 hover:bg-orange-400 text-slate-900"
                     >
-                      {openingId === ev.id ? <Loader2 size={16} className="animate-spin" /> : <Headphones size={16} />}
-                      <span className="hidden sm:inline">{playing ? 'Ouvindo' : 'Ouvir'}</span>
+                      <Headphones size={16} />
+                      <span className="hidden sm:inline">Ouvir</span>
                     </button>
                   )}
                 </li>
@@ -281,53 +269,6 @@ export default function PrimeRadioPage() {
       </div>
 
       {/* Player fixo no rodapé — continua tocando enquanto navega */}
-      {nowPlaying && (
-        <div className="fixed bottom-0 left-0 right-0 z-[60] border-t border-orange-500/30 bg-brand-dark/95 backdrop-blur-sm shadow-2xl">
-          <div className="w-full px-3 sm:px-6 py-3 flex items-center gap-3">
-            <div className="grid place-items-center h-10 w-10 rounded-lg bg-orange-500/20 ring-1 ring-orange-500/30 shrink-0">
-              <Radio size={18} className="text-orange-300 animate-pulse" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-white truncate">{nowPlaying.event.title}</div>
-              <div className="text-[11px] text-gray-400 truncate">
-                {nowPlaying.event.competition}
-                {current ? ` · ${current.name}` : ''}
-                {current?.city ? ` (${current.city})` : ''}
-              </div>
-              {/* Várias rádios narram o mesmo jogo — quem escolhe é o ouvinte. */}
-              {nowPlaying.stations.length > 1 && (
-                <div className="flex items-center gap-1 mt-1 overflow-x-auto no-scrollbar">
-                  {nowPlaying.stations.map((st, i) => (
-                    <button
-                      key={st.id}
-                      onClick={() => setStationIdx(i)}
-                      title={st.city ? `${st.name} — ${st.city}` : st.name}
-                      className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 transition ${
-                        i === stationIdx
-                          ? 'bg-orange-500/20 text-orange-200 ring-orange-500/40'
-                          : 'bg-white/5 text-gray-400 ring-white/10 hover:text-white hover:bg-white/10'
-                      }`}
-                    >
-                      {st.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {/* `key` força o <audio> a recarregar ao trocar de emissora: só mudar
-                o src não reinicia o stream em alguns navegadores. */}
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <audio key={current?.id || 'none'} src={current?.streamUrl} autoPlay controls className="h-9 max-w-[46vw] sm:max-w-sm" />
-            <button
-              onClick={() => setNowPlaying(null)}
-              className="grid place-items-center h-9 w-9 rounded-lg text-gray-400 hover:text-rose-300 hover:bg-white/10 transition shrink-0"
-              title="Fechar player"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
