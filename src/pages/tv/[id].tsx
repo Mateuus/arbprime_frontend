@@ -99,7 +99,7 @@ export default function PrimeTvPlayerPage() {
         // Aumenta o jitter buffer → menos travadinha (mais tempo p/ reordenar + NACK).
         // jitterBufferTarget (ms, API nova) ou playoutDelayHint (s, fallback antigo).
         try {
-          const r = e.receiver as RTCRtpReceiver & { jitterBufferTarget?: number | null; playoutDelayHint?: number };
+          const r = e.receiver as unknown as Record<string, unknown>;
           if ('jitterBufferTarget' in r) r.jitterBufferTarget = JITTER_MS;
           else if ('playoutDelayHint' in r) r.playoutDelayHint = JITTER_MS / 1000;
         } catch { /* browser sem suporte — ignora */ }
