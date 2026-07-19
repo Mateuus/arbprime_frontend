@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import Head from 'next/head';
-import { Radio, RefreshCcw, Plus, Pencil, Trash2, X, Search, Square, RotateCcw, Loader2 } from 'lucide-react';
+import { Radio, RefreshCcw, Plus, Pencil, Trash2, X, Search, Square, RotateCcw, Loader2, Activity } from 'lucide-react';
 import { apiGateway } from '@/gateways/api.gateway';
 import { formatEventDateParts } from '@/utils/eventTime';
 import { PrimeRadioAdminEvent, UpsertPrimeRadioDTO } from '@/interfaces/primeradio.interface';
@@ -75,6 +75,31 @@ const CrestPreview = ({ sofaId }: { sofaId: string }) => {
   return <img src={url} alt="" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="h-9 w-9 rounded-lg object-contain bg-white/5 ring-1 ring-white/10 shrink-0" />;
 };
 
+/** Resultado do teste do link (POST /primeradio/admin/probe). */
+interface StreamProbe {
+  ok: boolean;
+  error?: string;
+  kind?: 'audio' | 'playlist' | 'outro';
+  name?: string | null;
+  bitrate?: number | null;
+  channels?: number | null;
+  listeners?: number | null;
+  listenerPeak?: number | null;
+  nowPlaying?: string | null;
+}
+
+/** Monta os selos do resultado, pulando o que a estação não declarou. */
+const probeSpecs = (p: StreamProbe): string[] => {
+  const out: string[] = [];
+  if (p.name) out.push(p.name);
+  if (p.kind === 'playlist') out.push('playlist');
+  if (p.bitrate) out.push(`${p.bitrate}kbps${p.channels === 2 ? ' estéreo' : ''}`);
+  if (p.listeners !== null && p.listeners !== undefined) {
+    out.push(`${p.listeners} ouvinte${p.listeners === 1 ? '' : 's'}${p.listenerPeak ? ` (pico ${p.listenerPeak})` : ''}`);
+  }
+  return out;
+};
+
 /**
  * Jogo vindo de /external/events/grouped (o MESMO que a página /events usa —
  * MySQL do arbbetting via ExternalDataSource). Não usar o /events do Redis
@@ -100,6 +125,8 @@ export default function AdminPrimeRadioPage() {
   const [gameSearch, setGameSearch] = useState('');
   const [searching, setSearching] = useState(false);
   const [matches, setMatches] = useState<MatchedEvent[]>([]);
+  const [probe, setProbe] = useState<StreamProbe | null>(null);
+  const [probing, setProbing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -172,6 +199,25 @@ export default function AdminPrimeRadioPage() {
       endTime: start ? addMinutes(start, DURATION_MIN) : f.endTime,
     }));
     setMatches([]);
+  };
+
+  /**
+   * Pergunta ao backend se o link está no ar. Não dá pra fazer daqui: a
+   * resposta do Icecast não manda CORS e o navegador não expõe cabeçalho icy-*.
+   */
+  const runProbe = async () => {
+    const url = form.streamUrl.trim();
+    if (!url) return;
+    setProbing(true);
+    setProbe(null);
+    try {
+      const res = await apiGateway.probePrimeRadioStream(url);
+      setProbe(res.data?.result === 1 ? res.data.data : { ok: false, error: res.data?.message });
+    } catch (e) {
+      setProbe({ ok: false, error: errorMessage(e, 'Não foi possível testar o link.') });
+    } finally {
+      setProbing(false);
+    }
   };
 
   /** Ao mudar o início, sugere o fim (+100 min) se ainda não houver um. */
@@ -426,9 +472,32 @@ export default function AdminPrimeRadioPage() {
             {/* Player de teste: confere se o link toca ANTES de salvar */}
             {form.streamUrl.trim() && (
               <div className="mb-3 rounded-lg border border-orange-500/20 bg-orange-500/5 p-2">
-                <div className="text-[11px] text-orange-200/80 mb-1">Teste o link antes de salvar:</div>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-[11px] text-orange-200/80">Teste o link antes de salvar:</span>
+                  <button
+                    onClick={runProbe}
+                    disabled={probing}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/10 hover:bg-white/15 text-[11px] text-white transition disabled:opacity-50"
+                  >
+                    {probing ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}
+                    Verificar
+                  </button>
+                </div>
                 {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                 <audio src={form.streamUrl.trim()} controls className="w-full h-9" />
+                {probe && (
+                  <div className={`mt-2 text-[11px] rounded-md px-2 py-1.5 ${probe.ok ? 'bg-emerald-500/10 text-emerald-200' : 'bg-rose-500/10 text-rose-200'}`}>
+                    {probe.ok ? (
+                      <>
+                        <span className="font-semibold">No ar</span>
+                        {probeSpecs(probe).map((s) => <span key={s}> · {s}</span>)}
+                        {probe.nowPlaying && <div className="text-emerald-300/70 truncate mt-0.5">Tocando: {probe.nowPlaying}</div>}
+                      </>
+                    ) : (
+                      <><span className="font-semibold">Falhou</span> · {probe.error || 'Sem resposta.'}</>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

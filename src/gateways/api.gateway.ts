@@ -382,6 +382,11 @@ const endPrimeRadioEvent = async (id: string) =>
 const reopenPrimeRadioEvent = async (id: string) =>
   apiClient.post(`/primeradio/admin/events/${encodeURIComponent(id)}/reopen`, {});
 
+// Testa um link de stream (o navegador nao consegue: a resposta do Icecast
+// nao manda CORS e cabecalho icy-* nao e exposto ao JS).
+const probePrimeRadioStream = async (url: string) =>
+  apiClient.post('/primeradio/admin/probe', { url });
+
 const deletePrimeRadioEvent = async (id: string) =>
   apiClient.delete(`/primeradio/admin/events/${encodeURIComponent(id)}`);
 
@@ -1961,6 +1966,7 @@ export const apiGateway = {
     endPrimeRadioEvent,
     reopenPrimeRadioEvent,
     deletePrimeRadioEvent,
+    probePrimeRadioStream,
     // Proxies
     getProxies,
     syncProxies,
