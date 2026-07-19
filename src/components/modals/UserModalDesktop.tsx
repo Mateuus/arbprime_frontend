@@ -14,6 +14,7 @@ const UserPages: Record<string, any> = {
   "ab-bookmakers": dynamic(() => import("@/pages/_user/ab-bookmakers/index")),
   "change-password": dynamic(() => import("@/pages/_user/change-password")),
   "server": dynamic(() => import("@/pages/_user/server")),
+  "discord": dynamic(() => import("@/pages/_user/discord")),
 };
 
 const UserModalDesktop = () => {

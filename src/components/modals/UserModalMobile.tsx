@@ -10,6 +10,7 @@ import FilterListPage from '@/pages/_user/abfilter';
 import FilterFormPage from '@/pages/_user/abfilter/edit';
 import AbBookmakersPage from '@/pages/_user/ab-bookmakers';
 import ServerSettings from '@/pages/_user/server';
+import DiscordSettings from '@/pages/_user/discord';
 
 const getPageInfo = (pageId: string) => {
   for (const menu of userMenus) {
@@ -54,6 +55,8 @@ const UserModalMobile = () => {
         return <ChangePassword />;
       case 'server':
         return <ServerSettings />;
+      case 'discord':
+        return <DiscordSettings />;
       default:
         return <p className="text-sm text-gray-400">Conteúdo em breve para <b>{currentPage}</b></p>;
     }

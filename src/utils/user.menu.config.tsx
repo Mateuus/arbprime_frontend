@@ -12,6 +12,7 @@ import { GiSoccerBall } from "react-icons/gi";
 import { RiShieldUserLine } from "react-icons/ri";
 import { MdOutlineFilterAlt } from "react-icons/md";
 import { BiBookContent } from "react-icons/bi";
+import { FaDiscord } from "react-icons/fa";
 
 export const userMenus = [
   {
@@ -21,7 +22,8 @@ export const userMenus = [
     children: [
       { id: 'details', label: 'Dados Pessoais', description: 'Altere seus dados pessoais.', icon: <RiShieldUserLine size={16} /> },
       { id: 'change-password', label: 'Trocar Senha', description: 'Altere sua senha de acesso.', icon: <Lock size={16} /> },
-      { id: 'mensagens', label: 'Mensagens', description: 'Suas mensagens do sistema.', icon: <Mail size={16} /> }
+      { id: 'mensagens', label: 'Mensagens', description: 'Suas mensagens do sistema.', icon: <Mail size={16} /> },
+      { id: 'discord', label: 'Discord', description: 'Vincule sua conta do Discord e receba o cargo do seu plano.', icon: <FaDiscord size={16} /> }
     ]
   },
   {
