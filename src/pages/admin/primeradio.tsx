@@ -63,17 +63,23 @@ const emptyForm: Form = {
   startTime: '', endTime: '', streamUrl: '', station: '',
 };
 
-/** Escudo com preview instantâneo a partir do id do SofaScore. */
-const CrestPreview = ({ sofaId }: { sofaId: string }) => {
+/**
+ * Escudo do time. `referrerPolicy="no-referrer"` é obrigatório: a SofaScore
+ * bloqueia hotlink pelo Referer (mesma solução usada na lista do PrimeTV).
+ */
+const Crest = ({ url, size = 36 }: { url: string | null; size?: number }) => {
   const [broken, setBroken] = useState(false);
-  const url = crest(sofaId);
-  useEffect(() => { setBroken(false); }, [sofaId]);
+  useEffect(() => { setBroken(false); }, [url]);
+  const box = { height: size, width: size };
   if (!url || broken) {
-    return <span className="grid place-items-center h-9 w-9 rounded-lg bg-white/5 text-[10px] text-gray-500 ring-1 ring-white/10 shrink-0">—</span>;
+    return <span style={box} className="grid place-items-center rounded-lg bg-white/5 text-[10px] text-gray-500 ring-1 ring-white/10 shrink-0">—</span>;
   }
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={url} alt="" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="h-9 w-9 rounded-lg object-contain bg-white/5 ring-1 ring-white/10 shrink-0" />;
+  return <img src={url} alt="" style={box} referrerPolicy="no-referrer" onError={() => setBroken(true)} className="rounded-lg object-contain bg-white/5 ring-1 ring-white/10 shrink-0" />;
 };
+
+/** Preview no formulário: monta a URL a partir do id digitado, na hora. */
+const CrestPreview = ({ sofaId }: { sofaId: string }) => <Crest url={crest(sofaId)} />;
 
 /** Resultado do teste do link (POST /primeradio/admin/probe). */
 interface StreamProbe {
@@ -337,6 +343,12 @@ export default function AdminPrimeRadioPage() {
                     <div className="text-xs text-gray-400">{parts.day}</div>
                     <div className="text-sm font-semibold text-white">{parts.time}</div>
                   </div>
+                  {ev.isVersus && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Crest url={ev.home.iconUrl} size={28} />
+                      <Crest url={ev.away.iconUrl} size={28} />
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-white font-medium truncate">{ev.title}</div>
                     <div className="text-[11px] text-gray-400 truncate">
