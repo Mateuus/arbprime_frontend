@@ -36,8 +36,10 @@ const TeamAvatar = ({ name, url }: { name: string; url: string | null }) => {
       </span>
     );
   }
+  // referrerPolicy=no-referrer: a SofaScore bloqueia o hotlink por Referer de domínio
+  // público (funciona no localhost, 403 no arbprime.pro). Sem referer, ela serve a imagem.
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={url} alt="" onError={() => setBroken(true)} className="h-7 w-7 rounded-full object-contain bg-white/5 ring-1 ring-white/10 shrink-0" />;
+  return <img src={url} alt="" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="h-7 w-7 rounded-full object-contain bg-white/5 ring-1 ring-white/10 shrink-0" />;
 };
 
 /** Abre o player numa janela pequena separada (popup), do tamanho certo. */
