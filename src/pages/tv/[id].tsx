@@ -317,7 +317,7 @@ export default function PrimeTvPlayerPage() {
         {/* Marca d'água ARBPRIME — overlay CSS puro (não toca no stream: custo zero de
             CPU/banda/backend). pointer-events-none p/ não bloquear os controles. */}
         {state === 'ok' && play.status === 'playing' && (
-          <div className="pointer-events-none absolute bottom-3 right-4 select-none opacity-80">
+          <div className="pointer-events-none absolute top-3 right-4 select-none opacity-80">
             <span className="text-base sm:text-lg font-extrabold tracking-tight drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)]">
               <span className="text-white">ARB</span>
               <span className="bg-gradient-to-r from-green-400 to-teal-300 bg-clip-text text-transparent">PRIME</span>
