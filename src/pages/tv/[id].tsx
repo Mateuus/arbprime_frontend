@@ -314,6 +314,17 @@ export default function PrimeTvPlayerPage() {
       <div className="flex-1 relative bg-black grid place-items-center">
         <video ref={videoRef} autoPlay playsInline controls className="max-h-full max-w-full w-full h-full object-contain bg-black" />
 
+        {/* Marca d'água ARBPRIME — overlay CSS puro (não toca no stream: custo zero de
+            CPU/banda/backend). pointer-events-none p/ não bloquear os controles. */}
+        {state === 'ok' && play.status === 'playing' && (
+          <div className="pointer-events-none absolute bottom-3 right-4 select-none opacity-80">
+            <span className="text-base sm:text-lg font-extrabold tracking-tight drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)]">
+              <span className="text-white">ARB</span>
+              <span className="bg-gradient-to-r from-green-400 to-teal-300 bg-clip-text text-transparent">PRIME</span>
+            </span>
+          </div>
+        )}
+
         {/* Botão p/ dar som (autoplay bloqueado) */}
         {play.status === 'playing' && needsTap && (
           <button onClick={tapToUnmute} className="absolute bottom-4 left-1/2 -translate-x-1/2 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-500 hover:bg-red-400 text-sm font-semibold shadow-lg">
