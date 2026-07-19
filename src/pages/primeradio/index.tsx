@@ -5,7 +5,7 @@ import { Radio, RefreshCcw, Search, Headphones, X, Loader2, AlertTriangle } from
 import { useUserContext } from '@/context/UserContext';
 import { formatEventDateParts } from '@/utils/eventTime';
 import { apiGateway } from '@/gateways/api.gateway';
-import { PrimeRadioEvent, PrimeRadioListResult } from '@/interfaces/primeradio.interface';
+import { PrimeRadioEvent, PrimeRadioListResult, PrimeRadioStationListen } from '@/interfaces/primeradio.interface';
 
 /**
  * PrimeRádio — lista das narrações em ÁUDIO dos jogos.
@@ -55,7 +55,8 @@ type Filter = 'all' | 'live' | 'upcoming';
 
 interface NowPlaying {
   event: PrimeRadioEvent;
-  streamUrl: string;
+  streamUrl: string | null;
+  stations: PrimeRadioStationListen[];
 }
 
 export default function PrimeRadioPage() {
@@ -70,6 +71,8 @@ export default function PrimeRadioPage() {
   const [competition, setCompetition] = useState<string>('all');
   const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  // qual emissora está tocando (índice na lista do jogo aberto)
+  const [stationIdx, setStationIdx] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -105,7 +108,10 @@ export default function PrimeRadioPage() {
       setOpeningId(ev.id);
       try {
         const res = await apiGateway.getPrimeRadioListen(ev.id);
-        if (res.data?.result === 1) setNowPlaying(res.data.data as NowPlaying);
+        if (res.data?.result === 1) {
+          setStationIdx(0);
+          setNowPlaying(res.data.data as NowPlaying);
+        }
         else setErr(res.data?.message || 'Não foi possível abrir a transmissão.');
       } catch {
         setErr('Não foi possível abrir a transmissão.');
@@ -115,6 +121,9 @@ export default function PrimeRadioPage() {
     },
     [user, router],
   );
+
+  // Emissora tocando agora (guarda o índice fora da faixa após trocar de jogo).
+  const current = nowPlaying?.stations?.[stationIdx] || nowPlaying?.stations?.[0] || null;
 
   const events = useMemo(() => {
     const all = data?.events || [];
@@ -220,7 +229,8 @@ export default function PrimeRadioPage() {
             {events.map((ev) => {
               const parts = formatEventDateParts(ev.startTime);
               const playing = nowPlaying?.event.id === ev.id;
-              return (
+
+  return (
                 <li key={ev.id} className="flex items-center gap-3 px-3 sm:px-4 py-3 hover:bg-white/5 transition">
                   {/* horário + status */}
                   <div className="w-14 shrink-0 text-center">
@@ -281,11 +291,33 @@ export default function PrimeRadioPage() {
               <div className="text-sm font-semibold text-white truncate">{nowPlaying.event.title}</div>
               <div className="text-[11px] text-gray-400 truncate">
                 {nowPlaying.event.competition}
-                {nowPlaying.event.station ? ` · ${nowPlaying.event.station}` : ''}
+                {current ? ` · ${current.name}` : ''}
+                {current?.city ? ` (${current.city})` : ''}
               </div>
+              {/* Várias rádios narram o mesmo jogo — quem escolhe é o ouvinte. */}
+              {nowPlaying.stations.length > 1 && (
+                <div className="flex items-center gap-1 mt-1 overflow-x-auto no-scrollbar">
+                  {nowPlaying.stations.map((st, i) => (
+                    <button
+                      key={st.id}
+                      onClick={() => setStationIdx(i)}
+                      title={st.city ? `${st.name} — ${st.city}` : st.name}
+                      className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 transition ${
+                        i === stationIdx
+                          ? 'bg-orange-500/20 text-orange-200 ring-orange-500/40'
+                          : 'bg-white/5 text-gray-400 ring-white/10 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      {st.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+            {/* `key` força o <audio> a recarregar ao trocar de emissora: só mudar
+                o src não reinicia o stream em alguns navegadores. */}
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <audio src={nowPlaying.streamUrl} autoPlay controls className="h-9 max-w-[46vw] sm:max-w-sm" />
+            <audio key={current?.id || 'none'} src={current?.streamUrl} autoPlay controls className="h-9 max-w-[46vw] sm:max-w-sm" />
             <button
               onClick={() => setNowPlaying(null)}
               className="grid place-items-center h-9 w-9 rounded-lg text-gray-400 hover:text-rose-300 hover:bg-white/10 transition shrink-0"

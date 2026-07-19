@@ -14,6 +14,19 @@ export interface PrimeRadioTeam {
   iconUrl: string | null;
 }
 
+/** Emissora que narra o jogo — na lista pública vem SEM a URL. */
+export interface PrimeRadioStation {
+  id: string;
+  name: string;
+  city: string | null;
+  logoUrl: string | null;
+}
+
+/** Emissora COM a URL — só chega em /primeradio/listen/:id (autenticada). */
+export interface PrimeRadioStationListen extends PrimeRadioStation {
+  streamUrl: string;
+}
+
 export interface PrimeRadioEvent {
   id: string;
   isVersus: boolean;
@@ -29,12 +42,16 @@ export interface PrimeRadioEvent {
   endTime: string;
   status: PrimeRadioStatus;
   isLive: boolean;
-  station: string | null; // nome da rádio/narrador
+  station: string | null; // nome da rádio/narrador (legado)
+  /** Emissoras disponíveis (sem URL). O ouvinte escolhe qual tocar. */
+  stations: PrimeRadioStation[];
 }
 
 /** Item do painel admin: o público + gestão. */
 export interface PrimeRadioAdminEvent extends PrimeRadioEvent {
-  streamUrl: string;
+  /** No painel a URL aparece (é onde o admin cadastra). */
+  adminStations: PrimeRadioStationListen[];
+  streamUrl: string | null;
   isActive: boolean;
   endedAt: string | null;
   createdAt: string;
@@ -56,7 +73,9 @@ export interface PrimeRadioListResult {
 /** Resposta do "ouvir" — só aqui a URL do stream aparece. */
 export interface PrimeRadioListenResult {
   event: PrimeRadioEvent;
-  streamUrl: string;
+  /** 1ª emissora — atalho p/ tocar direto. */
+  streamUrl: string | null;
+  stations: PrimeRadioStationListen[];
 }
 
 /** Corpo de criação/edição no painel admin. */
@@ -75,4 +94,13 @@ export interface UpsertPrimeRadioDTO {
   streamUrl?: string;
   station?: string | null;
   isActive?: boolean;
+  /** Quando enviado, SUBSTITUI a lista inteira de emissoras. */
+  stations?: UpsertPrimeRadioStationDTO[];
+}
+
+export interface UpsertPrimeRadioStationDTO {
+  name: string;
+  streamUrl: string;
+  city?: string | null;
+  logoUrl?: string | null;
 }

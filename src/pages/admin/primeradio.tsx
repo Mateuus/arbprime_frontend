@@ -53,14 +53,18 @@ interface Form {
   sport: string;
   startTime: string; // valor do input (local, sem Z)
   endTime: string;
-  streamUrl: string;
-  station: string;
+  stations: StationRow[];
 }
+
+/** Uma emissora no formulário. Um jogo costuma ter várias narrando. */
+interface StationRow { name: string; streamUrl: string; city: string }
+
+const emptyStation = (): StationRow => ({ name: '', streamUrl: '', city: '' });
 
 const emptyForm: Form = {
   homeName: '', awayName: '', homeSofaId: '', awaySofaId: '', title: '',
   competition: '', country: '', countryCode: '', sport: 'futebol',
-  startTime: '', endTime: '', streamUrl: '', station: '',
+  startTime: '', endTime: '', stations: [emptyStation()],
 };
 
 /**
@@ -131,8 +135,8 @@ export default function AdminPrimeRadioPage() {
   const [gameSearch, setGameSearch] = useState('');
   const [searching, setSearching] = useState(false);
   const [matches, setMatches] = useState<MatchedEvent[]>([]);
-  const [probe, setProbe] = useState<StreamProbe | null>(null);
-  const [probing, setProbing] = useState(false);
+  const [probes, setProbes] = useState<Record<number, StreamProbe>>({});
+  const [probingIdx, setProbingIdx] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -169,7 +173,9 @@ export default function AdminPrimeRadioPage() {
       competition: ev.competition === 'Outros' ? '' : ev.competition,
       country: ev.country || '', countryCode: ev.countryCode || '',
       sport: ev.sport, startTime: toLocalInput(ev.startTime), endTime: toLocalInput(ev.endTime),
-      streamUrl: ev.streamUrl, station: ev.station || '',
+      stations: ev.adminStations?.length
+        ? ev.adminStations.map((st) => ({ name: st.name, streamUrl: st.streamUrl, city: st.city || '' }))
+        : [{ name: ev.station || '', streamUrl: ev.streamUrl || '', city: '' }],
     });
     setMatches([]);
     setGameSearch('');
@@ -211,19 +217,42 @@ export default function AdminPrimeRadioPage() {
    * Pergunta ao backend se o link está no ar. Não dá pra fazer daqui: a
    * resposta do Icecast não manda CORS e o navegador não expõe cabeçalho icy-*.
    */
-  const runProbe = async () => {
-    const url = form.streamUrl.trim();
+  const runProbe = async (idx: number) => {
+    const url = (form.stations[idx]?.streamUrl || '').trim();
     if (!url) return;
-    setProbing(true);
-    setProbe(null);
+    setProbingIdx(idx);
+    setProbes((p) => { const n = { ...p }; delete n[idx]; return n; });
     try {
       const res = await apiGateway.probePrimeRadioStream(url);
-      setProbe(res.data?.result === 1 ? res.data.data : { ok: false, error: res.data?.message });
+      const result: StreamProbe = res.data?.result === 1 ? res.data.data : { ok: false, error: res.data?.message };
+      setProbes((p) => ({ ...p, [idx]: result }));
+      // A estação costuma declarar o próprio nome — se o campo está vazio, aproveita.
+      if (result.ok && result.name) {
+        setForm((f) => {
+          if (f.stations[idx]?.name.trim()) return f;
+          const stations = [...f.stations];
+          stations[idx] = { ...stations[idx], name: result.name as string };
+          return { ...f, stations };
+        });
+      }
     } catch (e) {
-      setProbe({ ok: false, error: errorMessage(e, 'Não foi possível testar o link.') });
+      setProbes((p) => ({ ...p, [idx]: { ok: false, error: errorMessage(e, 'Não foi possível testar o link.') } }));
     } finally {
-      setProbing(false);
+      setProbingIdx(null);
     }
+  };
+
+  const setStation = (idx: number, patch: Partial<StationRow>) => {
+    setForm((f) => {
+      const stations = [...f.stations];
+      stations[idx] = { ...stations[idx], ...patch };
+      return { ...f, stations };
+    });
+  };
+  const addStation = () => setForm((f) => ({ ...f, stations: [...f.stations, emptyStation()] }));
+  const removeStation = (idx: number) => {
+    setForm((f) => ({ ...f, stations: f.stations.filter((_, i) => i !== idx) }));
+    setProbes((p) => { const n = { ...p }; delete n[idx]; return n; });
   };
 
   /** Ao mudar o início, sugere o fim (+100 min) se ainda não houver um. */
@@ -241,8 +270,15 @@ export default function AdminPrimeRadioPage() {
       setMsg({ type: 'err', text: 'Informe início e término.' });
       return;
     }
-    if (!form.streamUrl.trim()) {
-      setMsg({ type: 'err', text: 'Informe o link do stream da rádio.' });
+    const stations = form.stations
+      .map((st) => ({ name: st.name.trim(), streamUrl: st.streamUrl.trim(), city: st.city.trim() || null }))
+      .filter((st) => st.streamUrl);
+    if (!stations.length) {
+      setMsg({ type: 'err', text: 'Informe ao menos uma rádio com link.' });
+      return;
+    }
+    if (stations.some((st) => !st.name)) {
+      setMsg({ type: 'err', text: 'Toda rádio precisa de um nome.' });
       return;
     }
     setSaving(true);
@@ -259,8 +295,7 @@ export default function AdminPrimeRadioPage() {
         sport: form.sport.trim() || 'futebol',
         startTime: toWallclockIso(form.startTime),
         endTime: toWallclockIso(form.endTime),
-        streamUrl: form.streamUrl.trim(),
-        station: form.station.trim() || null,
+        stations,
       };
       if (editing) {
         await apiGateway.updatePrimeRadioEvent(editing.id, payload);
@@ -478,44 +513,83 @@ export default function AdminPrimeRadioPage() {
               </label>
             </div>
 
-            <label className="block text-xs text-gray-400 mb-1">Link do stream (ex.: https://servidor:8000/stream)
-              <input value={form.streamUrl} onChange={(e) => setForm({ ...form, streamUrl: e.target.value })} placeholder="https://.../stream" className={`${inputClass} mt-1`} />
-            </label>
-            {/* Player de teste: confere se o link toca ANTES de salvar */}
-            {form.streamUrl.trim() && (
-              <div className="mb-3 rounded-lg border border-orange-500/20 bg-orange-500/5 p-2">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-[11px] text-orange-200/80">Teste o link antes de salvar:</span>
-                  <button
-                    onClick={runProbe}
-                    disabled={probing}
-                    className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/10 hover:bg-white/15 text-[11px] text-white transition disabled:opacity-50"
-                  >
-                    {probing ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}
-                    Verificar
-                  </button>
-                </div>
-                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                <audio src={form.streamUrl.trim()} controls className="w-full h-9" />
-                {probe && (
-                  <div className={`mt-2 text-[11px] rounded-md px-2 py-1.5 ${probe.ok ? 'bg-emerald-500/10 text-emerald-200' : 'bg-rose-500/10 text-rose-200'}`}>
-                    {probe.ok ? (
-                      <>
-                        <span className="font-semibold">No ar</span>
-                        {probeSpecs(probe).map((s) => <span key={s}> · {s}</span>)}
-                        {probe.nowPlaying && <div className="text-emerald-300/70 truncate mt-0.5">Tocando: {probe.nowPlaying}</div>}
-                      </>
-                    ) : (
-                      <><span className="font-semibold">Falhou</span> · {probe.error || 'Sem resposta.'}</>
-                    )}
-                  </div>
-                )}
+            {/* Emissoras: um jogo costuma ter várias rádios narrando ao mesmo tempo. */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-400">Rádios que transmitem o jogo</span>
+                <button onClick={addStation} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/10 hover:bg-white/15 text-[11px] text-white transition">
+                  <Plus size={12} /> Adicionar rádio
+                </button>
               </div>
-            )}
 
-            <label className="block text-xs text-gray-400 mb-4">Rádio / narrador
-              <input value={form.station} onChange={(e) => setForm({ ...form, station: e.target.value })} placeholder="Ex.: Rádio Gaúcha — Pedro Ernesto" className={`${inputClass} mt-1`} />
-            </label>
+              <div className="space-y-2">
+                {form.stations.map((st, idx) => {
+                  const url = st.streamUrl.trim();
+                  const pr = probes[idx];
+                  return (
+                    <div key={idx} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="grid place-items-center h-6 w-6 rounded-md bg-orange-500/15 text-orange-300 text-[11px] font-semibold shrink-0">{idx + 1}</span>
+                        <input
+                          value={st.name}
+                          onChange={(e) => setStation(idx, { name: e.target.value })}
+                          placeholder="Nome da rádio (ex.: Rádio Globo RJ)"
+                          className={inputClass}
+                        />
+                        <input
+                          value={st.city}
+                          onChange={(e) => setStation(idx, { city: e.target.value })}
+                          placeholder="Praça"
+                          className={`${inputClass} max-w-[7.5rem]`}
+                        />
+                        {form.stations.length > 1 && (
+                          <button onClick={() => removeStation(idx)} className="p-2 rounded-lg text-gray-400 hover:text-rose-300 hover:bg-white/10 transition shrink-0" title="Remover rádio">
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={st.streamUrl}
+                          onChange={(e) => setStation(idx, { streamUrl: e.target.value })}
+                          placeholder="https://.../stream"
+                          className={inputClass}
+                        />
+                        <button
+                          onClick={() => runProbe(idx)}
+                          disabled={!url || probingIdx === idx}
+                          className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-[11px] text-white transition disabled:opacity-40"
+                        >
+                          {probingIdx === idx ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}
+                          Verificar
+                        </button>
+                      </div>
+
+                      {url && (
+                        <>
+                          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                          <audio src={url} controls className="w-full h-8 mt-2" />
+                          {pr && (
+                            <div className={`mt-2 text-[11px] rounded-md px-2 py-1.5 ${pr.ok ? 'bg-emerald-500/10 text-emerald-200' : 'bg-rose-500/10 text-rose-200'}`}>
+                              {pr.ok ? (
+                                <>
+                                  <span className="font-semibold">No ar</span>
+                                  {probeSpecs(pr).map((x) => <span key={x}> · {x}</span>)}
+                                  {pr.nowPlaying && <div className="text-emerald-300/70 truncate mt-0.5">Tocando: {pr.nowPlaying}</div>}
+                                </>
+                              ) : (
+                                <><span className="font-semibold">Falhou</span> · {pr.error || 'Sem resposta.'}</>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
             <div className="flex justify-end gap-2">
               <button onClick={() => setModalOpen(false)} className="px-4 py-2 rounded-lg text-sm text-gray-300 hover:bg-white/10 transition">Cancelar</button>
