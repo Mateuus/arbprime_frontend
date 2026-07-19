@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 180" width="340" height="180" fill="none">
+  <defs>
+    <linearGradient id="primeGrad" x1="60" y1="165" x2="290" y2="105" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#5df07d"/>
+    </linearGradient>
+  </defs>
+
+  <g font-family="'Arial Black','Arial Bold',Arial,'Liberation Sans','Helvetica Neue',sans-serif"
+     font-weight="900" text-anchor="middle">
+    <!-- ARB (branco, pesado) -->
+    <text x="170" y="84" font-size="92" fill="#ffffff" letter-spacing="-2">ARB</text>
+    <!-- hastes do "B" (estilo bitcoin ₿). Ficam sobre a HASTE vertical do B (x≈207..225):
+         dentro da letra somem (mesma cor), e aparecem como dois traços em cima e embaixo.
+         Não podem invadir os miolos do B (x>228) senão tapam os furos. -->
+    <rect x="209" y="5" width="7" height="93" fill="#ffffff"/>
+    <rect x="220" y="5" width="7" height="93" fill="#ffffff"/>
+    <!-- PRIME (verde, itálico) -->
+    <text x="170" y="158" font-size="66" font-style="italic" fill="url(#primeGrad)" letter-spacing="2">PRIME</text>
+  </g>
+</svg>
