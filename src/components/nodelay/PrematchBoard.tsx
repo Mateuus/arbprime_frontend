@@ -174,8 +174,9 @@ export interface PrematchPick {
   marketId: string;
   marketName: string;
   selectionLabel: string;
-  /** Odd de cada casa da instância (a melhor primeiro). */
-  prices: { bookmaker: string; price: number }[];
+  /** Odd de cada casa da instância (a melhor primeiro) + o eventId e os dados
+   * apostáveis (placeable) DAQUELA casa — o betslip usa p/ apostar em pré-jogo. */
+  prices: { bookmaker: string; price: number; eventId: string; placeable: EventGroupPrice['placeable'] }[];
 }
 
 interface Props {
@@ -480,7 +481,7 @@ function MarketView({
         marketId,
         marketName,
         selectionLabel: selLabel(sel),
-        prices: sel.prices.map((p) => ({ bookmaker: p.bookmaker, price: p.price })),
+        prices: sel.prices.map((p) => ({ bookmaker: p.bookmaker, price: p.price, eventId: p.eventId, placeable: p.placeable ?? null })),
       })
     : undefined;
 

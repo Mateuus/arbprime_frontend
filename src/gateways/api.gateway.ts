@@ -269,6 +269,13 @@ export interface EventGroupPrice {
   pa?: boolean;
   // Liquidez disponível (em R$) nessa odd — só em exchanges (ex.: betbra).
   size?: number | null;
+  /** Dados apostáveis da seleção NESTA casa (id(s), linha, limites) — o betslip usa
+   * pra apostar em pré-jogo. superbet={oddUuid}, betano/swarm={selectionId}. null =
+   * casa ainda não instrumentada no worker. */
+  placeable?: {
+    selectionId?: string; oddUuid?: string; marketUuid?: string; outcomeId?: string | number;
+    marketId?: string; selectionTypeId?: string | number; spov?: string; min?: number; max?: number;
+  } | null;
 }
 export interface EventGroupSelection {
   selection: string;
