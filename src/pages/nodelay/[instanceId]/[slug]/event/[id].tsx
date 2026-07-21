@@ -124,7 +124,7 @@ export default function NoDelayEventPage() {
     <NoDelayGate authLoading={authLoading} isAuthenticated={isAuthenticated} denied={denied}>
       <div className="w-full px-3 sm:px-6 py-6">
         <button
-          onClick={() => router.push(`/nodelay/${instanceId}`)}
+          onClick={() => router.push(`/nodelay/${instanceId}?tab=live`)}
           className="mb-3 inline-flex items-center gap-1.5 text-xs text-gray-400 transition hover:text-lime-300"
         >
           <ArrowLeft size={14} /> Eventos ao vivo
@@ -139,7 +139,7 @@ export default function NoDelayEventPage() {
             <AlertTriangle className="mx-auto text-amber-400" size={26} />
             <p className="mt-3 text-sm text-gray-300">{error || 'Jogo indisponível.'}</p>
             <button
-              onClick={() => router.push(`/nodelay/${instanceId}`)}
+              onClick={() => router.push(`/nodelay/${instanceId}?tab=live`)}
               className="mt-4 rounded-lg bg-white/5 px-4 py-2 text-xs text-gray-300 ring-1 ring-white/10 transition hover:bg-white/10"
             >
               Voltar aos jogos
@@ -187,7 +187,7 @@ export default function NoDelayEventPage() {
                 {connected.length === 0 ? (
                   <p className="text-[11px] text-gray-500">
                     Nenhuma conta conectada. Conecte em{' '}
-                    <button onClick={() => router.push(`/nodelay/${instanceId}`)} className="text-lime-300 hover:underline">
+                    <button onClick={() => router.push(`/nodelay/${instanceId}?tab=live`)} className="text-lime-300 hover:underline">
                       Casas e contas
                     </button>{' '}
                     para poder disparar.

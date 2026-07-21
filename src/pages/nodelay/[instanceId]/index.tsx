@@ -168,7 +168,7 @@ export default function NoDelayWorkspacePage() {
               </div>
             ) : (
               /* Feed ocupa a página inteira (Ao Vivo x Prematch são DUAS listas) */
-              <InstanceFeed instanceId={instanceId} houses={readyHouses} />
+              <InstanceFeed instanceId={instanceId} houses={readyHouses} houseSlugs={houseSlugs} />
             )}
 
             {drawerOpen && (
@@ -478,22 +478,41 @@ function SportTab({ active, icon, label, count, onClick }: { active: boolean; ic
 /**
  * Feed da instância = DUAS listas separadas (Ao Vivo x Prematch), trocadas pelo
  * alternador no topo. "Ao Vivo" = o feed real de jogos ao vivo (InstanceLiveFeed).
- * "Prematch" = a lista de pré-jogo (PrematchGamesList, dados de exemplo por ora).
+ * "Prematch" = a lista de pré-jogo (PrematchGamesList).
  * Cada partida abre a SUA página: ao vivo → /{casa}/event/{id}; prematch →
- * /prematch/{eventId} (sem toggle nas páginas — a escolha é só aqui na lista).
+ * /prematch/{casa}/{eventId} (sem toggle nas páginas — a escolha é só aqui).
+ *
+ * A aba fica PERSISTIDA na URL (?tab=prematch|live): assim voltar de uma página
+ * de evento restaura a aba certa (o onBack do prematch volta com ?tab=prematch).
  */
-function InstanceFeed({ instanceId, houses }: { instanceId: string; houses: NoDelayBookmaker[] }) {
+function InstanceFeed({ instanceId, houses, houseSlugs }: { instanceId: string; houses: NoDelayBookmaker[]; houseSlugs: string[] }) {
   const router = useRouter();
-  const [mode, setMode] = useState<BoardMode>('live');
+  // Modo inicial vem da URL: ?tab=prematch → prematch; ausente/qualquer → live.
+  const initialMode: BoardMode = router.query.tab === 'prematch' ? 'prematch' : 'live';
+  const [mode, setMode] = useState<BoardMode>(initialMode);
+
+  // Troca de aba: atualiza o estado + reflete na URL (shallow, sem rolar).
+  const changeMode = (m: BoardMode) => {
+    setMode(m);
+    router.replace(
+      { pathname: `/nodelay/${instanceId}`, query: { tab: m } },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  };
+
   return (
     <div>
       <div className="mb-4">
-        <PrematchLiveToggle mode={mode} onChange={setMode} />
+        <PrematchLiveToggle mode={mode} onChange={changeMode} />
       </div>
       {mode === 'live' ? (
         <InstanceLiveFeed instanceId={instanceId} houses={houses} />
       ) : (
-        <PrematchGamesList onOpen={(id) => router.push(`/nodelay/${instanceId}/prematch/${id}`)} />
+        <PrematchGamesList
+          houseSlugs={houseSlugs}
+          onOpen={(bm, id) => router.push(`/nodelay/${instanceId}/prematch/${bm}/${id}`)}
+        />
       )}
     </div>
   );

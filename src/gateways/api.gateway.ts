@@ -281,7 +281,14 @@ export interface EventGroupMarket {
   selections: EventGroupSelection[];
 }
 export interface EventGroupDetail {
-  event: { sport: string; home: string; away: string; eventDate: string | null; league: string | null; country: string | null };
+  event: {
+    sport: string; home: string; away: string; eventDate: string | null;
+    league: string | null; country: string | null;
+    // Campos opcionais que o backend pode anexar (chave do país; ids SoFaScore p/ escudo).
+    countryKey?: string | null;
+    homeSofaId?: string | number | null;
+    awaySofaId?: string | number | null;
+  };
   houses: GroupedHouse[];
   markets: EventGroupMarket[];
 }

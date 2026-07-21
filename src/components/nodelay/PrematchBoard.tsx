@@ -1,79 +1,312 @@
 import { useState, useMemo } from 'react';
 import { fmtOdd } from '@/utils/nodelayLive';
-import { PrematchEvent, PrematchSection, SAMPLE_PREMATCH, SAMPLE_PREMATCH_LIST, PrematchListMatch } from '@/services/nodelay/prematchSample';
+import { formatEventDateTime } from '@/utils/eventTime';
 import { TeamLogo } from '@/components/nodelay/TeamLogo';
-import { ArrowLeft, Play, Menu, Bell, ChevronDown, ChevronsRight, X } from 'lucide-react';
+import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
+import { Tooltip } from '@/components/ui/Tooltip';
+import { useBookmakers } from '@/hooks/useBookmakers';
+import { usePrematchEventGroup } from '@/hooks/usePrematchEventGroup';
+import { usePrematchGroupedGames, PrematchGame } from '@/hooks/usePrematchGroupedGames';
+import { EventGroupSelection, EventGroupPrice } from '@/gateways/api.gateway';
+import { ArrowLeft, Menu, ChevronDown, Loader2, X, Star, Layers, Zap } from 'lucide-react';
 
 /**
- * Board de PRÉ-JOGO no estilo bet365. DADOS DE EXEMPLO (SAMPLE_PREMATCH) — o feed
- * real virá do nosso catálogo /events. Mantém a mesma linguagem visual do live:
- * odds em ÂMBAR/OURO, acento lime do NoDelay, chip "CA" esmeralda.
+ * Board de PRÉ-JOGO com DADOS REAIS do nosso catálogo /events
+ * (usePrematchEventGroup), filtrado às casas da INSTÂNCIA (houseSlugs = Contas
+ * prontas). DISPLAY-ONLY: ainda não dá pra apostar no pré-jogo (o catálogo não
+ * tem os ids apostáveis) — o board só exibe. As células são estruturadas p/
+ * receber o disparo depois (ver // TODO(place)).
  *
- * As odds do pré-jogo AINDA não ligam no disparo (apostar prematch é futuro), mas
- * a célula de odd tem a mesma cara/estrutura do live p/ ser ligada depois (onPick).
+ * Dois modos de exibição (toggle no topo):
+ *  - "Melhor odd" (padrão): cada seleção mostra a MELHOR odd entre as casas da
+ *    instância (âmbar) + o selo da casa (logo) e as tags PA/turbinada.
+ *  - "Por casa": cada seleção expande e mostra o preço de CADA casa da instância
+ *    lado a lado; a melhor fica destacada em esmeralda.
+ *
+ * Acento lime (NoDelay), odds em âmbar, esmeralda p/ melhor/tags.
  */
 
+// ============================ helpers de mercado ============================
+// (mesma linguagem da página de comparação /events/event/[bookmaker]/[eventId])
+
+const PA_HELP = 'Pagamento Antecipado (PA): a casa paga sua aposta como VENCEDORA se o time abrir a vantagem de gols definida por ela, mesmo que o placar mude depois.';
+const BOOST_HELP = 'Odd turbinada (Super Placar/Super Odds): tem limite de stake / 1 por cliente.';
+
+const TOKEN_PT: Record<string, string> = {
+  home: 'Casa', draw: 'Empate', away: 'Fora',
+  '1': 'Casa', x: 'Empate', '2': 'Fora',
+  yes: 'Sim', no: 'Não',
+  over: 'Mais', under: 'Menos',
+  odd: 'Ímpar', even: 'Par',
+};
+
+const norm = (s: string): string =>
+  (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+const realLine = (h: string | number | null | undefined): string => {
+  const t = (h ?? '').toString().trim();
+  return (t === '' || /^[+-]?0(\.0+)?$/.test(t)) ? '' : t;
+};
+
+// Rótulo legível de uma seleção (traduz tokens conhecidos; preserva nomes de time).
+const selLabel = (sel: { selection: string; handicap: string }): string => {
+  const line = realLine(sel.handicap);
+  const parts = sel.selection.split('/').map((p) => p.trim());
+  const allKnown = parts.length >= 1 && parts.length <= 2 && parts.every((p) => TOKEN_PT[p.toLowerCase()] !== undefined);
+  if (allKnown) {
+    return parts.map((p) => {
+      const k = p.toLowerCase();
+      const base = TOKEN_PT[k];
+      return (k === 'over' || k === 'under') && line ? `${base} de ${line}` : base;
+    }).join(' & ');
+  }
+  if (line && !sel.selection.includes(line)) return `${sel.selection} (${line})`;
+  return sel.selection;
+};
+
+// Categorias derivadas do marketId (para as abas).
+const CATEGORIES: { key: string; label: string }[] = [
+  { key: 'resultado', label: 'Resultado' },
+  { key: 'gols', label: 'Gols' },
+  { key: 'handicap', label: 'Handicap' },
+  { key: 'combos', label: 'Combos' },
+  { key: 'escanteios', label: 'Escanteios' },
+  { key: 'cartoes', label: 'Cartões' },
+  { key: 'chutes', label: 'Chutes' },
+  { key: 'impedimentos', label: 'Impedimentos' },
+];
+const categoryOf = (marketId: string): string => {
+  const slug = (marketId || '').split(':')[0];
+  if (slug.includes('-and-') || slug.includes('result-and-btts')) return 'combos';
+  if (slug.includes('card')) return 'cartoes';
+  if (slug.includes('corner')) return 'escanteios';
+  if (slug.includes('shot')) return 'chutes';
+  if (slug.includes('offside')) return 'impedimentos';
+  if (slug.includes('goal') || slug === 'both-teams-to-score' || slug.startsWith('btts')) return 'gols';
+  if (slug.includes('asian-handicap')) return 'handicap';
+  return 'resultado';
+};
+
+type ColKey = 'over' | 'under' | 'h1' | 'h2' | 'yes' | 'no' | 'dc1x' | 'dc12' | 'dcx2' | 'home' | 'draw' | 'away';
+
+const lineOf = (sel: EventGroupSelection): string => {
+  const h = (sel.handicap ?? '').toString().trim();
+  if (h) return h;
+  const m = sel.selection.match(/-?\d+(\.\d+)?/);
+  return m ? m[0] : '';
+};
+
+const colOf = (sel: EventGroupSelection, ev: { home: string; away: string }): ColKey | null => {
+  const t = norm(sel.selection);
+  if (/\b(mais|over|acima|cima)\b/.test(t)) return 'over';
+  if (/\b(menos|under|abaixo|baixo)\b/.test(t)) return 'under';
+  if (/^h1\b|handicap 1/.test(t)) return 'h1';
+  if (/^h2\b|handicap 2/.test(t)) return 'h2';
+  if (/^hnb\b/.test(t)) return 'home';
+  if (/^anb\b/.test(t)) return 'away';
+  if (/^sim\b|^yes\b/.test(t)) return 'yes';
+  if (/^nao\b|^no\b/.test(t)) return 'no';
+  if (/1 ou empate|casa ou empate|home or draw|(^|\s)1x(\s|$)/.test(t)) return 'dc1x';
+  if (/1 ou 2|casa ou fora|home or away|(^|\s)12(\s|$)/.test(t)) return 'dc12';
+  if (/empate ou 2|empate ou fora|draw or away|(^|\s)x2(\s|$)/.test(t)) return 'dcx2';
+  if (/\b(empate|draw)\b/.test(t)) return 'draw';
+  const nh = norm(ev.home), na = norm(ev.away);
+  if (/\b(casa|mandante|home)\b/.test(t) || (nh && t.includes(nh))) return 'home';
+  if (/\b(fora|visitante|away)\b/.test(t) || (na && t.includes(na))) return 'away';
+  return null;
+};
+
+interface MarketCol { key: ColKey; label: string }
+interface MarketRow { label?: string; cells: (EventGroupSelection | null)[] }
+interface MarketLayout { columns: MarketCol[]; rows: MarketRow[]; lined: boolean }
+
+const buildLayout = (selections: EventGroupSelection[], ev: { home: string; away: string }): MarketLayout | null => {
+  if (selections.some((s) => s.selection.includes('/'))) return null;
+  const tagged = selections.map((s) => ({ s, col: colOf(s, ev) }));
+  const present = new Set(tagged.map((x) => x.col).filter(Boolean) as ColKey[]);
+  const pick = (col: ColKey, line?: string) =>
+    tagged.find((x) => x.col === col && (line === undefined || lineOf(x.s) === line))?.s || null;
+  const linesFor = (cols: ColKey[]): string[] => {
+    const set = new Set<string>();
+    tagged.forEach((x) => { if (x.col && cols.includes(x.col)) set.add(lineOf(x.s)); });
+    return Array.from(set).sort((a, b) => (parseFloat(a) || 0) - (parseFloat(b) || 0));
+  };
+  if (present.has('over') || present.has('under')) {
+    return {
+      columns: [{ key: 'over', label: 'Mais' }, { key: 'under', label: 'Menos' }],
+      rows: linesFor(['over', 'under']).map((ln) => ({ label: ln, cells: [pick('over', ln), pick('under', ln)] })),
+      lined: true,
+    };
+  }
+  if (present.has('h1') || present.has('h2')) {
+    return {
+      columns: [{ key: 'h1', label: 'H1' }, { key: 'h2', label: 'H2' }],
+      rows: linesFor(['h1', 'h2']).map((ln) => ({ label: ln, cells: [pick('h1', ln), pick('h2', ln)] })),
+      lined: true,
+    };
+  }
+  if (present.has('yes') || present.has('no')) {
+    return { columns: [{ key: 'yes', label: 'Sim' }, { key: 'no', label: 'Não' }], rows: [{ cells: [pick('yes'), pick('no')] }], lined: false };
+  }
+  if (present.has('dc1x') || present.has('dc12') || present.has('dcx2')) {
+    return {
+      columns: [{ key: 'dc1x', label: '1X' }, { key: 'dc12', label: '12' }, { key: 'dcx2', label: 'X2' }],
+      rows: [{ cells: [pick('dc1x'), pick('dc12'), pick('dcx2')] }], lined: false,
+    };
+  }
+  if (present.has('home') || present.has('away') || present.has('draw')) {
+    return {
+      columns: [{ key: 'home', label: ev.home || 'Casa' }, { key: 'draw', label: 'Empate' }, { key: 'away', label: ev.away || 'Fora' }],
+      rows: [{ cells: [pick('home'), pick('draw'), pick('away')] }], lined: false,
+    };
+  }
+  return null;
+};
+
+// ============================ componente ============================
+
+type DisplayMode = 'best' | 'byhouse';
+
 interface Props {
-  event?: PrematchEvent; // default = amostra; no futuro, o evento do /events
-  /** Abrir OUTRO jogo (via menu ≡ do mesmo campeonato). A página injeta a navegação. */
-  onOpenEvent?: (eventId: string) => void;
-  /** Voltar (o ← do hero) — evita um 2º "voltar" redundante na página. */
+  bookmaker: string;
+  eventId: string;
+  /** Casas da instância — filtra as odds exibidas (Contas prontas). */
+  houseSlugs: string[];
+  /** Abrir OUTRO jogo (menu ≡ do mesmo campeonato). A página injeta a navegação. */
+  onOpenEvent?: (bookmaker: string, eventId: string) => void;
+  /** Voltar (o ← do hero). */
   onBack?: () => void;
 }
 
-export function PrematchBoard({ event = SAMPLE_PREMATCH, onOpenEvent, onBack }: Props) {
-  const [tabId, setTabId] = useState<string>(event.groups[0]?.id ?? 'popular');
-  const sections = useMemo(
-    () => event.sections.filter((s) => s.groups.includes(tabId)),
-    [event.sections, tabId],
-  );
+export function PrematchBoard({ bookmaker, eventId, houseSlugs, onOpenEvent, onBack }: Props) {
+  const { detail, loading, error } = usePrematchEventGroup(bookmaker, eventId, houseSlugs);
+  const [mode, setMode] = useState<DisplayMode>('best');
+  const [category, setCategory] = useState('all');
+
+  // Ordem das casas p/ o modo "Por casa" (mesma ordem do grupo).
+  const orderedSlugs = useMemo(() => (detail ? detail.houses.map((h) => h.bookmaker) : []), [detail]);
+
+  // Abas (categorias) presentes neste evento.
+  const categories = useMemo(() => {
+    if (!detail) return [{ key: 'all', label: 'Todos' }];
+    const present = new Set(detail.markets.map((m) => categoryOf(m.marketId)));
+    return [{ key: 'all', label: 'Todos' }, ...CATEGORIES.filter((c) => present.has(c.key))];
+  }, [detail]);
+
+  const markets = useMemo(() => {
+    if (!detail) return [];
+    if (category === 'all') return detail.markets;
+    return detail.markets.filter((m) => categoryOf(m.marketId) === category);
+  }, [detail, category]);
 
   return (
     <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]">
-      <PrematchHero event={event} onOpenEvent={onOpenEvent} onBack={onBack} />
-
-      {/* Abas — rolam na horizontal, sino à direita fixo */}
-      <div className="flex items-stretch border-b border-white/10 bg-black/20">
-        <div className="min-w-0 flex-1 overflow-x-auto">
-          <div className="flex w-max gap-1 px-2 py-2">
-            {event.groups.map((g) => {
-              const on = g.id === tabId;
-              return (
-                <button
-                  key={g.id}
-                  onClick={() => setTabId(g.id)}
-                  className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                    on ? 'bg-lime-500/15 text-lime-200 ring-1 ring-lime-500/40' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
-                  }`}
-                >
-                  {g.name}
-                </button>
-              );
-            })}
-          </div>
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-20 text-gray-400">
+          <Loader2 className="animate-spin" size={18} /> Carregando evento…
         </div>
-        <button className="grid shrink-0 place-items-center border-l border-white/10 px-3 text-gray-400 transition hover:text-lime-300" title="Notificações">
-          <Bell size={15} />
-        </button>
-      </div>
+      ) : error ? (
+        <div className="p-6">
+          {onBack && (
+            <button onClick={onBack} className="mb-4 inline-flex items-center gap-1.5 text-sm text-gray-400 transition hover:text-lime-300">
+              <ArrowLeft size={16} /> Voltar
+            </button>
+          )}
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">{error}</div>
+        </div>
+      ) : !detail ? (
+        <div className="p-8 text-center text-sm text-gray-500">Evento não encontrado.</div>
+      ) : (
+        <>
+          <PrematchHero detail={detail} houseSlugs={houseSlugs} onOpenEvent={onOpenEvent} onBack={onBack} />
 
-      <div className="divide-y divide-white/10">
-        {sections.length === 0 ? (
-          <div className="p-8 text-center text-sm text-gray-500">Nenhum mercado nesta aba (amostra).</div>
-        ) : (
-          sections.map((s) => <SectionView key={s.id} section={s} />)
-        )}
-      </div>
+          {/* Alternador de exibição: Melhor odd | Por casa */}
+          <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-black/20 px-3 py-2">
+            <div className="inline-flex rounded-lg bg-black/30 p-0.5 ring-1 ring-white/10">
+              <ToggleBtn on={mode === 'best'} onClick={() => setMode('best')} icon={<Star size={13} />}>Melhor odd</ToggleBtn>
+              <ToggleBtn on={mode === 'byhouse'} onClick={() => setMode('byhouse')} icon={<Layers size={13} />}>Por casa</ToggleBtn>
+            </div>
+            <span className="hidden text-[11px] text-gray-500 sm:block">
+              {detail.houses.length} casa{detail.houses.length === 1 ? '' : 's'} da instância
+            </span>
+          </div>
+
+          {/* Abas de categoria (quando há mais de uma) */}
+          {categories.length > 2 && (
+            <div className="border-b border-white/10 bg-black/10 -mx-0 overflow-x-auto px-2 py-2">
+              <div className="flex w-max gap-1">
+                {categories.map((c) => {
+                  const on = c.key === category;
+                  return (
+                    <button
+                      key={c.key}
+                      onClick={() => setCategory(c.key)}
+                      className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                        on ? 'bg-lime-500/15 text-lime-200 ring-1 ring-lime-500/40' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {markets.length === 0 ? (
+            <div className="p-8 text-center text-sm text-gray-500">
+              Nenhum mercado das casas da instância neste evento.
+            </div>
+          ) : (
+            <div className="divide-y divide-white/10">
+              {markets.map((m) => (
+                <MarketView
+                  key={m.marketId}
+                  marketName={m.marketName || m.marketId}
+                  selections={m.selections}
+                  ev={detail.event}
+                  mode={mode}
+                  orderedSlugs={orderedSlugs}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
-/** Faixa hero: banda "estádio" (gradiente CSS, sem imagem por causa da CSP). */
-function PrematchHero({ event, onOpenEvent, onBack }: { event: PrematchEvent; onOpenEvent?: (id: string) => void; onBack?: () => void }) {
+function ToggleBtn({ on, onClick, icon, children }: { on: boolean; onClick: () => void; icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+        on ? 'bg-lime-500 text-slate-900' : 'text-gray-300 hover:text-white'
+      }`}
+    >
+      {icon} {children}
+    </button>
+  );
+}
+
+// -------------------------------- Hero --------------------------------
+
+function PrematchHero({
+  detail, houseSlugs, onOpenEvent, onBack,
+}: {
+  detail: NonNullable<ReturnType<typeof usePrematchEventGroup>['detail']>;
+  houseSlugs: string[];
+  onOpenEvent?: (bookmaker: string, eventId: string) => void;
+  onBack?: () => void;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const ev = detail.event;
+  const competition = ev.league || 'Pré-jogo';
+  const kickoff = formatEventDateTime(ev.eventDate) || '—';
+
   return (
     <div className="relative overflow-hidden">
-      {/* Banda estádio — gradiente radial escuro simulando o gramado/holofotes */}
       <div
         className="absolute inset-0"
         style={{
@@ -81,7 +314,6 @@ function PrematchHero({ event, onOpenEvent, onBack }: { event: PrematchEvent; on
             'radial-gradient(120% 90% at 50% -10%, rgba(101,163,13,0.18), transparent 55%), radial-gradient(80% 120% at 50% 120%, rgba(16,185,129,0.10), transparent 60%), linear-gradient(180deg, #0b1220 0%, #0a0f1a 100%)',
         }}
       />
-      {/* linhas do campo */}
       <div className="absolute inset-x-0 bottom-0 h-px bg-white/10" />
       <div className="relative px-4 pb-4 pt-3">
         <div className="flex items-center justify-between">
@@ -92,17 +324,15 @@ function PrematchHero({ event, onOpenEvent, onBack }: { event: PrematchEvent; on
           >
             <ArrowLeft size={15} />
           </button>
-          <span className="truncate px-2 text-xs font-medium text-gray-300">{event.competition}</span>
+          <span className="truncate px-2 text-xs font-medium text-gray-300">{competition}</span>
           <span className="h-7 w-7" />
         </div>
 
         <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-          <TeamCol name={event.home} sofaId={event.homeSofaId} align="right" />
+          <TeamCol name={ev.home} sofaId={ev.homeSofaId} align="right" />
           <div className="flex flex-col items-center gap-1">
-            <span className="text-[11px] font-semibold tabular-nums text-white">{event.kickoff}</span>
-            <span className="flex items-center gap-1 text-[10px] text-gray-400">
-              <Play size={10} className="fill-lime-300 text-lime-300" /> v
-            </span>
+            <span className="text-[11px] font-semibold tabular-nums text-white">{kickoff}</span>
+            <span className="text-[10px] uppercase tracking-wide text-lime-300/80">Pré-jogo</span>
             <button
               onClick={() => setMenuOpen(true)}
               className="mt-0.5 grid h-6 w-6 place-items-center rounded-full bg-black/40 text-gray-300 ring-1 ring-white/10 transition hover:bg-black/60 hover:text-white"
@@ -111,44 +341,58 @@ function PrematchHero({ event, onOpenEvent, onBack }: { event: PrematchEvent; on
               <Menu size={13} />
             </button>
           </div>
-          <TeamCol name={event.away} sofaId={event.awaySofaId} align="left" />
+          <TeamCol name={ev.away} sofaId={ev.awaySofaId} align="left" />
         </div>
       </div>
 
       {menuOpen && (
         <CompetitionFixturesModal
-          competition={event.competition}
+          competition={competition}
+          houseSlugs={houseSlugs}
+          currentHome={ev.home}
+          currentAway={ev.away}
           onClose={() => setMenuOpen(false)}
-          onOpenEvent={(id) => { setMenuOpen(false); onOpenEvent?.(id); }}
+          onOpenEvent={(bm, id) => { setMenuOpen(false); onOpenEvent?.(bm, id); }}
         />
       )}
     </div>
   );
 }
 
-// pt-BR: "Ter 21 Jul" e "19:30" a partir do ISO (kickoff tem offset -03:00 explícito).
-const OPTS_DATE: Intl.DateTimeFormatOptions = { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'America/Sao_Paulo' };
-const OPTS_TIME: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' };
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const fmtDate = (iso: string) => cap(new Date(iso).toLocaleDateString('pt-BR', OPTS_DATE).replace('.', '').replace(',', ''));
-const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', OPTS_TIME);
+function TeamCol({ name, sofaId, align }: { name: string; sofaId?: string | number | null; align: 'left' | 'right' }) {
+  return (
+    <div className={`flex min-w-0 flex-col items-center gap-1.5 ${align === 'right' ? 'sm:items-end' : 'sm:items-start'}`}>
+      <TeamLogo name={name} sofascoreId={sofaId} size={38} />
+      <span className="truncate text-center text-sm font-bold text-white sm:text-base">{name}</span>
+    </div>
+  );
+}
+
+// pt-BR: "19:30" (verbatim UTC — kickoff é wallclock BRT tagueado Z).
+const fmtTimeUTC = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) : '—';
 
 /**
- * Menu ≡ do jogo: lista os OUTROS jogos do MESMO campeonato (SAMPLE_PREMATCH_LIST
- * filtrado por competition), agrupados por data — como a bet365. Clicar abre o
- * evento (a página injeta a navegação por onOpenEvent). Overlay com tom "estádio".
+ * Menu ≡: OUTROS jogos do MESMO campeonato (mesmas casas da instância). Reusa
+ * usePrematchGroupedGames buscando pela liga e filtra por competição.
  */
-function CompetitionFixturesModal({ competition, onClose, onOpenEvent }: { competition: string; onClose: () => void; onOpenEvent: (id: string) => void }) {
-  const groups = useMemo(() => {
-    const list = SAMPLE_PREMATCH_LIST.filter((m) => m.competition === competition)
-      .sort((a, b) => a.kickoff.localeCompare(b.kickoff));
-    const by = new Map<string, PrematchListMatch[]>();
-    for (const m of list) {
-      const key = fmtDate(m.kickoff);
-      (by.get(key) ?? by.set(key, []).get(key)!).push(m);
-    }
-    return [...by.entries()];
-  }, [competition]);
+function CompetitionFixturesModal({
+  competition, houseSlugs, currentHome, currentAway, onClose, onOpenEvent,
+}: {
+  competition: string;
+  houseSlugs: string[];
+  currentHome: string;
+  currentAway: string;
+  onClose: () => void;
+  onOpenEvent: (bookmaker: string, eventId: string) => void;
+}) {
+  const { games, loading } = usePrematchGroupedGames(houseSlugs, { search: competition });
+  const list = useMemo(
+    () => games
+      .filter((g) => g.competition === competition && !(g.home === currentHome && g.away === currentAway))
+      .sort((a, b) => ((a.kickoff || '') < (b.kickoff || '') ? -1 : 1)),
+    [games, competition, currentHome, currentAway],
+  );
 
   return (
     <div className="fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto bg-black/70 p-4 sm:p-8" onClick={onClose}>
@@ -157,7 +401,6 @@ function CompetitionFixturesModal({ competition, onClose, onOpenEvent }: { compe
         style={{ background: 'radial-gradient(120% 60% at 50% 0%, rgba(16,185,129,0.14), transparent 60%), #0a0f1a' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* header */}
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
           <button onClick={onClose} className="grid h-7 w-7 place-items-center rounded-full bg-black/40 text-gray-300 ring-1 ring-white/10 transition hover:text-white">
             <ArrowLeft size={15} />
@@ -168,178 +411,99 @@ function CompetitionFixturesModal({ competition, onClose, onOpenEvent }: { compe
           </button>
         </div>
 
-        {groups.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-10 text-gray-400"><Loader2 className="animate-spin" size={16} /> Carregando…</div>
+        ) : list.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm text-gray-500">Nenhum outro jogo deste campeonato.</p>
         ) : (
-          <div className="max-h-[70vh] overflow-y-auto">
-            {groups.map(([date, matches]) => (
-              <div key={date}>
-                <div className="sticky top-0 bg-black/40 px-4 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400 backdrop-blur">{date}</div>
-                <ul>
-                  {matches.map((m) => (
-                    <li key={m.id}>
-                      <button
-                        onClick={() => onOpenEvent(m.id)}
-                        className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-3 text-left transition hover:bg-white/5"
-                      >
-                        <div className="flex min-w-0 items-center justify-end gap-2 text-right">
-                          <span className="truncate text-sm font-semibold text-white">{m.home}</span>
-                          <TeamLogo name={m.home} sofascoreId={m.homeSofaId} size={26} />
-                        </div>
-                        <span className="shrink-0 rounded bg-black/40 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-300">{fmtTime(m.kickoff)}</span>
-                        <div className="flex min-w-0 items-center gap-2">
-                          <TeamLogo name={m.away} sofascoreId={m.awaySofaId} size={26} />
-                          <span className="truncate text-sm font-semibold text-white">{m.away}</span>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function TeamCol({ name, sofaId, align }: { name: string; sofaId?: number; align: 'left' | 'right' }) {
-  return (
-    <div className={`flex min-w-0 flex-col items-center gap-1.5 ${align === 'right' ? 'sm:items-end' : 'sm:items-start'}`}>
-      <TeamLogo name={name} sofascoreId={sofaId} size={38} />
-      <span className="truncate text-center text-sm font-bold text-white sm:text-base">{name}</span>
-    </div>
-  );
-}
-
-function SectionView({ section }: { section: PrematchSection }) {
-  const [collapsed, setCollapsed] = useState(false);
-
-  // Cabeçalho comum (título + sub-tags verdes + CA + chevron). A "Aposta Aumentada"
-  // e os cards "Criar Aposta" têm cabeçalho próprio, tratados nos seus ramos.
-  const header = (title: string, opts?: { ca?: boolean; tag?: string; subtags?: string[] }) => (
-    <button onClick={() => setCollapsed((v) => !v)} className="flex w-full items-start justify-between gap-2 px-3 py-2.5 text-left">
-      <span className="flex min-w-0 flex-col gap-1">
-        <span className="flex items-center gap-2">
-          <span className="truncate text-sm font-semibold text-white">{title}</span>
-          {opts?.tag && (
-            <span className="shrink-0 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-300 ring-1 ring-emerald-500/40">
-              {opts.tag}
-            </span>
-          )}
-          {opts?.ca && (
-            <span className="shrink-0 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-300 ring-1 ring-emerald-500/40">
-              CA
-            </span>
-          )}
-        </span>
-        {opts?.subtags && opts.subtags.length > 0 && (
-          <span className="flex flex-wrap gap-x-3 gap-y-0.5">
-            {opts.subtags.map((t) => (
-              <span key={t} className="text-[10px] font-semibold italic text-emerald-400">{t}</span>
-            ))}
-          </span>
-        )}
-      </span>
-      <ChevronDown size={16} className={`mt-0.5 shrink-0 text-gray-500 transition ${collapsed ? '-rotate-90' : ''}`} />
-    </button>
-  );
-
-  if (section.kind === 'result') {
-    return (
-      <div>
-        {header(section.title, { ca: section.ca, subtags: section.subtags })}
-        {!collapsed && (
-          <div className="px-3 pb-3">
-            <div className={`grid gap-1.5 ${section.selections.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-              {section.selections.map((o) => <OddCell key={o.id} label={o.name} price={o.price} />)}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (section.kind === 'boosted') {
-    return (
-      <div>
-        <button onClick={() => setCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left">
-          <span className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide text-emerald-400">
-            <ChevronsRight size={16} /> {section.title} <ChevronsRight size={16} />
-          </span>
-          <ChevronDown size={16} className={`shrink-0 text-gray-500 transition ${collapsed ? '-rotate-90' : ''}`} />
-        </button>
-        {!collapsed && (
-          <div className="space-y-1.5 px-3 pb-3">
-            {section.picks.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg bg-black/25 px-3 py-2 ring-1 ring-emerald-500/20">
-                <span className="min-w-0 flex-1 truncate text-xs text-gray-200">{p.label}</span>
-                <BoostOdd oldPrice={p.oldPrice} newPrice={p.newPrice} />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (section.kind === 'buildcards') {
-    return (
-      <div>
-        {header(section.title, { ca: true })}
-        {!collapsed && (
-          <div className="-mx-1 overflow-x-auto px-1 pb-3">
-            <div className="flex w-max gap-2 px-2">
-              {section.cards.map((c) => (
-                <div key={c.id} className="flex w-56 shrink-0 flex-col rounded-xl bg-black/30 p-3 ring-1 ring-white/10">
-                  <span className="mb-2 text-[10px] font-bold uppercase tracking-wide text-emerald-400">Criar Aposta</span>
-                  <ul className="mb-3 flex-1 space-y-1.5">
-                    {c.legs.map((leg, i) => (
-                      <li key={i} className="flex gap-1.5 text-[11px] leading-snug text-gray-300">
-                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-lime-400" />
-                        <span className="min-w-0">{leg}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="flex items-center justify-end">
-                    <BoostOdd oldPrice={c.oldPrice} newPrice={c.newPrice} />
+          <ul className="max-h-[70vh] overflow-y-auto">
+            {list.map((m) => (
+              <li key={m.key}>
+                <button
+                  onClick={() => onOpenEvent(m.bookmaker, m.eventId)}
+                  className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-3 text-left transition hover:bg-white/5"
+                >
+                  <div className="flex min-w-0 items-center justify-end gap-2 text-right">
+                    <span className="truncate text-sm font-semibold text-white">{m.home}</span>
+                    <TeamLogo name={m.home} size={26} />
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                  <span className="shrink-0 rounded bg-black/40 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-300">{fmtTimeUTC(m.kickoff)}</span>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <TeamLogo name={m.away} size={26} />
+                    <span className="truncate text-sm font-semibold text-white">{m.away}</span>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  // playerprops — tabela Jogador / Últimos 5 | colunas de mercado
+// -------------------------------- Mercado --------------------------------
+
+function MarketView({
+  marketName, selections, ev, mode, orderedSlugs,
+}: {
+  marketName: string;
+  selections: EventGroupSelection[];
+  ev: { home: string; away: string };
+  mode: DisplayMode;
+  orderedSlugs: string[];
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const layout = buildLayout(selections, ev);
+
   return (
     <div>
-      {header(section.title, { ca: section.ca, tag: section.tag })}
+      <button onClick={() => setCollapsed((v) => !v)} className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left">
+        <span className="truncate text-sm font-semibold text-white">{marketName}</span>
+        <span className="flex items-center gap-2">
+          <span className="text-[11px] text-gray-500">{selections.length}</span>
+          <ChevronDown size={16} className={`shrink-0 text-gray-500 transition ${collapsed ? '-rotate-90' : ''}`} />
+        </span>
+      </button>
+
       {!collapsed && (
-        <div className="overflow-x-auto px-3 pb-3">
-          <div className="w-full min-w-[30rem]">
-            <div className="grid grid-cols-[1fr_repeat(3,4.5rem)] gap-1.5 px-1 pb-1.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
-              <span>Jogador · Últimos 5</span>
-              {section.columns.map((c) => <span key={c} className="text-center">{c}</span>)}
+        <div className="px-3 pb-3">
+          {layout ? (
+            <div>
+              {/* Cabeçalho de colunas */}
+              <div
+                className="mb-1.5 grid gap-1.5 px-1 text-[11px] uppercase tracking-wide text-gray-500"
+                style={{ gridTemplateColumns: `${layout.lined ? '44px ' : ''}repeat(${layout.columns.length}, minmax(0,1fr))` }}
+              >
+                {layout.lined && <span />}
+                {layout.columns.map((c) => <span key={c.key} className="truncate text-center">{c.label}</span>)}
+              </div>
+              <div className="space-y-1.5">
+                {layout.rows.map((row, ri) => (
+                  <div
+                    key={ri}
+                    className="grid items-start gap-1.5"
+                    style={{ gridTemplateColumns: `${layout.lined ? '44px ' : ''}repeat(${layout.columns.length}, minmax(0,1fr))` }}
+                  >
+                    {layout.lined && <span className="pt-2 text-center text-xs tabular-nums text-gray-400">{row.label}</span>}
+                    {row.cells.map((cell, ci) => (
+                      <SelCell key={ci} sel={cell} mode={mode} orderedSlugs={orderedSlugs} />
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="space-y-1.5">
-              {section.rows.map((r) => (
-                <div key={r.id} className="grid grid-cols-[1fr_repeat(3,4.5rem)] items-center gap-1.5">
-                  <span className="min-w-0">
-                    <span className="block truncate text-xs font-semibold text-white">{r.player}</span>
-                    <span className="block truncate text-[10px] text-gray-500">{r.last5}</span>
-                  </span>
-                  {r.odds.map((p, i) => (p == null
-                    ? <span key={i} className="rounded-lg bg-black/10 px-2 py-2 text-center text-xs text-gray-700 ring-1 ring-white/5">—</span>
-                    : <OddCell key={i} price={p} compact />
-                  ))}
+          ) : (
+            // Fallback: lista (mercados não reconhecidos / combos).
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {selections.map((s, si) => (
+                <div key={si} className="rounded-lg bg-black/25 px-2.5 py-2 ring-1 ring-white/10">
+                  <Tooltip label={selLabel(s)} className="block"><div className="mb-1 truncate text-[11px] text-gray-300">{selLabel(s)}</div></Tooltip>
+                  <SelCell sel={s} mode={mode} orderedSlugs={orderedSlugs} bare />
                 </div>
               ))}
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>
@@ -347,33 +511,84 @@ function SectionView({ section }: { section: PrematchSection }) {
 }
 
 /**
- * Célula de odd do pré-jogo — MESMA cara do live (odd em âmbar). Sem onClick por
- * ora (apostar prematch é futuro); estruturada p/ receber onPick depois, igual ao
- * EventBoard. `label` opcional (nome à esquerda); `compact` = só a odd centralizada.
+ * Célula de uma seleção. TODO(place): estruturada p/ receber o disparo (onPick)
+ * quando o pré-jogo for apostável — hoje é só exibição (o catálogo não tem os ids
+ * apostáveis).
+ *  - mode "best": mostra a MELHOR odd (prices[0]) em âmbar + selo da casa + tags.
+ *  - mode "byhouse": mostra o preço de CADA casa da instância; a melhor em esmeralda.
+ * `bare` = sem fundo/anel próprios (usado no fallback de lista, que já tem card).
  */
-function OddCell({ label, price, compact }: { label?: string; price: number; compact?: boolean }) {
-  if (compact || !label) {
+function SelCell({
+  sel, mode, orderedSlugs, bare,
+}: {
+  sel: EventGroupSelection | null;
+  mode: DisplayMode;
+  orderedSlugs: string[];
+  bare?: boolean;
+}) {
+  const { getBookmaker } = useBookmakers();
+
+  if (!sel || sel.prices.length === 0) {
+    return <div className={`grid place-items-center px-2 py-2 text-center text-xs text-gray-600 ${bare ? '' : 'rounded-lg bg-black/20 ring-1 ring-white/5'}`}>—</div>;
+  }
+
+  const best = sel.prices[0];
+
+  if (mode === 'best') {
+    const b = getBookmaker(best.bookmaker);
     return (
-      <span className="grid place-items-center rounded-lg bg-black/25 px-2 py-2 text-sm font-bold tabular-nums text-amber-400 ring-1 ring-white/10 transition hover:ring-amber-500/40">
-        {fmtOdd(price)}
-      </span>
+      <div className={`relative flex items-center justify-between gap-1.5 px-2 py-1.5 ${bare ? '' : 'rounded-lg bg-black/25 ring-1 ring-white/10'}`}>
+        <Tooltip label={b?.name || best.bookmaker}>
+          <span className="flex items-center gap-1">
+            <BookmakerLogo name={b?.name || best.bookmaker} slug={best.bookmaker} logoUrl={b?.logoUrl} color={b?.color} size={16} />
+            <PriceTags p={best} />
+          </span>
+        </Tooltip>
+        <span className="text-sm font-bold tabular-nums text-amber-400">{fmtOdd(best.price)}</span>
+      </div>
     );
   }
+
+  // Por casa: uma linha por casa da instância (na ordem do grupo), melhor em esmeralda.
+  const rows = orderedSlugs
+    .map((slug) => ({ slug, p: sel.prices.find((x) => x.bookmaker === slug) || null }))
+    .filter((r) => r.p);
   return (
-    <span className="flex items-center justify-between gap-1.5 rounded-lg bg-black/25 px-2.5 py-2 ring-1 ring-white/10 transition hover:ring-amber-500/40">
-      <span className="min-w-0 truncate text-[11px] text-gray-300">{label}</span>
-      <span className="shrink-0 text-sm font-bold tabular-nums text-amber-400">{fmtOdd(price)}</span>
-    </span>
+    <div className={`space-y-1 ${bare ? '' : 'rounded-lg bg-black/25 p-1 ring-1 ring-white/10'}`}>
+      {rows.map(({ slug, p }) => {
+        const isBest = p!.bookmaker === best.bookmaker && p!.price === best.price;
+        const b = getBookmaker(slug);
+        return (
+          <div
+            key={slug}
+            className={`flex items-center justify-between gap-1.5 rounded px-1.5 py-1 ${
+              isBest ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40' : 'bg-black/20'
+            }`}
+          >
+            <Tooltip label={b?.name || slug}>
+              <span className="flex items-center gap-1">
+                <BookmakerLogo name={b?.name || slug} slug={slug} logoUrl={b?.logoUrl} color={b?.color} size={14} />
+                <PriceTags p={p!} />
+              </span>
+            </Tooltip>
+            <span className={`text-xs font-bold tabular-nums ${isBest ? 'text-emerald-300' : 'text-amber-400/90'}`}>{fmtOdd(p!.price)}</span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
-/** Odd turbinada: preço antigo riscado/cinza » preço novo em âmbar forte. */
-function BoostOdd({ oldPrice, newPrice }: { oldPrice: number; newPrice: number }) {
+/** Tags PA (Pagamento Antecipado) / turbinada de um preço. */
+function PriceTags({ p }: { p: EventGroupPrice }) {
   return (
-    <span className="flex shrink-0 items-center gap-1.5">
-      <span className="text-xs font-semibold tabular-nums text-gray-500 line-through">{fmtOdd(oldPrice)}</span>
-      <ChevronsRight size={13} className="text-emerald-400" />
-      <span className="text-sm font-bold tabular-nums text-amber-400">{fmtOdd(newPrice)}</span>
-    </span>
+    <>
+      {p.pa && (
+        <span title={PA_HELP} className="rounded-sm bg-sky-500/20 px-1 text-[8px] font-bold leading-tight text-sky-300 ring-1 ring-sky-400/40">PA</span>
+      )}
+      {p.boosted && (
+        <span title={BOOST_HELP} className="inline-flex"><Zap size={11} className="text-amber-400 fill-amber-400/40" /></span>
+      )}
+    </>
   );
 }
