@@ -129,15 +129,12 @@ export default function NoDelayEventPage() {
   const refAccount = useMemo(() => connected.find((a) => a.bookmakerSlug === slug), [connected, slug]);
   const maxStakeK = useNoDelayMaxStake(primary?.rogueUrl ?? null, refAccount?.id ?? null, detail);
 
-  // Betslip (tap-to-bet no quadro): toca na odd → Disparo direto LIGADO dispara na
-  // hora; DESLIGADO abre o cupom (confirma antes). O resultado sai no BetSlipDrawer.
+  // Betslip (tap-to-bet no quadro): tocar na odd SEMPRE abre o CUPOM. O "Disparo
+  // direto" NÃO existe aqui — é exclusivo do modal Aposta Rápida. O resultado do
+  // disparo (feito pelo cupom) aparece no BetSlipDrawer.
   const [slipPick, setSlipPick] = useState<{ m: LiveMarket; s: LiveSelection } | null>(null);
   const fire = useNoDelayFire({ detail, houseBySlug, getHousePrice, betting: bettingAccounts, settings, k: maxStakeK });
-  const onPickOdd = useCallback((m: LiveMarket, s: LiveSelection) => {
-    // Disparo direto SÓ com conta marcada; senão abre o cupom (pra marcar/confirmar).
-    if (settings.instantFire && bettingAccounts.length > 0) fire.doFire(m, s);
-    else setSlipPick({ m, s });
-  }, [settings.instantFire, bettingAccounts.length, fire]);
+  const onPickOdd = useCallback((m: LiveMarket, s: LiveSelection) => setSlipPick({ m, s }), []);
 
   return (
     <NoDelayGate authLoading={authLoading} isAuthenticated={isAuthenticated} denied={denied}>
