@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { TeamLogo } from '@/components/nodelay/TeamLogo';
 import { usePrematchGroupedGames, PrematchGame } from '@/hooks/usePrematchGroupedGames';
+import { usePrematchFacets } from '@/hooks/usePrematchFacets';
 import { PrematchLeaguesSidebar, LeagueSelection } from '@/components/nodelay/PrematchLeaguesSidebar';
 import { ChevronRight, Loader2, Search, CalendarClock, CheckCircle2, ListFilter, X } from 'lucide-react';
 
@@ -44,12 +45,67 @@ const dayLabel = (iso: string): string =>
 const timeLabel = (iso: string): string =>
   new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
 
+// Emoji por esporte (igual ao feed ao vivo, p/ as abas de esporte). Fallback 🏆.
+function sportEmoji(name: string): string {
+  const n = (name || '').toLowerCase();
+  if (n.includes('futebol americano') || n.includes('nfl')) return '🏈';
+  if (n.includes('futsal')) return '⚽';
+  if (n.includes('futebol') || n.includes('soccer')) return '⚽';
+  if (n.includes('basquet') || n.includes('basket')) return '🏀';
+  if (n.includes('tênis de mesa') || n.includes('tenis de mesa') || n.includes('ping')) return '🏓';
+  if (n.includes('tên') || n.includes('ten')) return '🎾';
+  if (n.includes('vôlei') || n.includes('volei') || n.includes('volley')) return '🏐';
+  if (n.includes('hóquei') || n.includes('hoquei') || n.includes('hockey')) return '🏒';
+  if (n.includes('beisebol') || n.includes('baseball')) return '⚾';
+  if (n.includes('handebol') || n.includes('handball')) return '🤾';
+  if (n.includes('rugby') || n.includes('rúgbi')) return '🏉';
+  if (n.includes('críquete') || n.includes('criquete') || n.includes('cricket')) return '🏏';
+  if (n.includes('e-sport') || n.includes('esport') || n.includes('cs') || n.includes('dota') || n.includes('lol')) return '🎮';
+  if (n.includes('boxe') || n.includes('mma') || n.includes('luta') || n.includes('ufc')) return '🥊';
+  if (n.includes('dardos') || n.includes('darts')) return '🎯';
+  if (n.includes('sinuca') || n.includes('bilhar') || n.includes('snooker')) return '🎱';
+  if (n.includes('golfe') || n.includes('golf')) return '⛳';
+  if (n.includes('badminton')) return '🏸';
+  if (n.includes('automob') || n.includes('fórmula') || n.includes('formula') || n.includes('corrida')) return '🏎️';
+  return '🏆';
+}
+
+// Aba de esporte estilo bet365 (ícone em cima, sublinhado lime na ativa) — mesma
+// linguagem do feed ao vivo, p/ consistência entre as duas listas.
+function SportTab({ active, icon, label, count, onClick }: { active: boolean; icon: string; label: string; count: number; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative flex shrink-0 flex-col items-center gap-0.5 whitespace-nowrap px-3 py-2 transition ${
+        active ? 'text-lime-300' : 'text-gray-400 hover:text-gray-200'
+      }`}
+    >
+      <span className="text-lg leading-none">{icon}</span>
+      <span className="flex items-center gap-1 text-[11px] font-medium">
+        {label}
+        <span className={`rounded-full px-1 text-[9px] font-bold tabular-nums ${active ? 'bg-lime-500/25 text-lime-200' : 'bg-white/10 text-gray-500'}`}>{count}</span>
+      </span>
+      {active && <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-lime-400" />}
+    </button>
+  );
+}
+
 export function PrematchGamesList({ houseSlugs, onOpen }: Props) {
   const [search, setSearch] = useState('');
   const [sel, setSel] = useState<LeagueSelection>(EMPTY_SEL);
   const [drawerOpen, setDrawerOpen] = useState(false); // sidebar como drawer (mobile)
 
-  const hasFilter = !!(sel.sport || sel.countryKey || sel.leagueId);
+  // Esportes (abas do topo) + a árvore país/liga da sidebar vêm dos mesmos facets.
+  const { facets } = usePrematchFacets();
+  // Assim que os facets chegam, foca o 1º esporte (ex.: Futebol) — sem forçar um
+  // "Todos" quando só há um esporte. Roda uma vez (o usuário pode trocar depois).
+  const initedRef = useRef(false);
+  useEffect(() => {
+    if (initedRef.current || facets.length === 0) return;
+    initedRef.current = true;
+    setSel((cur) => (cur.sport || cur.countryKey || cur.leagueId ? cur : { sport: facets[0].sport, countryKey: '', leagueId: '', label: '' }));
+  }, [facets]);
+
   const { games, loading, loadingMore, hasMore, loadMore, error } = usePrematchGroupedGames(houseSlugs, {
     sport: sel.sport || undefined,
     countryKey: sel.countryKey || undefined,
@@ -57,8 +113,16 @@ export function PrematchGamesList({ houseSlugs, onOpen }: Props) {
     search: search.trim() || undefined,
   });
 
+  // Chip só p/ país/liga (o esporte já aparece nas abas).
+  const hasLeagueFilter = !!(sel.countryKey || sel.leagueId);
+  // Abas de esporte: com >1 esporte, oferece "Todos" (sport=''); com 1, só ele.
+  const totalCount = facets.reduce((s, f) => s + f.count, 0);
+  const showAll = facets.length > 1;
+
+  const selectSport = (s: string) => { setSel({ sport: s, countryKey: '', leagueId: '', label: '' }); setDrawerOpen(false); };
   const selectFromSidebar = (s: LeagueSelection) => { setSel(s); setDrawerOpen(false); };
-  const clearSidebar = () => { setSel(EMPTY_SEL); setDrawerOpen(false); };
+  // Limpar país/liga mantém o esporte da aba ativa.
+  const clearSidebar = () => { setSel((cur) => ({ sport: cur.sport, countryKey: '', leagueId: '', label: '' })); setDrawerOpen(false); };
 
   // Agrupa por competição → depois por dia, tudo ordenado por horário.
   const comps = useMemo(() => {
@@ -79,7 +143,7 @@ export function PrematchGamesList({ houseSlugs, onOpen }: Props) {
     }).sort((a, b) => (a.first < b.first ? -1 : 1));
   }, [games]);
 
-  const sidebar = <PrematchLeaguesSidebar selected={sel} onSelect={selectFromSidebar} onClear={clearSidebar} />;
+  const sidebar = <PrematchLeaguesSidebar facets={facets} selected={sel} onSelect={selectFromSidebar} onClear={clearSidebar} />;
 
   return (
     <div className="flex w-full items-start gap-4">
@@ -102,11 +166,33 @@ export function PrematchGamesList({ houseSlugs, onOpen }: Props) {
           </h2>
         </div>
 
-        {/* Chip do filtro ativo (liga/país/esporte) */}
-        {hasFilter && (
+        {/* Abas de esporte (categoria de topo) — derivadas dos facets. Hoje só
+            Futebol; novos esportes aparecem sozinhos. Rolam na horizontal (mobile). */}
+        {facets.length > 0 && (
+          <div className="mb-3 -mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+            <div className="flex w-max min-w-full gap-1 border-b border-white/10">
+              {showAll && (
+                <SportTab active={!sel.sport} icon="🏆" label="Todos" count={totalCount} onClick={() => selectSport('')} />
+              )}
+              {facets.map((f) => (
+                <SportTab
+                  key={f.sport}
+                  active={sel.sport === f.sport}
+                  icon={sportEmoji(f.sport)}
+                  label={cap(f.sport)}
+                  count={f.count}
+                  onClick={() => selectSport(f.sport)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Chip do filtro de país/liga ativo (o esporte já está nas abas). */}
+        {hasLeagueFilter && (
           <div className="mb-3">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-lime-500/15 px-3 py-1 text-xs font-semibold text-lime-200 ring-1 ring-lime-500/30">
-              {sel.label || cap(sel.sport)}
+              {sel.label || 'Filtro'}
               <button onClick={clearSidebar} className="text-lime-300 transition hover:text-white" title="Limpar filtro"><X size={13} /></button>
             </span>
           </div>
@@ -133,7 +219,7 @@ export function PrematchGamesList({ houseSlugs, onOpen }: Props) {
           </div>
         ) : comps.length === 0 ? (
           <Empty>
-            {hasFilter
+            {hasLeagueFilter
               ? 'Nenhum jogo das suas casas nesta liga agora.'
               : 'Nenhum jogo de pré-jogo das casas da instância.'}
           </Empty>
