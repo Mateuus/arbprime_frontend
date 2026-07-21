@@ -1,363 +1,207 @@
-import { useState } from 'react';
-import { BetSlipApi, SlipMode, SlipSelection, SLIP_MAX, SLIP_MAX_STAKE } from '@/hooks/useBetSlip';
+import { useMemo } from 'react';
+import { LiveGameDetail, LiveMarket, LiveSelection } from '@/services/nodelay/rogueModel';
+import { NoDelayAccount, NoDelayBookmaker } from '@/interfaces/nodelay.interface';
+import { HousePrice } from '@/hooks/useInstanceLiveEvent';
+import { NoDelaySettings } from '@/hooks/useNoDelaySettings';
+import { useNoDelayFire, HOUSE_MIN } from '@/hooks/useNoDelayFire';
+import { selectionLabel, scoreOf, clockOf, fmtOdd } from '@/utils/nodelayLive';
 import { formatMoney } from '@/utils/nodelayUi';
-import { fmtOdd } from '@/utils/nodelayLive';
-import { TeamLogo } from '@/components/nodelay/TeamLogo';
-import {
-  Receipt, ChevronDown, Trash2, Share2, Calculator, X, Goal, Radio,
-} from 'lucide-react';
+import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
+import { X, Minus, Plus, Check, Lock, Zap } from 'lucide-react';
 
 /**
- * CUPOM DE APOSTAS ("betslip") estilo bet365 — COMPARTILHADO por todas as casas de
- * uma instância NoDelay. Uma aposta simples/múltipla (prematch OU ao vivo).
+ * Cupom de Apostas (Betslip) — bottom sheet compartilhado por TODA casa, prematch e
+ * ao vivo. Abre ao tocar numa odd quando o "Disparo direto" está DESLIGADO (com ele
+ * ligado a aposta sai na hora, sem cupom). NÃO é usado na Aposta Rápida.
  *
- * NÃO é a "Aposta Rápida" (aquela dispara a mesma entrada em N contas — ver
- * BetSlipDrawer). Aqui é UM apostador montando UMA aposta antes de confirmar.
- *
- * Cores: âmbar/ouro na odd (assinatura bet365), lime = acento interativo do NoDelay
- * (aba ativa, botão principal), esmeralda no cabeçalho/faixa "verde" da casa.
- *
- * Responsivo: painel fixo à direita no desktop (lg+), bottom-sheet no mobile com um
- * gatilho flutuante "Cupom (N)". O componente gerencia o próprio open/close.
- *
- * O disparo real ainda NÃO existe (prematch/live é futuro) → "Fazer aposta" é MOCK:
- * mostra um aviso e MANTÉM o cupom. Ver `// TODO(place)`.
+ * Mostra a seleção + as "Contas Prontas" (marcadas) com a odd de CADA casa, o stake
+ * e o retorno; confirma → dispara client-side em todas as casas de uma vez (motor
+ * `useNoDelayFire`, o mesmo da Aposta Rápida). O resultado aparece no BetSlipDrawer
+ * (a página é dona do `fire`), então aqui o cupom só monta e confirma.
  */
-
 interface Props {
-  slip: BetSlipApi;
-  /** Rótulo da casa/instância no rodapé (ex.: "bet365" / "Betano"). */
-  houseLabel?: string;
+  pick: { m: LiveMarket; s: LiveSelection };
+  detail: LiveGameDetail;
+  /** Motor de disparo da página (dono dos slips + drawer de resultado). */
+  fire: ReturnType<typeof useNoDelayFire>;
+  houseBySlug: Map<string, NoDelayBookmaker>;
+  getHousePrice: (slug: string, selId: string) => HousePrice | undefined;
+  connected: NoDelayAccount[];
+  selectedIds: Set<string>;
+  onToggleAccount: (id: string) => void;
+  settings: NoDelaySettings;
+  onUpdateSettings: (patch: Partial<NoDelaySettings>) => void;
+  onClose: () => void;
 }
 
-export function BetSlip({ slip, houseLabel }: Props) {
-  const [open, setOpen] = useState(true);
+export function BetSlip({
+  pick, detail, fire, houseBySlug, getHousePrice, connected, selectedIds, onToggleAccount, settings, onUpdateSettings, onClose,
+}: Props) {
+  const { m, s } = pick;
+  const betting = useMemo(() => connected.filter((a) => selectedIds.has(a.id)), [connected, selectedIds]);
+
+  const score = scoreOf(detail);
+  const clock = clockOf(detail);
+  const eventName = `${detail.home} x ${detail.away}`;
+
+  // Re-lê a odd VIVA (a de agora, não a congelada do toque): se suspendeu entre o
+  // toque e a confirmação, bloqueia o disparo (não aposta morto).
+  const liveMkt = detail.markets.find((mm) => mm.id === m.id);
+  const liveSel = liveMkt?.selections.find((ss) => ss.id === s.id);
+  const dead = !liveSel || !!liveMkt?.suspended || liveSel.disabled || (liveSel.price ?? 0) <= 0;
+
+  const rows = useMemo(() => fire.preview(m, s), [fire, m, s]);
+  const byAccount = useMemo(() => new Map(rows.map((r) => [r.account.id, r])), [rows]);
+  const totalStake = rows.reduce((acc, r) => acc + (r.blocked ? 0 : r.stake), 0);
+  const totalReturn = rows.reduce((acc, r) => acc + r.potential, 0);
+
+  const setStake = (v: number) => onUpdateSettings({ defaultStake: Math.max(HOUSE_MIN, +v.toFixed(2)) });
+  const canFire = betting.length > 0 && !dead;
+
+  const confirm = () => { fire.doFire(m, s); onClose(); };
 
   return (
-    <>
-      {/* Gatilho flutuante — some quando o painel está aberto. No desktop também
-          serve p/ reabrir o painel se o usuário fechar. */}
-      {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          className="fixed bottom-4 right-4 z-[9998] inline-flex items-center gap-2 rounded-full bg-lime-500 px-4 py-3 text-sm font-bold text-black shadow-[0_8px_30px_rgba(132,204,22,0.35)] transition hover:bg-lime-400"
-        >
-          <Receipt size={17} />
-          Cupom
-          {slip.count > 0 && (
-            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-black/25 px-1 text-xs font-bold tabular-nums">
-              {slip.count}
-            </span>
-          )}
-        </button>
-      )}
+    <div className="fixed inset-0 z-[9995] flex flex-col justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
 
-      {open && (
-        <>
-          {/* Backdrop só no mobile (no desktop o painel fica dockado, sem escurecer). */}
-          <div
-            className="fixed inset-0 z-[9998] bg-black/50 backdrop-blur-sm lg:hidden"
-            onClick={() => setOpen(false)}
-          />
-          {/* Painel: bottom-sheet no mobile, coluna fixa à direita no desktop. */}
-          <div className="fixed inset-x-0 bottom-0 z-[9999] flex max-h-[88dvh] flex-col rounded-t-2xl border-t border-white/10 bg-brand-dark shadow-[0_-8px_40px_rgba(0,0,0,0.6)] lg:inset-y-0 lg:left-auto lg:right-0 lg:max-h-none lg:w-[380px] lg:rounded-none lg:border-l lg:border-t-0">
-            <SlipHeader slip={slip} onClose={() => setOpen(false)} />
-            <SlipBody slip={slip} houseLabel={houseLabel} />
-          </div>
-        </>
-      )}
-    </>
-  );
-}
-
-/** Faixa verde do cabeçalho: "Cupom de Apostas  N/30" + chevron de fechar. */
-function SlipHeader({ slip, onClose }: { slip: BetSlipApi; onClose: () => void }) {
-  return (
-    <div className="flex items-center gap-2 rounded-t-2xl bg-emerald-600 px-3 py-2.5 text-white lg:rounded-none">
-      <Receipt size={16} />
-      <span className="text-sm font-bold">Cupom de Apostas</span>
-      <span className="rounded-md bg-black/20 px-1.5 py-0.5 text-[11px] font-bold tabular-nums">
-        {slip.count}/{SLIP_MAX}
-      </span>
-      <button onClick={onClose} className="ml-auto rounded-lg p-1 transition hover:bg-black/20" title="Fechar cupom">
-        <ChevronDown size={18} className="lg:hidden" />
-        <X size={16} className="hidden lg:block" />
-      </button>
-    </div>
-  );
-}
-
-function SlipBody({ slip, houseLabel }: { slip: BetSlipApi; houseLabel?: string }) {
-  const empty = slip.count === 0;
-
-  return (
-    <>
-      {/* Linha de ações: limpar / compartilhar / valores */}
-      <div className="flex items-center gap-1 border-b border-white/10 bg-black/20 px-2 py-1.5">
-        <ActionBtn icon={<Trash2 size={13} />} label="Limpar" onClick={slip.clear} disabled={empty} />
-        <ActionBtn icon={<Share2 size={13} />} label="Compartilhar" disabled />
-        <ActionBtn icon={<Calculator size={13} />} label="Valores" disabled />
-      </div>
-
-      {/* Abas Simples | Múltipla | Sistema */}
-      <div className="flex gap-1 border-b border-white/10 bg-black/10 px-2 py-2">
-        <ModeTab id="simples" label="Simples" slip={slip} />
-        <ModeTab id="multipla" label={`Múltipla${slip.count > 1 ? ` (${slip.count})` : ''}`} slip={slip} />
-        <ModeTab id="sistema" label="Sistema" slip={slip} />
-      </div>
-
-      {/* Lista de seleções */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {empty ? (
-          <EmptyState />
-        ) : slip.mode === 'multipla' ? (
-          <MultiplaList slip={slip} />
-        ) : slip.mode === 'sistema' ? (
-          <SistemaStub slip={slip} />
-        ) : (
-          <div className="divide-y divide-white/5">
-            {slip.selections.map((s) => (
-              <SimplesRow key={s.id} sel={s} slip={slip} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {!empty && <SlipFooter slip={slip} houseLabel={houseLabel} />}
-    </>
-  );
-}
-
-function ActionBtn({ icon, label, onClick, disabled }: { icon: React.ReactNode; label: string; onClick?: () => void; disabled?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-gray-300 transition enabled:hover:bg-white/10 disabled:opacity-40"
-    >
-      {icon} {label}
-    </button>
-  );
-}
-
-function ModeTab({ id, label, slip }: { id: SlipMode; label: string; slip: BetSlipApi }) {
-  const on = slip.mode === id;
-  return (
-    <button
-      onClick={() => slip.setMode(id)}
-      className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition ${
-        on ? 'bg-lime-500/15 text-lime-200 ring-1 ring-lime-500/40' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-      <span className="grid h-14 w-14 place-items-center rounded-full bg-white/5 ring-1 ring-white/10">
-        <Receipt size={26} className="text-gray-600" />
-      </span>
-      <p className="text-sm font-semibold text-gray-300">Nenhuma aposta encontrada</p>
-      <p className="max-w-[16rem] text-xs text-gray-500">
-        Toque numa odd no quadro do jogo para adicionar sua seleção ao cupom.
-      </p>
-    </div>
-  );
-}
-
-/** Cabeçalho comum de uma seleção (times + mercado + pick + odd + lixeira). */
-function SelectionHead({ sel, slip, showOdd = true }: { sel: SlipSelection; slip: BetSlipApi; showOdd?: boolean }) {
-  return (
-    <div className="flex items-start gap-2">
-      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded bg-white/5 text-gray-400">
-        <Goal size={13} />
-      </span>
-      <div className="min-w-0 flex-1">
-        {/* Evento */}
-        <div className="flex items-center gap-1.5">
-          {sel.homeSofaId != null && <TeamLogo name={sel.eventLabel} sofascoreId={sel.homeSofaId} size={14} />}
-          <span className="min-w-0 truncate text-[11px] text-gray-400">{sel.eventLabel}</span>
-        </div>
-        {/* Mercado + tag PA verde itálica */}
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span className="text-[11px] text-gray-500">{sel.marketName}</span>
-          {sel.paTag && <span className="text-[10px] font-semibold italic text-emerald-400">{sel.paTag}</span>}
-        </div>
-        {/* Pick (negrito) + horário/Ao Vivo */}
-        <div className="mt-0.5 flex items-center gap-2">
-          <span className="min-w-0 truncate text-sm font-bold text-white">{sel.selectionName}</span>
-          {sel.live ? (
-            <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-rose-300">
-              <Radio size={10} /> Ao Vivo
-            </span>
-          ) : sel.kickoffLabel ? (
-            <span className="shrink-0 text-[10px] tabular-nums text-gray-500">{sel.kickoffLabel}</span>
-          ) : null}
-        </div>
-      </div>
-      {/* Odd em âmbar + remover */}
-      <div className="flex shrink-0 flex-col items-end gap-1">
-        {showOdd && <span className="text-sm font-bold tabular-nums text-amber-400">{fmtOdd(sel.odd)}</span>}
-        <button
-          onClick={() => slip.remove(sel.id)}
-          className="rounded p-0.5 text-gray-600 transition hover:text-rose-400"
-          title="Remover seleção"
-        >
-          <Trash2 size={13} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** Chips rápidos de stake: +10 / +50 / +200 / MÁX. */
-function StakeChips({ onBump, onMax }: { onBump: (v: number) => void; onMax: () => void }) {
-  return (
-    <div className="mt-1.5 flex gap-1">
-      {[10, 50, 200].map((v) => (
-        <button
-          key={v}
-          onClick={() => onBump(v)}
-          className="flex-1 rounded-md bg-white/5 py-1 text-[11px] font-semibold text-gray-300 ring-1 ring-white/10 transition hover:bg-white/10"
-        >
-          +{v}
-        </button>
-      ))}
-      <button
-        onClick={onMax}
-        className="flex-1 rounded-md bg-lime-500/10 py-1 text-[11px] font-bold text-lime-300 ring-1 ring-lime-500/30 transition hover:bg-lime-500/20"
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex max-h-[86vh] w-full flex-col rounded-t-2xl border-t border-white/10 bg-brand-dark shadow-2xl sm:mx-auto sm:max-w-lg animate-[slideUp_.18s_ease-out]"
       >
-        MÁX
-      </button>
-    </div>
-  );
-}
+        {/* Alça + cabeçalho */}
+        <div className="shrink-0 px-4 pt-2.5">
+          <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-white/15" />
+          <div className="flex items-center gap-2 pb-2">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-lime-500/15 ring-1 ring-lime-500/30">
+              <Zap size={14} className="text-lime-300" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold text-white">Cupom de Apostas</div>
+              <div className="flex items-center gap-1.5 truncate text-[11px] text-gray-400">
+                <span className="truncate">{eventName}</span>
+                {clock && <span className="shrink-0 font-semibold text-lime-300">{clock}</span>}
+                {score && <span className="shrink-0 text-gray-300">{score.home}-{score.away}</span>}
+              </div>
+            </div>
+            <button onClick={onClose} className="text-gray-400 transition hover:text-white"><X size={18} /></button>
+          </div>
+        </div>
 
-/** Input de stake "R$ 0,00". Mantém string local p/ digitação livre. */
-function StakeInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex items-center rounded-lg bg-black/30 px-2.5 py-2 ring-1 ring-white/10 focus-within:ring-lime-500/40">
-      <span className="mr-1 text-xs font-semibold text-gray-500">R$</span>
-      <input
-        type="number"
-        inputMode="decimal"
-        min={0}
-        step="0.01"
-        value={value || ''}
-        placeholder="0,00"
-        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-        className="w-full min-w-0 bg-transparent text-right text-sm font-bold tabular-nums text-white outline-none placeholder:text-gray-600"
-      />
-    </div>
-  );
-}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+          {/* Seleção */}
+          <div className="rounded-xl bg-white/[0.04] p-3 ring-1 ring-white/10">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-bold text-white">{selectionLabel(s.name, s.points)}</div>
+                <div className="truncate text-[11px] text-gray-500">{m.name}</div>
+              </div>
+              <div className="shrink-0 text-lg font-bold tabular-nums text-amber-400">
+                {dead ? <span className="inline-flex items-center gap-1 text-rose-300"><Lock size={15} /></span> : fmtOdd(liveSel!.price)}
+              </div>
+            </div>
+            {dead && <p className="mt-1.5 text-[10px] text-rose-300/80">Mercado suspendeu — feche e toque de novo quando reabrir.</p>}
+          </div>
 
-/** Modo SIMPLES: cada seleção com sua stake + retorno próprio. */
-function SimplesRow({ sel, slip }: { sel: SlipSelection; slip: BetSlipApi }) {
-  const stake = slip.stakeOf(sel.id);
-  const ret = slip.returnOf(sel.id);
-  return (
-    <div className="px-3 py-2.5">
-      <SelectionHead sel={sel} slip={slip} />
-      <div className="mt-2">
-        <StakeInput value={stake} onChange={(v) => slip.setStake(sel.id, v)} />
-        <StakeChips onBump={(v) => slip.bumpStake(sel.id, v)} onMax={() => slip.setStake(sel.id, SLIP_MAX_STAKE)} />
-        <div className="mt-1.5 flex items-center justify-between text-[11px]">
-          <span className="text-gray-500">Retorno potencial</span>
-          <span className="font-bold tabular-nums text-emerald-300">{formatMoney(ret)}</span>
+          {/* Stake */}
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-[11px] text-gray-400">Valor por conta</span>
+            <div className={`ml-auto flex items-center rounded-lg bg-black/30 ring-1 ring-white/10 ${settings.maxStakeMode ? 'opacity-40' : ''}`}>
+              <button onClick={() => setStake(settings.defaultStake - 1)} disabled={settings.maxStakeMode} className="grid h-8 w-8 place-items-center text-gray-400 hover:text-white disabled:cursor-not-allowed"><Minus size={14} /></button>
+              <input
+                value={settings.defaultStake}
+                onChange={(e) => setStake(parseFloat(e.target.value.replace(',', '.')) || 0)}
+                inputMode="decimal"
+                disabled={settings.maxStakeMode}
+                className="w-16 bg-transparent text-center text-sm font-bold tabular-nums text-white focus:outline-none"
+              />
+              <button onClick={() => setStake(settings.defaultStake + 1)} disabled={settings.maxStakeMode} className="grid h-8 w-8 place-items-center text-gray-400 hover:text-white disabled:cursor-not-allowed"><Plus size={14} /></button>
+            </div>
+            <button
+              onClick={() => onUpdateSettings({ maxStakeMode: !settings.maxStakeMode })}
+              className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold ring-1 transition ${settings.maxStakeMode ? 'bg-lime-500 text-slate-900 ring-lime-400' : 'bg-white/5 text-gray-300 ring-white/10 hover:bg-white/10'}`}
+              title="Apostar o máximo de cada conta (limitado pelo saldo)"
+            >
+              MÁX
+            </button>
+          </div>
+
+          {/* Contas Prontas — casas que vão apostar, com a odd de cada casa */}
+          <div className="mt-3">
+            <div className="mb-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+              <span>Contas prontas · odd por casa</span>
+              <span>{betting.length}/{connected.length}</span>
+            </div>
+            {connected.length === 0 ? (
+              <p className="rounded-lg bg-black/20 px-3 py-3 text-center text-[11px] text-gray-500">Nenhuma conta conectada.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {connected.map((a) => {
+                  const on = selectedIds.has(a.id);
+                  const h = houseBySlug.get(a.bookmakerSlug);
+                  const row = byAccount.get(a.id);
+                  const odd = row?.odd ?? getHousePrice(a.bookmakerSlug, s.id)?.price ?? s.price;
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => onToggleAccount(a.id)}
+                      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left ring-1 transition ${
+                        on ? 'bg-lime-500/[0.07] ring-lime-500/30' : 'bg-white/[0.02] ring-white/5 hover:bg-white/5'
+                      }`}
+                    >
+                      <span className={`grid h-4 w-4 shrink-0 place-items-center rounded ring-1 ${on ? 'bg-lime-500 ring-lime-500 text-slate-900' : 'ring-white/20'}`}>
+                        {on && <Check size={11} strokeWidth={3} />}
+                      </span>
+                      {h && <BookmakerLogo name={h.name} slug={h.slug} logoUrl={h.logoUrl} color={h.color} size={18} />}
+                      <div className="min-w-0 flex-1">
+                        <div className={`truncate text-[12px] font-medium ${on ? 'text-white' : 'text-gray-400'}`}>{a.label || a.username}</div>
+                        <div className="truncate text-[10px] text-gray-500">{formatMoney(a.balance, a.currency)}</div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {on && row?.blocked ? (
+                          <div className="text-[10px] font-medium text-rose-300/80">{row.reason}</div>
+                        ) : (
+                          <>
+                            <div className={`text-sm font-bold tabular-nums ${on ? 'text-amber-400' : 'text-gray-500'}`}>{fmtOdd(odd)}</div>
+                            {on && row && <div className="text-[10px] text-gray-500">R$ {row.stake.toFixed(0)} → <span className="text-emerald-300/90">{formatMoney(row.potential)}</span></div>}
+                          </>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Rodapé fixo: total + confirmar */}
+        <div className="shrink-0 border-t border-white/10 bg-black/30 px-4 py-3">
+          <div className="mb-2 flex items-center justify-between text-[11px]">
+            <span className="text-gray-400">
+              <span className="font-semibold text-white">{betting.length}</span> conta{betting.length === 1 ? '' : 's'}
+              {settings.maxStakeMode && <span className="font-bold text-lime-300"> · MÁX</span>}
+            </span>
+            <span className="text-gray-400">
+              Total <span className="font-bold text-white">{formatMoney(totalStake)}</span>
+              <span className="mx-1">·</span>
+              Retorno <span className="font-bold text-emerald-300">{formatMoney(totalReturn)}</span>
+            </span>
+          </div>
+          <button
+            disabled={!canFire}
+            onClick={confirm}
+            className={`w-full rounded-xl py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              settings.realBets ? 'bg-rose-500 text-white hover:bg-rose-400' : 'bg-lime-500 text-slate-900 hover:bg-lime-400'
+            }`}
+          >
+            {dead ? 'Mercado suspenso' : betting.length === 0 ? 'Marque uma conta' : settings.realBets ? 'Confirmar aposta real' : 'Confirmar (simulação)'}
+          </button>
         </div>
       </div>
-    </div>
-  );
-}
 
-/** Modo MÚLTIPLA: seleções listadas (só odd), UMA stake, odd combinada = produto. */
-function MultiplaList({ slip }: { slip: BetSlipApi }) {
-  return (
-    <div>
-      <div className="divide-y divide-white/5">
-        {slip.selections.map((s) => (
-          <div key={s.id} className="px-3 py-2.5">
-            <SelectionHead sel={s} slip={slip} />
-          </div>
-        ))}
-      </div>
-      {/* Bloco da múltipla: odd combinada + stake única */}
-      <div className="border-t border-white/10 bg-black/20 px-3 py-3">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-semibold text-gray-300">Múltipla · {slip.count} seleções</span>
-          <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-sm font-bold tabular-nums text-amber-400 ring-1 ring-amber-500/25">
-            {fmtOdd(slip.multiOdds)}
-          </span>
-        </div>
-        <StakeInput value={slip.multiStake} onChange={slip.setMultiStake} />
-        <StakeChips onBump={(v) => slip.setMultiStake(slip.multiStake + v)} onMax={() => slip.setMultiStake(SLIP_MAX_STAKE)} />
-      </div>
-    </div>
-  );
-}
-
-/** Modo SISTEMA: stub por ora (combinações parciais é futuro). */
-function SistemaStub({ slip }: { slip: BetSlipApi }) {
-  return (
-    <div>
-      <div className="divide-y divide-white/5">
-        {slip.selections.map((s) => (
-          <div key={s.id} className="px-3 py-2.5">
-            <SelectionHead sel={s} slip={slip} />
-          </div>
-        ))}
-      </div>
-      <div className="border-t border-white/10 bg-black/20 px-3 py-4 text-center">
-        <p className="text-xs font-semibold text-gray-300">Aposta de Sistema</p>
-        <p className="mt-1 text-[11px] text-gray-500">
-          Combinações parciais (ex.: 2/3) em breve. Use Simples ou Múltipla por enquanto.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/** Rodapé: total apostado + botão "Fazer aposta" com o retorno potencial. */
-function SlipFooter({ slip, houseLabel }: { slip: BetSlipApi; houseLabel?: string }) {
-  const { totalStake, totalReturn } = slip.totals;
-  const canPlace = totalStake > 0 && (slip.mode !== 'sistema');
-
-  const onPlace = () => {
-    // TODO(place): AQUI vai a colocação real na casa (prematch/live). Hoje é mock:
-    //   const ticket = { house, mode, selections, stakes... };
-    //   await placeSlip(instanceId, ticket)  // futuro serviço, análogo ao placeBet.ts
-    // Por ora só avisamos e MANTEMOS o cupom (o usuário não perde a montagem).
-    const label = slip.mode === 'multipla'
-      ? `Múltipla ${fmtOdd(slip.multiOdds)} · ${formatMoney(totalStake)}`
-      : `${slip.count} simples · ${formatMoney(totalStake)}`;
-    // eslint-disable-next-line no-alert
-    window.alert(`Aposta registrada (mock) — placement real em breve.\n\n${label}`);
-  };
-
-  return (
-    <div className="border-t border-white/10 bg-brand-dark px-3 py-3">
-      <div className="mb-2 flex items-center justify-between text-xs">
-        <span className="text-gray-400">Total apostado</span>
-        <span className="font-bold tabular-nums text-white">{formatMoney(totalStake)}</span>
-      </div>
-      <button
-        onClick={onPlace}
-        disabled={!canPlace}
-        className="flex w-full items-center justify-between rounded-xl bg-lime-500 px-4 py-3 font-bold text-black transition enabled:hover:bg-lime-400 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-gray-500"
-      >
-        <span className="text-sm">Fazer aposta</span>
-        <span className="flex flex-col items-end leading-none">
-          <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">Retornos potenciais</span>
-          <span className="text-sm tabular-nums">{formatMoney(totalReturn)}</span>
-        </span>
-      </button>
-      <p className="mt-1.5 text-center text-[10px] text-gray-600">
-        {houseLabel ? `${houseLabel} · ` : ''}colocação real em breve (mock)
-      </p>
+      <style jsx>{`
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+      `}</style>
     </div>
   );
 }

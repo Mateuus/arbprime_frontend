@@ -15,6 +15,10 @@ import { NoDelayGate } from '@/components/nodelay/NoDelayGate';
 import { LiveScoreboard } from '@/components/nodelay/LiveScoreboard';
 import { MatchRadar } from '@/components/nodelay/MatchRadar';
 import { EventBoard } from '@/components/nodelay/EventBoard';
+import { BetSlip } from '@/components/nodelay/BetSlip';
+import { BetSlipDrawer } from '@/components/nodelay/BetSlipDrawer';
+import { useNoDelayFire } from '@/hooks/useNoDelayFire';
+import { LiveMarket, LiveSelection } from '@/services/nodelay/rogueModel';
 import { useAltenarLiveEvent } from '@/hooks/useAltenarLiveEvent';
 import { useSuperbetLiveEvent } from '@/hooks/useSuperbetLiveEvent';
 import { BetSettingsPopover } from '@/components/nodelay/BetSettingsPopover';
@@ -125,6 +129,16 @@ export default function NoDelayEventPage() {
   const refAccount = useMemo(() => connected.find((a) => a.bookmakerSlug === slug), [connected, slug]);
   const maxStakeK = useNoDelayMaxStake(primary?.rogueUrl ?? null, refAccount?.id ?? null, detail);
 
+  // Betslip (tap-to-bet no quadro): toca na odd → Disparo direto LIGADO dispara na
+  // hora; DESLIGADO abre o cupom (confirma antes). O resultado sai no BetSlipDrawer.
+  const [slipPick, setSlipPick] = useState<{ m: LiveMarket; s: LiveSelection } | null>(null);
+  const fire = useNoDelayFire({ detail, houseBySlug, getHousePrice, betting: bettingAccounts, settings, k: maxStakeK });
+  const onPickOdd = useCallback((m: LiveMarket, s: LiveSelection) => {
+    // Disparo direto SÓ com conta marcada; senão abre o cupom (pra marcar/confirmar).
+    if (settings.instantFire && bettingAccounts.length > 0) fire.doFire(m, s);
+    else setSlipPick({ m, s });
+  }, [settings.instantFire, bettingAccounts.length, fire]);
+
   return (
     <NoDelayGate authLoading={authLoading} isAuthenticated={isAuthenticated} denied={denied}>
       <div className="w-full px-3 sm:px-6 py-6">
@@ -161,6 +175,7 @@ export default function NoDelayEventPage() {
               <EventBoard
                 detail={detail}
                 changed={changed}
+                onPick={onPickOdd}
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
                 delayTradeOnly={settings.delayTradeOnly}
@@ -286,6 +301,24 @@ export default function NoDelayEventPage() {
             onToggleAntiProtect={toggleAntiProtect}
           />
         )}
+
+        {/* Betslip (Disparo direto desligado) + resultado do disparo (drawer). */}
+        {slipPick && detail && (
+          <BetSlip
+            pick={slipPick}
+            detail={detail}
+            fire={fire}
+            houseBySlug={houseBySlug}
+            getHousePrice={getHousePrice}
+            connected={connected}
+            selectedIds={selectedIds}
+            onToggleAccount={(id) => toggleAccount(id, connectedIds)}
+            settings={settings}
+            onUpdateSettings={update}
+            onClose={() => setSlipPick(null)}
+          />
+        )}
+        {fire.slips && <BetSlipDrawer slips={fire.slips} onClose={fire.reset} />}
       </div>
     </NoDelayGate>
   );
