@@ -3,6 +3,7 @@ import { LiveGameDetail, LiveMarket, LiveSelection } from '@/services/nodelay/ro
 import { NoDelayAccount, NoDelayBookmaker } from '@/interfaces/nodelay.interface';
 import { HousePrice } from '@/hooks/useInstanceLiveEvent';
 import { useNowTick } from '@/hooks/useNowTick';
+import { useUserContext } from '@/context/UserContext';
 import { NoDelaySettings } from '@/hooks/useNoDelaySettings';
 import { placeBet, BetTicket } from '@/services/nodelay/placeBet';
 import { placeBetReal, warmAccountTokens, tokensWarm } from '@/services/nodelay/placeBetReal';
@@ -68,6 +69,8 @@ export function QuickBetModal({
   const [pending, setPending] = useState<{ m: LiveMarket; s: LiveSelection } | null>(null);
   const [tokensReady, setTokensReady] = useState(false);
   const fireSeq = useRef(0);
+  const { user } = useUserContext();
+  const isAdmin = user?.role === 'admin';
 
   const betting = useMemo(() => connected.filter((a) => selectedIds.has(a.id)), [connected, selectedIds]);
 
@@ -381,24 +384,26 @@ export function QuickBetModal({
                 on={settings.allowPartial}
                 onToggle={() => onUpdateSettings({ allowPartial: !settings.allowPartial })}
               />
-              {/* TEMPORÁRIO (teste): liga o place REAL. */}
-              <div className="mt-1 rounded-lg border border-rose-500/40 bg-rose-500/[0.06] p-2.5">
-                <label className="flex cursor-pointer items-start justify-between gap-3">
-                  <span className="min-w-0">
-                    <span className="block text-xs font-bold text-rose-300">⚠️ Aposta REAL (teste)</span>
-                    <span className="mt-0.5 block text-[10px] leading-snug text-rose-300/70">
-                      Desliga o mock e envia de verdade na casa (gasta dinheiro). Pede confirmação a cada disparo.
+              {/* Mock vs REAL — SÓ admin (todo o resto aposta sempre real). */}
+              {isAdmin && (
+                <div className="mt-1 rounded-lg border border-rose-500/40 bg-rose-500/[0.06] p-2.5">
+                  <label className="flex cursor-pointer items-start justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block text-xs font-bold text-rose-300">⚠️ Aposta REAL (admin)</span>
+                      <span className="mt-0.5 block text-[10px] leading-snug text-rose-300/70">
+                        Desligue para testar no mock (sem gastar). Usuários normais apostam sempre de verdade.
+                      </span>
                     </span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onUpdateSettings({ realBets: !settings.realBets })}
-                    className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${settings.realBets ? 'bg-rose-500' : 'bg-white/15'}`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${settings.realBets ? 'translate-x-4' : 'translate-x-1'}`} />
-                  </button>
-                </label>
-              </div>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateSettings({ realBets: !settings.realBets })}
+                      className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${settings.realBets ? 'bg-rose-500' : 'bg-white/15'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${settings.realBets ? 'translate-x-4' : 'translate-x-1'}`} />
+                    </button>
+                  </label>
+                </div>
+              )}
               <SettingToggle
                 label="Disparo direto (sem confirmar)"
                 hint="Ao tocar na odd, aposta na hora — sem o modal de confirmação. Mais rápido, menos rede de segurança."

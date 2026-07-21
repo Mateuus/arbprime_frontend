@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useUserContext } from '@/context/UserContext';
 
 /**
  * Config de aposta do NoDelay (por navegador — localStorage). São as escolhas
@@ -33,7 +34,7 @@ export const DEFAULT_SETTINGS: NoDelaySettings = {
   selectedAccountIds: null,
   delayTradeOnly: false,
   hidePriceless: true, // "por natureza": limpa os "—" por padrão
-  realBets: false,     // teste: começa SEMPRE no mock
+  realBets: true,      // todo mundo aposta REAL; só admin pode voltar pro mock
   instantFire: false,  // por padrão confirma antes
 };
 
@@ -49,6 +50,8 @@ function load(): NoDelaySettings {
 }
 
 export function useNoDelaySettings() {
+  const { user } = useUserContext();
+  const isAdmin = user?.role === 'admin';
   const [settings, setSettings] = useState<NoDelaySettings>(DEFAULT_SETTINGS);
 
   // Carrega do localStorage no cliente (evita mismatch de hidratação).
@@ -76,7 +79,11 @@ export function useNoDelaySettings() {
     });
   }, []);
 
-  return { settings, update, toggleAccount };
+  // Só admin controla o mock (realBets). Para todo o resto, aposta é SEMPRE real —
+  // coage aqui pra um valor antigo salvo em localStorage não deixar ninguém no mock.
+  const effective = isAdmin ? settings : (settings.realBets ? settings : { ...settings, realBets: true });
+
+  return { settings: effective, update, toggleAccount, isAdmin };
 }
 
 /** Contas que de fato vão apostar = as marcadas ∩ conectadas (ou todas se nunca marcou). */

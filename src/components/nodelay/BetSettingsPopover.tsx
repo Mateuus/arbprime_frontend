@@ -57,13 +57,7 @@ export function BetSettingsPopover({
               </div>
             </label>
 
-            {/* Filtros Delay Trade */}
-            <Toggle
-              label="Modo Delay Trade"
-              hint="Só entradas de 'Mais' (esconde o 'Menos'). O suspenso continua (cadeado = sinal)."
-              on={settings.delayTradeOnly}
-              onToggle={() => onUpdate({ delayTradeOnly: !settings.delayTradeOnly })}
-            />
+            {/* Ocultar mercados sem odd (o "Modo Delay Trade" mora só na Aposta Rápida) */}
             <Toggle
               label="Ocultar mercados sem odd"
               hint="Some com o '—' por natureza; o suspenso não some, aparece a odd quando destrava."
