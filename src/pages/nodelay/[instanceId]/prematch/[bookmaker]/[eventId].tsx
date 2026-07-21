@@ -122,6 +122,7 @@ export default function NoDelayPrematchEventPage() {
             settings={settings}
             onUpdateSettings={update}
             onClose={() => setPick(null)}
+            prematch
           />
         )}
       </div>

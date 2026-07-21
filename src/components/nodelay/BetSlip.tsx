@@ -36,10 +36,13 @@ interface Props {
   onClose: () => void;
   /** Prematch: sem dados apostáveis ainda → cupom em modo PREVIEW (confirmar desligado). */
   previewOnly?: boolean;
+  /** Pré-jogo: pula a re-checagem de mercado "vivo" (o detail do prematch não tem
+   * markets) — a odd é a do catálogo; o gate por casa fica no fire. */
+  prematch?: boolean;
 }
 
 export function BetSlip({
-  pick, detail, fire, houseBySlug, getHousePrice, connected, selectedIds, onToggleAccount, settings, onUpdateSettings, onClose, previewOnly,
+  pick, detail, fire, houseBySlug, getHousePrice, connected, selectedIds, onToggleAccount, settings, onUpdateSettings, onClose, previewOnly, prematch,
 }: Props) {
   const { m, s } = pick;
   const betting = useMemo(() => connected.filter((a) => selectedIds.has(a.id)), [connected, selectedIds]);
@@ -51,7 +54,8 @@ export function BetSlip({
   // Re-lê a odd VIVA: se suspendeu entre o toque e a confirmação, bloqueia.
   const liveMkt = detail.markets.find((mm) => mm.id === m.id);
   const liveSel = liveMkt?.selections.find((ss) => ss.id === s.id);
-  const dead = !previewOnly && (!liveSel || !!liveMkt?.suspended || liveSel.disabled || (liveSel.price ?? 0) <= 0);
+  // Pré-jogo/preview: sem re-checagem de mercado vivo (não há markets no detail).
+  const dead = !previewOnly && !prematch && (!liveSel || !!liveMkt?.suspended || liveSel.disabled || (liveSel.price ?? 0) <= 0);
   const headOdd = liveSel?.price ?? s.price;
 
   const rows = useMemo(() => fire.preview(m, s), [fire, m, s]);
