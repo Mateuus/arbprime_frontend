@@ -4,6 +4,7 @@ import { useUserContext } from '@/context/UserContext';
 import { useNoDelay } from '@/hooks/useNoDelay';
 import { useInstanceLiveGames } from '@/hooks/useInstanceLiveGames';
 import { useAltenarInstanceGames } from '@/hooks/useAltenarInstanceGames';
+import { useSuperbetInstanceGames } from '@/hooks/useSuperbetInstanceGames';
 import { useNoDelaySessionKeeper } from '@/hooks/useNoDelaySessionKeeper';
 import { apiGateway } from '@/gateways/api.gateway';
 import { NoDelayInstance, NoDelayBookmaker, NoDelayAccount } from '@/interfaces/nodelay.interface';
@@ -526,12 +527,14 @@ function InstanceFeed({ instanceId, houses, houseSlugs }: { instanceId: string; 
  */
 function InstanceLiveFeed({ instanceId, houses }: { instanceId: string; houses: NoDelayBookmaker[] }) {
   const router = useRouter();
-  // Feed UNIFICADO: fssb (SSE) + biahosted/Altenar (polling), no mesmo formato.
+  // Feed UNIFICADO: fssb (SSE) + biahosted/Altenar (polling) + Superbet (polling),
+  // todos no mesmo formato.
   const swarm = useInstanceLiveGames(houses);
   const bia = useAltenarInstanceGames(houses);
-  const games = useMemo(() => [...swarm.games, ...bia.games], [swarm.games, bia.games]);
-  const loading = swarm.loading || bia.loading;
-  const liveCount = swarm.liveCount + bia.liveCount;
+  const sb = useSuperbetInstanceGames(houses);
+  const games = useMemo(() => [...swarm.games, ...bia.games, ...sb.games], [swarm.games, bia.games, sb.games]);
+  const loading = swarm.loading || bia.loading || sb.loading;
+  const liveCount = swarm.liveCount + bia.liveCount + sb.liveCount;
   const [q, setQ] = useState('');
   const [sport, setSport] = useState('all');
 
