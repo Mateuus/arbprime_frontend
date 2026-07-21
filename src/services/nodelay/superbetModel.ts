@@ -76,19 +76,18 @@ function toSelection(o: AnyRec, order: number): LiveSelection {
   const infoTxt = str(o.info); // "Mais de 6.5 gols marcados na partida" / "Inter vence"
   const ou = overUnderOf(cleanName || infoTxt);
   const isOu = ou.type !== '';
-  // O/U: nome curto ("Mais de 6.5") + points (a linha) → o board pareia por linha e
-  //   mostra só a odd (BareOdd), sem repetir a linha no rótulo.
-  // Resto (1X2/BTTS/handicap): `info` é o rótulo descritivo ("Inter vence"); só cai
-  //   pro `name` quando o info não vem.
+  // O/U: nome já é curto e COMPLETO ("Mais de 6.5"). A linha vai no `line` (p/ o
+  //   board parear os dois lados), NÃO em `points` — senão o selectionLabel repete
+  //   ("Menos de 6.5 6.5"). Resto (1X2/BTTS/handicap): `info` é o rótulo descritivo.
   const label = isOu ? cleanName : (infoTxt || cleanName || str(o.code));
   return {
     id: str(o.uuid) || `${str(o.marketUuid)}:${str(o.outcomeId)}`,
     name: label,
     price,
     trueOdds: price,
-    line: null,
+    line: isOu && ou.line != null ? String(ou.line) : null,
     side: sideOf(str(o.code)),
-    points: isOu ? ou.line : null,
+    points: null,
     disabled,
     order,
     outcomeType: ou.type,

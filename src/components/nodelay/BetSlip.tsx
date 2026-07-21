@@ -4,6 +4,7 @@ import { NoDelayAccount, NoDelayBookmaker } from '@/interfaces/nodelay.interface
 import { HousePrice } from '@/hooks/useInstanceLiveEvent';
 import { NoDelaySettings, acceptOddsChangeFor } from '@/hooks/useNoDelaySettings';
 import { useNoDelayFire, HOUSE_MIN } from '@/hooks/useNoDelayFire';
+import { BetSlipCard } from '@/components/nodelay/BetSlipCard';
 import { selectionLabel, scoreOf, clockOf, fmtOdd } from '@/utils/nodelayLive';
 import { formatMoney } from '@/utils/nodelayUi';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
@@ -72,9 +73,16 @@ export function BetSlip({
   const [activeSlug, setActiveSlug] = useState('');
   const active = houses.find((h) => h.slug === activeSlug) ?? houses[0];
 
-  const setStake = (v: number) => onUpdateSettings({ defaultStake: Math.max(HOUSE_MIN, +v.toFixed(2)) });
+  // Menor aposta permitida = o menor mínimo entre as casas do cupom (Superbet 0,50).
+  const slipMin = useMemo(() => houses.reduce((mn, h) => Math.min(mn, h.house?.minStake ?? HOUSE_MIN), HOUSE_MIN), [houses]);
+  const setStake = (v: number) => onUpdateSettings({ defaultStake: Math.max(slipMin, +v.toFixed(2)) });
   const canFire = !previewOnly && betting.length > 0 && !dead;
-  const confirm = () => { if (canFire) { fire.doFire(m, s); onClose(); } };
+  // Fechar SEMPRE limpa os bilhetes (próxima abertura começa limpa).
+  const close = () => { fire.reset(); onClose(); };
+  // Confirmar dispara e MANTÉM o cupom aberto: os bilhetes (tempo/carregando/status
+  // por casa) aparecem AQUI DENTRO, não num drawer separado.
+  const confirm = () => { if (canFire) fire.doFire(m, s); };
+  const fired = fire.slips !== null;
 
   const houseAcceptChange = active ? acceptOddsChangeFor(settings, active.slug) : settings.acceptOddsChange;
   const toggleHouseAcceptChange = () => {
@@ -83,7 +91,7 @@ export function BetSlip({
   };
 
   return (
-    <div className="fixed inset-0 z-[9995] flex flex-col justify-end" onClick={onClose}>
+    <div className="fixed inset-0 z-[9995] flex flex-col justify-end" onClick={close}>
       <div className="absolute inset-0 bg-black/60" />
 
       <div
@@ -105,7 +113,7 @@ export function BetSlip({
                 {score && <span className="shrink-0 text-gray-300">{score.home}-{score.away}</span>}
               </div>
             </div>
-            <button onClick={onClose} className="text-gray-400 transition hover:text-white"><X size={18} /></button>
+            <button onClick={close} className="text-gray-400 transition hover:text-white"><X size={18} /></button>
           </div>
         </div>
 
@@ -125,6 +133,13 @@ export function BetSlip({
             {previewOnly && <p className="mt-1.5 text-[10px] text-amber-300/80">Prévia — a aposta em pré-jogo entra quando os coletores trouxerem os dados apostáveis.</p>}
           </div>
 
+          {fired ? (
+            /* Bilhetes DENTRO do cupom: tempo/carregando/status por casa */
+            <div className="mt-3 space-y-2">
+              {fire.slips!.map((sl) => <BetSlipCard key={sl.key} slip={sl} />)}
+            </div>
+          ) : (
+          <>
           {/* Stake (fixo, sem MÁX) + aviso de limite */}
           <div className="mt-3">
             <div className="flex items-center gap-2">
@@ -224,27 +239,42 @@ export function BetSlip({
               )}
             </div>
           )}
+          </>
+          )}
         </div>
 
-        {/* Rodapé fixo: total + confirmar */}
+        {/* Rodapé fixo: total + confirmar (ou Fechar/Nova aposta após disparar) */}
         <div className="shrink-0 border-t border-white/10 bg-black/30 px-4 py-3">
-          <div className="mb-2 flex items-center justify-between text-[11px]">
-            <span className="text-gray-400"><span className="font-semibold text-white">{betting.length}</span> conta{betting.length === 1 ? '' : 's'}</span>
-            <span className="text-gray-400">
-              Total <span className="font-bold text-white">{formatMoney(totalStake)}</span>
-              <span className="mx-1">·</span>
-              Retorno <span className="font-bold text-emerald-300">{formatMoney(totalReturn)}</span>
-            </span>
-          </div>
-          <button
-            disabled={!canFire}
-            onClick={confirm}
-            className={`w-full rounded-xl py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
-              settings.realBets ? 'bg-rose-500 text-white hover:bg-rose-400' : 'bg-lime-500 text-slate-900 hover:bg-lime-400'
-            }`}
-          >
-            {previewOnly ? 'Aposta em breve (pré-jogo)' : dead ? 'Mercado suspenso' : betting.length === 0 ? 'Marque uma conta' : settings.realBets ? 'Confirmar aposta real' : 'Confirmar (simulação)'}
-          </button>
+          {fired ? (
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={fire.reset} className="rounded-xl bg-white/10 py-3 text-sm font-bold text-white ring-1 ring-white/15 transition hover:bg-white/15">
+                Nova aposta
+              </button>
+              <button onClick={close} className="rounded-xl bg-lime-500 py-3 text-sm font-bold text-slate-900 transition hover:bg-lime-400">
+                Fechar
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="mb-2 flex items-center justify-between text-[11px]">
+                <span className="text-gray-400"><span className="font-semibold text-white">{betting.length}</span> conta{betting.length === 1 ? '' : 's'}</span>
+                <span className="text-gray-400">
+                  Total <span className="font-bold text-white">{formatMoney(totalStake)}</span>
+                  <span className="mx-1">·</span>
+                  Retorno <span className="font-bold text-emerald-300">{formatMoney(totalReturn)}</span>
+                </span>
+              </div>
+              <button
+                disabled={!canFire}
+                onClick={confirm}
+                className={`w-full rounded-xl py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                  settings.realBets ? 'bg-rose-500 text-white hover:bg-rose-400' : 'bg-lime-500 text-slate-900 hover:bg-lime-400'
+                }`}
+              >
+                {previewOnly ? 'Aposta em breve (pré-jogo)' : dead ? 'Mercado suspenso' : betting.length === 0 ? 'Marque uma conta' : settings.realBets ? 'Confirmar aposta real' : 'Confirmar (simulação)'}
+              </button>
+            </>
+          )}
         </div>
       </div>
 

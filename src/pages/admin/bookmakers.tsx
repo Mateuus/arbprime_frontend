@@ -24,6 +24,7 @@ interface BookmakerForm {
   // NoDelay: liga a casa na aposta rápida + como o browser conecta nela.
   noDelayEnabled: boolean;
   noDelayPlatform: string;
+  noDelayMinStake: string;
   noDelayWssUrl: string;
   noDelayRogueUrl: string;
   noDelayOrigin: string;
@@ -39,7 +40,7 @@ interface BookmakerForm {
 }
 const emptyForm: BookmakerForm = {
   slug: '', name: '', logoUrl: '', color: '', url: '', cloneOf: '', sortOrder: '0', commissionPct: '',
-  noDelayEnabled: false, noDelayPlatform: '', noDelayWssUrl: '', noDelayRogueUrl: '', noDelayOrigin: '', noDelaySiteId: '', noDelaySource: '', noDelayLanguage: '',
+  noDelayEnabled: false, noDelayPlatform: '', noDelayMinStake: '', noDelayWssUrl: '', noDelayRogueUrl: '', noDelayOrigin: '', noDelaySiteId: '', noDelaySource: '', noDelayLanguage: '',
   noDelayBffUrl: '', noDelayLoginDomain: '', noDelayOddsUrl: '', noDelayIntegration: '', noDelayBetUrl: ''
 };
 
@@ -108,6 +109,7 @@ const AdminBookmakersPage = () => {
       sortOrder: String(b.sortOrder ?? 0), commissionPct: b.commissionPct != null ? String(b.commissionPct) : '',
       noDelayEnabled: !!b.noDelayEnabled,
       noDelayPlatform: b.noDelayPlatform || '',
+      noDelayMinStake: nd.minStake != null ? String(nd.minStake) : '',
       noDelayWssUrl: nd.wssUrl || '',
       noDelayRogueUrl: nd.rogueUrl || '',
       noDelayOrigin: nd.origin || '',
@@ -144,6 +146,7 @@ const AdminBookmakersPage = () => {
         noDelayPlatform: form.noDelayPlatform || null,
         noDelayConfig: form.noDelayPlatform
           ? {
+              minStake: form.noDelayMinStake.trim() ? Number(form.noDelayMinStake.replace(',', '.')) : null,
               wssUrl: form.noDelayWssUrl.trim() || null,
               rogueUrl: form.noDelayRogueUrl.trim() || null,
               origin: form.noDelayOrigin.trim() || null,
@@ -606,6 +609,19 @@ const AdminBookmakersPage = () => {
                         options={NODELAY_PLATFORMS}
                       />
                     </div>
+
+                    {form.noDelayPlatform && (
+                      <label className="block text-xs text-gray-400">
+                        Aposta mínima (R$) <span className="text-gray-600">(vazio = R$ 1,00 — Superbet 0,50)</span>
+                        <input
+                          value={form.noDelayMinStake}
+                          onChange={(e) => setForm({ ...form, noDelayMinStake: e.target.value })}
+                          inputMode="decimal"
+                          className={`${inputClass} mt-1 font-mono`}
+                          placeholder="1.00"
+                        />
+                      </label>
+                    )}
 
                     {form.noDelayPlatform === 'swarm' && (
                       <>

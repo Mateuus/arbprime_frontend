@@ -3,9 +3,10 @@ import { LiveGameDetail, LiveMarket, LiveSelection } from '@/services/nodelay/ro
 import { NoDelayAccount, NoDelayBookmaker } from '@/interfaces/nodelay.interface';
 import { HousePrice } from '@/hooks/useInstanceLiveEvent';
 import { NoDelaySettings, acceptOddsChangeFor } from '@/hooks/useNoDelaySettings';
-import { placeBet, BetTicket } from '@/services/nodelay/placeBet';
+import { placeBet, BetTicket, BetResult } from '@/services/nodelay/placeBet';
 import { placeBetReal, warmAccountTokens, tokensWarm } from '@/services/nodelay/placeBetReal';
 import { buildAltenarTicket, placeBetAltenar, AltenarTicket } from '@/services/nodelay/placeBetAltenar';
+import { placeBetSuperbet } from '@/services/nodelay/placeBetSuperbet';
 import { maxStakeOf, cachedK, getAccountK, pickCalibrationSample } from '@/services/nodelay/maxStake';
 import { SlipView } from '@/components/nodelay/BetSlipCard';
 import { selectionLabel, scoreOf, clockOf } from '@/utils/nodelayLive';
@@ -50,9 +51,11 @@ interface Params {
   /** Stake = exatamente o valor digitado (ignora MÁX e o teto do fornecedor de odd).
    * O limite REAL é o da casa. Usado pelo Betslip. */
   forceFixedStake?: boolean;
+  /** Superbet: 'live' (evento ao vivo) ou 'prematch'. Default 'live'. */
+  betType?: 'prematch' | 'live';
 }
 
-export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, settings, k, forceFixedStake }: Params) {
+export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, settings, k, forceFixedStake, betType }: Params) {
   const [slips, setSlips] = useState<SlipView[] | null>(null);
   const [tokensReady, setTokensReady] = useState(false);
   const fireSeq = useRef(0);
@@ -134,9 +137,10 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
       const hp = getHousePrice(a.bookmakerSlug, s.id);
       const odd = hp?.price ?? s.price;
       const stake = stakeForAccount(a, m, s);
+      const min = house?.minStake ?? HOUSE_MIN;
       let blocked = false; let reason: string | undefined;
       if (hp && (hp.disabled || hp.price <= 0)) { blocked = true; reason = 'Suspenso nesta casa'; }
-      else if (stake < HOUSE_MIN) { blocked = true; reason = 'Abaixo do mínimo (R$ 1)'; }
+      else if (stake < min) { blocked = true; reason = `Abaixo do mínimo (R$ ${min.toFixed(2).replace('.', ',')})`; }
       return { account: a, house, odd, stake, blocked, reason, potential: blocked ? 0 : +(stake * odd).toFixed(2) };
     });
   }, [betting, houseBySlug, getHousePrice, stakeForAccount]);
@@ -151,7 +155,7 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
     if (!detail) return;
     const round = ++fireSeq.current;
     const slipList: SlipView[] = [];
-    const toSubmit: { key: string; a: NoDelayAccount; ticket: BetTicket; stake: number; rogueUrl?: string; isBia: boolean; altenarTicket: AltenarTicket | null; house?: NoDelayBookmaker }[] = [];
+    const toSubmit: { key: string; a: NoDelayAccount; ticket: BetTicket; stake: number; rogueUrl?: string; isBia: boolean; isSuperbet: boolean; altenarTicket: AltenarTicket | null; house?: NoDelayBookmaker }[] = [];
 
     for (const a of betting) {
       const key = `${round}:${a.id}`;
@@ -164,28 +168,38 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
         continue;
       }
       const stake = stakeForAccount(a, m, s);
-      if (stake < HOUSE_MIN) {
-        slipList.push({ key, accountId: a.id, accountLabel: label, ticket, stakeRequested: stake, status: 'done', result: { ok: false, elapsedMs: 0, stake: 0, odds: 0, partial: false, oddsChanged: false, error: 'Abaixo do mínimo da casa (R$ 1)' } });
+      const min = house?.minStake ?? HOUSE_MIN;
+      if (stake < min) {
+        slipList.push({ key, accountId: a.id, accountLabel: label, ticket, stakeRequested: stake, status: 'done', result: { ok: false, elapsedMs: 0, stake: 0, odds: 0, partial: false, oddsChanged: false, error: `Abaixo do mínimo da casa (R$ ${min.toFixed(2).replace('.', ',')})` } });
         continue;
       }
       const isBia = house?.platform === 'biahosted';
+      const isSuperbet = house?.platform === 'superbet';
       const altenarTicket = isBia ? buildAltenarTicket(detail, m, s, ticket.odds) : null;
       slipList.push({ key, accountId: a.id, accountLabel: label, ticket, stakeRequested: stake, status: 'placing' });
-      toSubmit.push({ key, a, ticket, stake, rogueUrl: house?.rogueUrl || undefined, isBia, altenarTicket, house });
+      toSubmit.push({ key, a, ticket, stake, rogueUrl: house?.rogueUrl || undefined, isBia, isSuperbet, altenarTicket, house });
     }
     setSlips(slipList);
 
     for (const it of toSubmit) {
       // "Aceitar mudança de odd" é POR CASA (override) — cai no global se não setado.
       const opts = { allowPartial: settings.allowPartial, acceptOddsChange: acceptOddsChangeFor(settings, it.a.bookmakerSlug) };
-      const p = it.isBia && settings.realBets && it.altenarTicket && it.house
-        ? placeBetAltenar(it.a, it.house, it.altenarTicket, it.stake)
-        : (settings.realBets && !it.isBia ? placeBetReal : placeBet)(it.a, it.ticket, { stake: it.stake, ...opts, rogueUrl: it.rogueUrl });
+      let p: Promise<BetResult>;
+      if (!settings.realBets) {
+        p = placeBet(it.a, it.ticket, { stake: it.stake, ...opts, rogueUrl: it.rogueUrl }); // mock
+      } else if (it.isSuperbet) {
+        // Superbet = server-side (backend cycletls). selectionId do ticket = uuid da odd.
+        p = placeBetSuperbet(it.a, it.ticket, { stake: it.stake, betType: betType || 'live', acceptOddsChange: opts.acceptOddsChange });
+      } else if (it.isBia && it.altenarTicket && it.house) {
+        p = placeBetAltenar(it.a, it.house, it.altenarTicket, it.stake);
+      } else {
+        p = placeBetReal(it.a, it.ticket, { stake: it.stake, ...opts, rogueUrl: it.rogueUrl });
+      }
       p
         .then((result) => { setSlips((prev) => prev && prev.map((sl) => (sl.key === it.key ? { ...sl, status: 'done', result } : sl))); })
         .catch(() => failSlip(it.key, it.ticket, 'Falha de rede — confira o histórico da casa.'));
     }
-  }, [betting, houseBySlug, ticketFor, getHousePrice, stakeForAccount, settings, detail]);
+  }, [betting, houseBySlug, ticketFor, getHousePrice, stakeForAccount, settings, detail, betType]);
 
   const reset = useCallback(() => setSlips(null), []);
 

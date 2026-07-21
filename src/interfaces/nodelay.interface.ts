@@ -27,6 +27,8 @@ export interface NoDelayBookmaker {
   color: string | null;
   url: string | null;
   platform: NoDelayPlatform | string | null;
+  /** Aposta mínima da casa em BRL (Superbet 0.50, maioria 1). null = default 1. */
+  minStake: number | null;
   wssUrl: string | null;
   origin: string | null;
   siteId: string | null;

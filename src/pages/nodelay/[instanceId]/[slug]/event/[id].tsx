@@ -16,7 +16,6 @@ import { LiveScoreboard } from '@/components/nodelay/LiveScoreboard';
 import { MatchRadar } from '@/components/nodelay/MatchRadar';
 import { EventBoard } from '@/components/nodelay/EventBoard';
 import { BetSlip } from '@/components/nodelay/BetSlip';
-import { BetSlipDrawer } from '@/components/nodelay/BetSlipDrawer';
 import { useNoDelayFire } from '@/hooks/useNoDelayFire';
 import { LiveMarket, LiveSelection } from '@/services/nodelay/rogueModel';
 import { useAltenarLiveEvent } from '@/hooks/useAltenarLiveEvent';
@@ -315,7 +314,6 @@ export default function NoDelayEventPage() {
             onClose={() => setSlipPick(null)}
           />
         )}
-        {fire.slips && <BetSlipDrawer slips={fire.slips} onClose={fire.reset} />}
       </div>
     </NoDelayGate>
   );

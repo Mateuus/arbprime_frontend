@@ -416,6 +416,7 @@ const deletePrimeRadioEvent = async (id: string) =>
 
 /** Config do NoDelay por casa (admin). Casas da mesma plataforma só mudam a wssUrl. */
 export interface NoDelayBookmakerConfigDTO {
+  minStake?: number | null;
   wssUrl?: string | null;
   rogueUrl?: string | null;
   origin?: string | null;
@@ -1866,6 +1867,9 @@ const getNoDelayBetToken = async (id: string) => apiClient.get(`/nodelay/account
 // biahosted: disparo SERVER-SIDE (fallback — hoje o disparo é client-side).
 const placeNoDelayBet = async (id: string, body: { stake: number; market: unknown }) =>
   apiClient.post(`/nodelay/accounts/${id}/bet`, body);
+// superbet: disparo SERVER-SIDE (host betler=WAF + sessão no cofre → backend cycletls).
+const placeSuperbetBet = async (id: string, body: { eventId: string | number; oddUuid: string; stake: number; betType?: 'prematch' | 'live'; autoAccept?: boolean }) =>
+  apiClient.post(`/nodelay/accounts/${id}/superbet-bet`, body);
 const setNoDelayStatus = async (id: string, status: string, error?: string) =>
   apiClient.post(`/nodelay/accounts/${id}/status`, { status, error });
 const saveNoDelayBalance = async (id: string, balance: number, currency?: string) =>
@@ -2241,6 +2245,7 @@ export const apiGateway = {
     getSuperbetFaceidStatus,
     getNoDelayBetToken,
     placeNoDelayBet,
+    placeSuperbetBet,
     setNoDelayStatus,
     saveNoDelayBalance
 };
