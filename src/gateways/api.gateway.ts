@@ -698,6 +698,7 @@ export interface TeamDTO {
   createdAt: string;
   updatedAt: string;
   aliasCount?: number;
+  sofascoreId: string | null;
 }
 
 export interface TeamDetailDTO extends TeamDTO {
@@ -710,6 +711,31 @@ export interface UpsertTeamDTO {
   category?: string;
   country?: string | null;
   status?: string;
+  sofascoreId?: string | null;
+}
+
+// Candidato retornado pela busca no SoFaScore.
+export interface SofaCandidateDTO {
+  sofascoreId: number;
+  name: string;
+  slug: string;
+  country: string | null;
+  sport: string | null;
+  gender: string | null;
+  national: boolean;
+  logoUrl: string;
+}
+
+// Resultado de uma linha do backfill em lote.
+export interface SofaBackfillResultDTO {
+  teamId: string;
+  name: string;
+  category: string;
+  matched:
+    | { sofascoreId: number; name: string; country: string | null; confidence: number; reason: string; logoUrl: string }
+    | { error: string }
+    | null;
+  saved: boolean;
 }
 
 export interface UpsertAliasDTO {
@@ -757,6 +783,16 @@ const updateTeam = async (id: string, data: UpsertTeamDTO) => {
 
 const mergeTeams = async (sourceId: string, targetId: string) => {
   return apiClient.post('/teams/merge', { sourceId, targetId });
+};
+
+// Busca times no SoFaScore por nome (para o picker de escudo).
+const searchSofascore = async (q: string) => {
+  return apiClient.get('/teams/sofascore/search?q=' + encodeURIComponent(q));
+};
+
+// Backfill em lote: procura times SEM sofascoreId e (com commit) grava os de alta confiança.
+const backfillSofascore = async (body: { limit?: number; commit?: boolean; minConfidence?: number; sport?: string }) => {
+  return apiClient.post('/teams/sofascore/backfill', body);
 };
 
 const addAlias = async (teamId: string, data: UpsertAliasDTO) => {
@@ -1814,6 +1850,10 @@ const saveNoDelaySession = async (id: string, body: { externalUserId?: string; a
 const clearNoDelaySession = async (id: string) => apiClient.delete(`/nodelay/accounts/${id}/session`);
 // biahosted: login SERVER-SIDE (o backend loga no BFF e salva a sessão).
 const connectNoDelayAccount = async (id: string) => apiClient.post(`/nodelay/accounts/${id}/connect`, {});
+// superbet: completa o MFA (código SMS + faceid quando exigido) → conecta.
+const completeSuperbetMfa = async (id: string, code: string) => apiClient.post(`/nodelay/accounts/${id}/superbet-mfa`, { code });
+// superbet: poll do faceid (selfie no celular) → { active }.
+const getSuperbetFaceidStatus = async (id: string) => apiClient.get(`/nodelay/accounts/${id}/superbet-mfa/faceid-status`);
 // biahosted: JWT da conta p/ o BROWSER apostar direto no betgateway (client-side).
 const getNoDelayBetToken = async (id: string) => apiClient.get(`/nodelay/accounts/${id}/bet-token`);
 // biahosted: disparo SERVER-SIDE (fallback — hoje o disparo é client-side).
@@ -2017,6 +2057,8 @@ export const apiGateway = {
     createTeam,
     updateTeam,
     mergeTeams,
+    searchSofascore,
+    backfillSofascore,
     addAlias,
     updateAlias,
     deleteAlias,
@@ -2188,6 +2230,8 @@ export const apiGateway = {
     saveNoDelaySession,
     clearNoDelaySession,
     connectNoDelayAccount,
+    completeSuperbetMfa,
+    getSuperbetFaceidStatus,
     getNoDelayBetToken,
     placeNoDelayBet,
     setNoDelayStatus,

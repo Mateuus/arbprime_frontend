@@ -7,15 +7,20 @@ import { useAltenarInstanceGames } from '@/hooks/useAltenarInstanceGames';
 import { useNoDelaySessionKeeper } from '@/hooks/useNoDelaySessionKeeper';
 import { apiGateway } from '@/gateways/api.gateway';
 import { NoDelayInstance, NoDelayBookmaker, NoDelayAccount } from '@/interfaces/nodelay.interface';
-import { connectAccount, disconnectAccount, refreshAllAccounts, errorText } from '@/services/nodelay/connect';
+import { connectAccount, disconnectAccount, refreshAllAccounts, errorText, SuperbetMfa } from '@/services/nodelay/connect';
 import { NoDelayGate } from '@/components/nodelay/NoDelayGate';
 import { AccountCard } from '@/components/nodelay/AccountCard';
 import { NoDelayLoginModal } from '@/components/nodelay/NoDelayLoginModal';
+import { SuperbetMfaModal } from '@/components/nodelay/SuperbetMfaModal';
+import { EditAccountModal } from '@/components/nodelay/EditAccountModal';
+import { PrematchLiveToggle, BoardMode } from '@/components/nodelay/PrematchLiveToggle';
+import { PrematchGamesList } from '@/components/nodelay/PrematchGamesList';
+import { TeamLogo } from '@/components/nodelay/TeamLogo';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
 import { scoreOf, clockOf } from '@/utils/nodelayLive';
 import { formatMoney } from '@/utils/nodelayUi';
 import {
-  ArrowLeft, Loader2, Plus, Check, Radio, ChevronRight, Wallet, Users, X, Layers, AlertTriangle, Search, Settings2, RefreshCw,
+  ArrowLeft, Loader2, Plus, Check, Radio, ChevronRight, ChevronDown, Wallet, Users, X, Layers, AlertTriangle, Search, Settings2, RefreshCw,
 } from 'lucide-react';
 
 /**
@@ -38,6 +43,10 @@ export default function NoDelayWorkspacePage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [managing, setManaging] = useState(false);
   const [loginHouse, setLoginHouse] = useState<NoDelayBookmaker | null>(null);
+  const [editAccount, setEditAccount] = useState<NoDelayAccount | null>(null);
+  // superbet: conta + métodos de 2º fator quando o connect devolve `mfa`.
+  const [mfaAccount, setMfaAccount] = useState<NoDelayAccount | null>(null);
+  const [mfaInfo, setMfaInfo] = useState<SuperbetMfa | null>(null);
   const [busyAcc, setBusyAcc] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshProg, setRefreshProg] = useState<{ done: number; total: number } | null>(null);
@@ -86,6 +95,22 @@ export default function NoDelayWorkspacePage() {
   const runAcc = useCallback(async (id: string, fn: () => Promise<unknown>) => {
     setBusyAcc(id);
     try { await fn(); await reloadNd(); } catch (e) { alert(errorText(e)); await reloadNd(); } finally { setBusyAcc(null); }
+  }, [reloadNd]);
+
+  // Conectar: igual ao runAcc, MAS se o backend pedir 2º fator (superbet), abre o
+  // modal de MFA em vez de dar como concluído. Vale p/ qualquer botão "Conectar".
+  const handleConnect = useCallback(async (house: NoDelayBookmaker, a: NoDelayAccount) => {
+    setBusyAcc(a.id);
+    try {
+      const out = await connectAccount(house, a);
+      if (out.status === 'mfa') { setMfaAccount(out.account); setMfaInfo(out.mfa); }
+      await reloadNd();
+    } catch (e) {
+      alert(errorText(e));
+      await reloadNd();
+    } finally {
+      setBusyAcc(null);
+    }
   }, [reloadNd]);
 
   // "Atualizar": revalida sessão (restore_login) + relê saldo de todas as contas.
@@ -142,8 +167,8 @@ export default function NoDelayWorkspacePage() {
                 </button>
               </div>
             ) : (
-              /* Feed ocupa a página inteira */
-              <InstanceLiveFeed instanceId={instanceId} houses={readyHouses} />
+              /* Feed ocupa a página inteira (Ao Vivo x Prematch são DUAS listas) */
+              <InstanceFeed instanceId={instanceId} houses={readyHouses} />
             )}
 
             {drawerOpen && (
@@ -157,9 +182,10 @@ export default function NoDelayWorkspacePage() {
                 onClose={() => setDrawerOpen(false)}
                 onManage={() => setManaging(true)}
                 onAddAccount={(h) => setLoginHouse(h)}
-                onConnect={(house, a) => runAcc(a.id, () => connectAccount(house, a))}
+                onConnect={handleConnect}
                 onDisconnect={(a) => runAcc(a.id, () => disconnectAccount(a))}
                 onRemove={(a) => { if (window.confirm('Remover a conta?')) runAcc(a.id, () => apiGateway.deleteNoDelayAccount(a.id)); }}
+                onEdit={(a) => setEditAccount(a)}
               />
             )}
             {managing && (
@@ -171,7 +197,27 @@ export default function NoDelayWorkspacePage() {
               />
             )}
             {loginHouse && (
-              <NoDelayLoginModal house={loginHouse} onClose={() => setLoginHouse(null)} onDone={async () => { setLoginHouse(null); await reloadNd(); }} />
+              <NoDelayLoginModal
+                house={loginHouse}
+                onClose={() => setLoginHouse(null)}
+                onDone={async () => { setLoginHouse(null); await reloadNd(); }}
+                onMfa={(account, mfa) => { setLoginHouse(null); setMfaAccount(account); setMfaInfo(mfa); }}
+              />
+            )}
+            {mfaAccount && mfaInfo && (
+              <SuperbetMfaModal
+                account={mfaAccount}
+                mfa={mfaInfo}
+                onClose={() => { setMfaAccount(null); setMfaInfo(null); }}
+                onDone={async () => { setMfaAccount(null); setMfaInfo(null); await reloadNd(); }}
+              />
+            )}
+            {editAccount && (
+              <EditAccountModal
+                account={editAccount}
+                onClose={() => setEditAccount(null)}
+                onSaved={async () => { setEditAccount(null); await reloadNd(); }}
+              />
             )}
           </>
         )}
@@ -209,7 +255,7 @@ function InstanceName({ instance, instanceId, onRenamed }: { instance: NoDelayIn
  * casas e conecta/remove contas.
  */
 function HousesDrawer({
-  houses, accountsByHouse, busyAcc, refreshing, refreshProgress, onRefresh, onClose, onManage, onAddAccount, onConnect, onDisconnect, onRemove,
+  houses, accountsByHouse, busyAcc, refreshing, refreshProgress, onRefresh, onClose, onManage, onAddAccount, onConnect, onDisconnect, onRemove, onEdit,
 }: {
   houses: NoDelayBookmaker[];
   accountsByHouse: Map<string, NoDelayAccount[]>;
@@ -223,6 +269,7 @@ function HousesDrawer({
   onConnect: (house: NoDelayBookmaker, a: NoDelayAccount) => void;
   onDisconnect: (a: NoDelayAccount) => void;
   onRemove: (a: NoDelayAccount) => void;
+  onEdit: (a: NoDelayAccount) => void;
 }) {
   return (
     <div className="fixed inset-0 z-[9998] flex">
@@ -254,43 +301,88 @@ function HousesDrawer({
 
           {houses.length === 0 ? (
             <p className="px-1 pt-2 text-sm text-gray-500">Nenhuma casa na instância ainda.</p>
-          ) : houses.map((house) => {
-            const accs = accountsByHouse.get(house.slug) ?? [];
-            const caixa = accs.filter((a) => a.status === 'connected').reduce((s, a) => s + (a.balance ?? 0), 0);
-            const temSaldo = accs.some((a) => a.balance != null);
-            return (
-              <div key={house.slug} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <div className="mb-2.5 flex items-center gap-2">
-                  <BookmakerLogo name={house.name} slug={house.slug} logoUrl={house.logoUrl} color={house.color} size={26} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-white">{house.name}</div>
-                    {temSaldo && <div className="text-[11px] text-gray-500"><Wallet size={10} className="mr-1 inline" />{formatMoney(caixa)}</div>}
-                  </div>
-                  <button onClick={() => onAddAccount(house)} disabled={!house.ready} className="inline-flex items-center gap-1 rounded-lg bg-lime-500/15 px-2.5 py-1.5 text-[11px] font-semibold text-lime-200 ring-1 ring-lime-500/30 transition hover:bg-lime-500/25 disabled:opacity-40" title={house.ready ? 'Conectar conta' : 'Casa não configurada'}>
-                    <Plus size={13} /> Conta
-                  </button>
-                </div>
-                {accs.length === 0 ? (
-                  <p className="px-1 pb-1 text-[11px] text-gray-600">Nenhuma conta ainda.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {accs.map((a) => (
-                      <AccountCard
-                        key={a.id}
-                        account={a}
-                        busy={busyAcc === a.id}
-                        onConnect={() => onConnect(house, a)}
-                        onDisconnect={() => onDisconnect(a)}
-                        onRemove={() => onRemove(a)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          ) : houses.map((house) => (
+            <HouseGroup
+              key={house.slug}
+              house={house}
+              accounts={accountsByHouse.get(house.slug) ?? []}
+              busyAcc={busyAcc}
+              onAddAccount={onAddAccount}
+              onConnect={onConnect}
+              onDisconnect={onDisconnect}
+              onRemove={onRemove}
+              onEdit={onEdit}
+            />
+          ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Grupo de uma casa no drawer — COLAPSÁVEL (recolhido por padrão). O cabeçalho
+ * (logo + nome + caixa total + nº de contas + "+ Conta") fica sempre à vista;
+ * clicar expande/recolhe as contas. Compacto p/ caber muitas contas sem rolar.
+ */
+function HouseGroup({
+  house, accounts, busyAcc, onAddAccount, onConnect, onDisconnect, onRemove, onEdit,
+}: {
+  house: NoDelayBookmaker;
+  accounts: NoDelayAccount[];
+  busyAcc: string | null;
+  onAddAccount: (h: NoDelayBookmaker) => void;
+  onConnect: (house: NoDelayBookmaker, a: NoDelayAccount) => void;
+  onDisconnect: (a: NoDelayAccount) => void;
+  onRemove: (a: NoDelayAccount) => void;
+  onEdit: (a: NoDelayAccount) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const caixa = accounts.filter((a) => a.status === 'connected').reduce((s, a) => s + (a.balance ?? 0), 0);
+  const temSaldo = accounts.some((a) => a.balance != null);
+  const connectedCount = accounts.filter((a) => a.status === 'connected').length;
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
+      <div className="flex items-center gap-2 px-2.5 py-2">
+        <button onClick={() => setOpen((v) => !v)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <ChevronDown size={15} className={`shrink-0 text-gray-500 transition ${open ? '' : '-rotate-90'}`} />
+          <BookmakerLogo name={house.name} slug={house.slug} logoUrl={house.logoUrl} color={house.color} size={22} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-white">{house.name}</div>
+            {temSaldo && <div className="text-[11px] text-gray-500"><Wallet size={10} className="mr-1 inline" />{formatMoney(caixa)}</div>}
+          </div>
+          {/* nº de contas conectadas / total */}
+          <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-400" title="Contas conectadas / total">
+            {connectedCount}/{accounts.length}
+          </span>
+        </button>
+        <button onClick={() => onAddAccount(house)} disabled={!house.ready} className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-lime-500/15 px-2.5 py-1.5 text-[11px] font-semibold text-lime-200 ring-1 ring-lime-500/30 transition hover:bg-lime-500/25 disabled:opacity-40" title={house.ready ? 'Conectar conta' : 'Casa não configurada'}>
+          <Plus size={13} /> Conta
+        </button>
+      </div>
+
+      {open && (
+        <div className="border-t border-white/5 p-2">
+          {accounts.length === 0 ? (
+            <p className="px-1 py-1 text-[11px] text-gray-600">Nenhuma conta ainda.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {accounts.map((a) => (
+                <AccountCard
+                  key={a.id}
+                  account={a}
+                  busy={busyAcc === a.id}
+                  onConnect={() => onConnect(house, a)}
+                  onDisconnect={() => onDisconnect(a)}
+                  onRemove={() => onRemove(a)}
+                  onEdit={() => onEdit(a)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -360,17 +452,50 @@ function sportEmoji(name: string): string {
   return '🏆';
 }
 
-function SportTab({ active, label, count, onClick }: { active: boolean; label: string; count: number; onClick: () => void }) {
+/**
+ * Aba de esporte estilo bet365: ícone (emoji) em cima, rótulo embaixo, e um
+ * sublinhado LIME na aba ativa (não é pílula preenchida). Fica numa barra escura
+ * com border-b; o sublinhado da ativa se sobrepõe à linha de base.
+ */
+function SportTab({ active, icon, label, count, onClick }: { active: boolean; icon: string; label: string; count: number; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium ring-1 transition ${
-        active ? 'bg-lime-500/15 text-lime-200 ring-lime-500/40' : 'bg-white/[0.03] text-gray-400 ring-white/10 hover:bg-white/5 hover:text-gray-200'
+      className={`relative flex shrink-0 flex-col items-center gap-0.5 whitespace-nowrap px-3 py-2 transition ${
+        active ? 'text-lime-300' : 'text-gray-400 hover:text-gray-200'
       }`}
     >
-      {label}
-      <span className={`rounded-full px-1.5 text-[10px] font-bold tabular-nums ${active ? 'bg-lime-500/25 text-lime-200' : 'bg-white/10 text-gray-500'}`}>{count}</span>
+      <span className="text-lg leading-none">{icon}</span>
+      <span className="flex items-center gap-1 text-[11px] font-medium">
+        {label}
+        <span className={`rounded-full px-1 text-[9px] font-bold tabular-nums ${active ? 'bg-lime-500/25 text-lime-200' : 'bg-white/10 text-gray-500'}`}>{count}</span>
+      </span>
+      {active && <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-lime-400" />}
     </button>
+  );
+}
+
+/**
+ * Feed da instância = DUAS listas separadas (Ao Vivo x Prematch), trocadas pelo
+ * alternador no topo. "Ao Vivo" = o feed real de jogos ao vivo (InstanceLiveFeed).
+ * "Prematch" = a lista de pré-jogo (PrematchGamesList, dados de exemplo por ora).
+ * Cada partida abre a SUA página: ao vivo → /{casa}/event/{id}; prematch →
+ * /prematch/{eventId} (sem toggle nas páginas — a escolha é só aqui na lista).
+ */
+function InstanceFeed({ instanceId, houses }: { instanceId: string; houses: NoDelayBookmaker[] }) {
+  const router = useRouter();
+  const [mode, setMode] = useState<BoardMode>('live');
+  return (
+    <div>
+      <div className="mb-4">
+        <PrematchLiveToggle mode={mode} onChange={setMode} />
+      </div>
+      {mode === 'live' ? (
+        <InstanceLiveFeed instanceId={instanceId} houses={houses} />
+      ) : (
+        <PrematchGamesList onOpen={(id) => router.push(`/nodelay/${instanceId}/prematch/${id}`)} />
+      )}
+    </div>
   );
 }
 
@@ -433,26 +558,35 @@ function InstanceLiveFeed({ instanceId, houses }: { instanceId: string; houses: 
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-3 flex items-center gap-2">
         <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
           <Radio size={13} className={liveCount > 0 ? 'text-lime-300' : ''} /> Eventos ao vivo
           <span className="text-gray-600">({displayGames.length})</span>
         </h2>
-        {displayGames.length > 0 && (
-          <div className="relative w-full sm:w-80">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar time ou liga…" className="w-full rounded-lg border border-white/10 bg-black/30 py-1.5 pl-8 pr-3 text-xs text-white placeholder-gray-500 transition focus:border-lime-500/50 focus:outline-none focus:ring-2 focus:ring-lime-500/30" />
-          </div>
-        )}
       </div>
 
-      {/* Abas de esporte */}
+      {/* Busca — barra full-width, alvo de toque maior */}
+      {displayGames.length > 0 && (
+        <div className="relative mb-3">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar time ou liga…"
+            className="w-full rounded-xl border border-white/10 bg-black/30 py-2.5 pl-10 pr-3 text-sm text-white placeholder-gray-500 transition focus:border-lime-500/50 focus:outline-none focus:ring-2 focus:ring-lime-500/30"
+          />
+        </div>
+      )}
+
+      {/* Abas de esporte estilo bet365 (ícone em cima, sublinhado lime na ativa) */}
       {sports.length > 1 && (
-        <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1">
-          <SportTab active={activeSport === 'all'} label="Todos" count={displayGames.length} onClick={() => setSport('all')} />
-          {sports.map((s) => (
-            <SportTab key={s.id} active={activeSport === s.id} label={`${sportEmoji(s.name)} ${s.name}`} count={s.count} onClick={() => setSport(s.id)} />
-          ))}
+        <div className="mb-4 -mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+          <div className="flex w-max min-w-full gap-1 border-b border-white/10">
+            <SportTab active={activeSport === 'all'} icon="🏆" label="Todos" count={displayGames.length} onClick={() => setSport('all')} />
+            {sports.map((s) => (
+              <SportTab key={s.id} active={activeSport === s.id} icon={sportEmoji(s.name)} label={s.name} count={s.count} onClick={() => setSport(s.id)} />
+            ))}
+          </div>
         </div>
       )}
 
@@ -467,33 +601,63 @@ function InstanceLiveFeed({ instanceId, houses }: { instanceId: string; houses: 
       ) : leagues.length === 0 ? (
         <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-sm text-gray-500">Nada encontrado.</div>
       ) : (
-        <div className="space-y-4">
+        /* Estilo bet365 (irmão do PrematchGamesList): container por liga +
+           linhas com escudo, times empilhados, relógio (lime) + placar. Sem odds
+           1X2: no ao vivo a odd só carrega DENTRO do evento.
+           TODO: mostrar 1X2 na lista exigiria fetch de odds por evento aqui. */
+        <div className="space-y-5">
           {leagues.map((b) => (
-            <div key={b.name}>
-              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{b.name} <span className="text-gray-600">({b.games.length})</span></div>
-              <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            <div key={b.name} className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]">
+              {/* Cabeçalho da liga */}
+              <div className="flex items-center gap-1 border-b border-white/10 bg-black/20 px-3 py-2.5">
+                <span className="truncate text-sm font-bold text-white">{b.name}</span>
+                <span className="text-xs text-gray-600">({b.games.length})</span>
+                <ChevronRight size={15} className="text-gray-500" />
+              </div>
+
+              <div className="divide-y divide-white/5">
                 {b.games.map((g) => {
                   const score = scoreOf(g); const clock = clockOf(g);
                   return (
-                    <button key={g.id} onClick={() => router.push(`/nodelay/${instanceId}/${g.houseSlug}/event/${g.id}`)} className="group w-full rounded-xl border border-white/10 bg-white/[0.03] p-3 text-left transition hover:border-lime-500/30 hover:bg-white/[0.05]">
-                      {clock && (
-                        <div className="mb-1.5 flex items-center justify-end">
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold tabular-nums text-lime-300"><Radio size={8} className="animate-pulse" /> {clock}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <div className="min-w-0 flex-1 space-y-0.5">
-                          <div className="truncate text-xs text-white">{g.home || '—'}</div>
-                          <div className="truncate text-xs text-white">{g.away || '—'}</div>
-                        </div>
-                        {score && (
-                          <div className="shrink-0 space-y-0.5 text-right">
-                            <div className="text-xs font-bold tabular-nums text-lime-300">{score.home}</div>
-                            <div className="text-xs font-bold tabular-nums text-lime-300">{score.away}</div>
-                          </div>
+                    <button
+                      key={g.id}
+                      onClick={() => router.push(`/nodelay/${instanceId}/${g.houseSlug}/event/${g.id}`)}
+                      className="group flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-white/[0.03]"
+                    >
+                      {/* Coluna do relógio ao vivo (lime, Radio pulsando) */}
+                      <span className="flex w-11 shrink-0 items-center justify-center">
+                        {clock ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold tabular-nums text-lime-300">
+                            <Radio size={8} className="animate-pulse" /> {clock}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-rose-300">
+                            <Radio size={8} className="animate-pulse" /> Live
+                          </span>
                         )}
-                        <ChevronRight size={14} className="shrink-0 text-gray-600 transition group-hover:translate-x-0.5 group-hover:text-lime-300" />
-                      </div>
+                      </span>
+
+                      {/* Times empilhados com escudo (fallback iniciais: live não traz sofascoreId) */}
+                      <span className="min-w-0 flex-1 space-y-1">
+                        <span className="flex items-center gap-1.5">
+                          <TeamLogo name={g.home} size={18} />
+                          <span className="min-w-0 truncate text-xs font-medium text-white">{g.home || '—'}</span>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <TeamLogo name={g.away} size={18} />
+                          <span className="min-w-0 truncate text-xs font-medium text-white">{g.away || '—'}</span>
+                        </span>
+                      </span>
+
+                      {/* Placar por time (lime, direita) */}
+                      {score && (
+                        <span className="shrink-0 space-y-1 text-right tabular-nums">
+                          <span className="block text-sm font-bold text-lime-300">{score.home}</span>
+                          <span className="block text-sm font-bold text-lime-300">{score.away}</span>
+                        </span>
+                      )}
+
+                      <ChevronRight size={16} className="shrink-0 text-gray-600 transition group-hover:translate-x-0.5 group-hover:text-lime-300" />
                     </button>
                   );
                 })}

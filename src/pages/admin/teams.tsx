@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  apiGateway, TeamDTO, TeamDetailDTO, TeamAliasDTO, UpsertTeamDTO, TeamsPaginationDTO
+  apiGateway, TeamDTO, TeamDetailDTO, TeamAliasDTO, UpsertTeamDTO, TeamsPaginationDTO,
+  SofaCandidateDTO, SofaBackfillResultDTO
 } from '@/gateways/api.gateway';
 import {
   Users2, Plus, RefreshCcw, Pencil, Trash2, X, Search, ChevronDown, ChevronRight, ChevronLeft,
-  GitMerge, Check, Tag, ShieldCheck, Clock
+  GitMerge, Check, Tag, ShieldCheck, Clock, Shield, Wand2, Loader2, Globe
 } from 'lucide-react';
 import { Select } from '@/components/ui/Select';
+import { teamLogoUrl } from '@/utils/teamLogo';
 
 // Categorias conhecidas (espelha o detectCategory do matcher). 'senior' é o padrão.
 const CATEGORY_OPTIONS = [
@@ -26,8 +28,9 @@ interface TeamForm {
   category: string;
   country: string;
   status: string;
+  sofascoreId: string; // id do SoFaScore (string de dígitos) — '' = sem escudo
 }
-const emptyForm: TeamForm = { canonicalName: '', sport: 'futebol', category: 'senior', country: '', status: 'confirmed' };
+const emptyForm: TeamForm = { canonicalName: '', sport: 'futebol', category: 'senior', country: '', status: 'confirmed', sofascoreId: '' };
 
 const errorMessage = (e: unknown, fallback: string): string => {
   const resp = (e as { response?: { data?: { message?: string } } })?.response;
@@ -37,6 +40,27 @@ const errorMessage = (e: unknown, fallback: string): string => {
 const inputClass =
   'w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 ' +
   'focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500/50 transition';
+
+/**
+ * Escudo do time a partir do id SoFaScore. `referrerPolicy="no-referrer"` é
+ * obrigatório: a SofaScore bloqueia hotlink pelo Referer (mesma solução do
+ * /admin/primeradio e /primetv). Cai no fallback de ícone quando vazio ou erro.
+ */
+const Crest = ({ sofascoreId, size = 28 }: { sofascoreId: string | null; size?: number }) => {
+  const [broken, setBroken] = useState(false);
+  const id = (sofascoreId || '').trim();
+  useEffect(() => { setBroken(false); }, [id]);
+  const box = { height: size, width: size };
+  if (!id || broken) {
+    return (
+      <span style={box} className="grid place-items-center rounded-lg bg-white/5 text-gray-600 ring-1 ring-white/10 shrink-0">
+        <Shield size={Math.round(size * 0.5)} />
+      </span>
+    );
+  }
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={teamLogoUrl(id)} alt="" style={box} referrerPolicy="no-referrer" onError={() => setBroken(true)} className="rounded-lg object-contain bg-white/5 ring-1 ring-white/10 shrink-0" />;
+};
 
 // Selo de status (confirmado vs pendente de revisão).
 const StatusBadge = ({ status }: { status: string }) =>
@@ -71,6 +95,20 @@ const AdminTeamsPage = () => {
   const [aliasInput, setAliasInput] = useState('');
   const [aliasBusy, setAliasBusy] = useState(false);
   const [editAlias, setEditAlias] = useState<{ id: string; alias: string; bookmaker: string } | null>(null);
+
+  // Picker do SoFaScore (aberto por cima do modal de edição).
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState('');
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const [pickerCandidates, setPickerCandidates] = useState<SofaCandidateDTO[]>([]);
+
+  // Ação em lote: buscar ids faltantes no SoFaScore.
+  const [backfillOpen, setBackfillOpen] = useState(false);
+  const [backfillLimit, setBackfillLimit] = useState(50);
+  const [backfillCommit, setBackfillCommit] = useState(true);
+  const [backfillRunning, setBackfillRunning] = useState(false);
+  const [backfillResults, setBackfillResults] = useState<SofaBackfillResultDTO[] | null>(null);
 
   // Modal de merge.
   const [mergeSource, setMergeSource] = useState<TeamDTO | null>(null);
@@ -150,7 +188,7 @@ const AdminTeamsPage = () => {
   const openAdd = () => { setEditing(null); setForm(emptyForm); setModalOpen(true); };
   const openEdit = (t: TeamDTO) => {
     setEditing(t);
-    setForm({ canonicalName: t.canonicalName, sport: t.sport || 'futebol', category: t.category || 'senior', country: t.country || '', status: t.status || 'confirmed' });
+    setForm({ canonicalName: t.canonicalName, sport: t.sport || 'futebol', category: t.category || 'senior', country: t.country || '', status: t.status || 'confirmed', sofascoreId: t.sofascoreId || '' });
     setModalOpen(true);
   };
 
@@ -163,7 +201,9 @@ const AdminTeamsPage = () => {
         sport: form.sport.trim() || 'futebol',
         category: form.category,
         country: form.country.trim() || null,
-        status: form.status
+        status: form.status,
+        // string de dígitos ou null p/ limpar o escudo
+        sofascoreId: form.sofascoreId.trim() || null
       };
       if (editing) {
         await apiGateway.updateTeam(editing.id, payload);
@@ -285,6 +325,69 @@ const AdminTeamsPage = () => {
     }
   };
 
+  // ---- Picker do SoFaScore ----
+  const runSofaSearch = async (q: string) => {
+    const term = q.trim();
+    if (!term) { setPickerCandidates([]); setPickerError(null); return; }
+    setPickerLoading(true);
+    setPickerError(null);
+    try {
+      const res = await apiGateway.searchSofascore(term);
+      if (res.data?.result === 1) {
+        setPickerCandidates(res.data.data?.candidates || []);
+      } else {
+        setPickerError(res.data?.message || 'Erro na busca.');
+        setPickerCandidates([]);
+      }
+    } catch (e: unknown) {
+      setPickerError(errorMessage(e, 'Erro ao buscar no SoFaScore.'));
+      setPickerCandidates([]);
+    } finally {
+      setPickerLoading(false);
+    }
+  };
+
+  const openPicker = () => {
+    const q = form.canonicalName.trim();
+    setPickerQuery(q);
+    setPickerCandidates([]);
+    setPickerError(null);
+    setPickerOpen(true);
+    runSofaSearch(q); // já busca com o nome do time
+  };
+
+  const pickCandidate = (c: SofaCandidateDTO) => {
+    setForm((f) => ({ ...f, sofascoreId: String(c.sofascoreId) }));
+    setPickerOpen(false);
+  };
+
+  // ---- Backfill em lote ----
+  const runBackfill = async () => {
+    setBackfillRunning(true);
+    setBackfillResults(null);
+    try {
+      const res = await apiGateway.backfillSofascore({ limit: backfillLimit, commit: backfillCommit });
+      if (res.data?.result === 1) {
+        const results: SofaBackfillResultDTO[] = res.data.data?.results || [];
+        setBackfillResults(results);
+        // Se gravou, recarrega a lista para os novos escudos aparecerem.
+        if (backfillCommit && results.some((r) => r.saved)) await load();
+      } else {
+        setMsg({ type: 'err', text: res.data?.message || 'Erro no backfill.' });
+      }
+    } catch (e: unknown) {
+      setMsg({ type: 'err', text: errorMessage(e, 'Erro ao rodar o backfill.') });
+    } finally {
+      setBackfillRunning(false);
+    }
+  };
+
+  const closeBackfill = () => {
+    if (backfillRunning) return; // não fecha no meio da corrida
+    setBackfillOpen(false);
+    setBackfillResults(null);
+  };
+
   return (
     <div className="w-full px-3 sm:px-6 py-6">
       {/* Cabeçalho */}
@@ -301,6 +404,9 @@ const AdminTeamsPage = () => {
         <div className="flex items-center gap-2">
           <button onClick={() => load()} className="grid place-items-center h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 transition" title="Atualizar">
             <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button onClick={() => { setBackfillResults(null); setBackfillOpen(true); }} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition" title="Buscar ids do SoFaScore para times sem escudo">
+            <Wand2 size={15} className="text-teal-300" /> Buscar IDs faltantes
           </button>
           <button onClick={openAdd} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-900 font-semibold transition">
             <Plus size={15} /> Adicionar time
@@ -348,6 +454,7 @@ const AdminTeamsPage = () => {
                     <button onClick={() => toggleExpand(t)} className="grid place-items-center h-7 w-7 shrink-0 rounded-lg text-gray-400 hover:text-teal-300 hover:bg-white/10 transition" title={open ? 'Recolher' : 'Ver aliases'}>
                       {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     </button>
+                    <Crest sofascoreId={t.sofascoreId} />
                     <div className="min-w-0 flex-1 cursor-pointer" onClick={() => toggleExpand(t)}>
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="font-semibold text-white truncate">{t.canonicalName}</span>
@@ -483,6 +590,29 @@ const AdminTeamsPage = () => {
                 País <span className="text-gray-600">(opcional, informativo)</span>
                 <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} className={`${inputClass} mt-1`} placeholder="Irã" />
               </label>
+              {/* SoFaScore — escudo do time */}
+              <div className="block text-xs text-gray-400">
+                SoFaScore <span className="text-gray-600">(id do escudo — o admin pode colocar manualmente)</span>
+                <div className="mt-1 flex items-center gap-2">
+                  <Crest sofascoreId={form.sofascoreId} size={38} />
+                  <input
+                    value={form.sofascoreId}
+                    onChange={(e) => setForm({ ...form, sofascoreId: e.target.value.replace(/[^0-9]/g, '') })}
+                    inputMode="numeric"
+                    className={inputClass}
+                    placeholder="Ex.: 4819"
+                  />
+                  <button
+                    type="button"
+                    onClick={openPicker}
+                    disabled={!form.canonicalName.trim()}
+                    className="flex items-center gap-1.5 shrink-0 px-3 py-2 text-sm rounded-lg bg-teal-500/15 text-teal-200 ring-1 ring-teal-500/40 hover:bg-teal-500/25 disabled:opacity-50 transition"
+                    title="Buscar o time no SoFaScore"
+                  >
+                    <Search size={14} /> Buscar
+                  </button>
+                </div>
+              </div>
               <label className="block text-xs text-gray-400">
                 Status
                 <Select className="mt-1" value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={[{ value: 'confirmed', label: 'Confirmado' }, { value: 'pending_review', label: 'A revisar' }]} />
@@ -542,6 +672,147 @@ const AdminTeamsPage = () => {
                 {merging ? 'Fundindo...' : 'Fundir'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Picker do SoFaScore (por cima do modal de edição → z maior) */}
+      {pickerOpen && (
+        <div className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-brand-dark border border-white/10 w-full max-w-lg rounded-2xl p-6 relative shadow-2xl flex flex-col max-h-[85vh]">
+            <button onClick={() => setPickerOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-rose-400"><X size={20} /></button>
+            <h2 className="text-lg font-bold text-white mb-1 flex items-center gap-2"><Search size={18} className="text-teal-300" /> Buscar no SoFaScore</h2>
+            <p className="text-sm text-gray-400 mb-4">Escolha o time para vincular o escudo. Você pode editar a busca.</p>
+
+            <form className="relative mb-4" onSubmit={(e) => { e.preventDefault(); runSofaSearch(pickerQuery); }}>
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input autoFocus value={pickerQuery} onChange={(e) => setPickerQuery(e.target.value)} placeholder="Nome do time... (Enter)" className={`${inputClass} pl-9 pr-24`} />
+              <button type="submit" disabled={pickerLoading || !pickerQuery.trim()} className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-900 font-semibold disabled:opacity-50">
+                {pickerLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Buscar
+              </button>
+            </form>
+
+            <div className="overflow-y-auto -mx-1 px-1">
+              {pickerLoading ? (
+                <div className="py-10 text-center text-gray-400 flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Buscando...</div>
+              ) : pickerError ? (
+                <div className="text-sm text-rose-200 bg-rose-500/10 ring-1 ring-rose-500/30 rounded-lg px-3 py-2">{pickerError}</div>
+              ) : pickerCandidates.length === 0 ? (
+                <div className="py-10 text-center text-sm text-gray-500">Nenhum candidato encontrado.</div>
+              ) : (
+                <ul className="space-y-1.5">
+                  {pickerCandidates.map((c) => (
+                    <li key={c.sofascoreId}>
+                      <button
+                        onClick={() => pickCandidate(c)}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 hover:bg-teal-500/10 ring-1 ring-white/10 hover:ring-teal-500/40 text-left transition"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={c.logoUrl} alt="" width={32} height={32} referrerPolicy="no-referrer" className="h-8 w-8 rounded-lg object-contain bg-white/5 ring-1 ring-white/10 shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium text-white truncate">{c.name}</div>
+                          <div className="flex items-center gap-2 text-[11px] text-gray-500 mt-0.5">
+                            {c.country && <span className="inline-flex items-center gap-1"><Globe size={10} /> {c.country}</span>}
+                            {c.sport && <span className="rounded bg-white/5 px-1.5 py-0.5 ring-1 ring-white/10">{c.sport}</span>}
+                            {c.national && <span className="rounded bg-white/5 px-1.5 py-0.5 ring-1 ring-white/10">seleção</span>}
+                            {c.gender && <span>{c.gender === 'F' ? 'feminino' : c.gender === 'M' ? 'masculino' : c.gender}</span>}
+                            <span className="text-gray-600">#{c.sofascoreId}</span>
+                          </div>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ação em lote: Buscar IDs faltantes */}
+      {backfillOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-brand-dark border border-white/10 w-full max-w-lg rounded-2xl p-6 relative shadow-2xl flex flex-col max-h-[85vh]">
+            <button onClick={closeBackfill} className="absolute top-4 right-4 text-gray-400 hover:text-rose-400"><X size={20} /></button>
+            <h2 className="text-lg font-bold text-white mb-1 flex items-center gap-2"><Wand2 size={18} className="text-teal-300" /> Buscar IDs faltantes</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Procura times <b className="text-white">sem</b> id do SoFaScore e tenta casá-los pelo nome na SoFaScore.
+              É lento (limitado a ~1 time a cada 350ms), então limite o lote.
+            </p>
+
+            {!backfillResults ? (
+              <>
+                <div className="space-y-3">
+                  <label className="block text-xs text-gray-400">
+                    Limite de times por lote
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      value={backfillLimit}
+                      onChange={(e) => setBackfillLimit(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
+                      disabled={backfillRunning}
+                      className={`${inputClass} mt-1`}
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none">
+                    <input type="checkbox" checked={backfillCommit} onChange={(e) => setBackfillCommit(e.target.checked)} disabled={backfillRunning} className="h-4 w-4 rounded border-white/20 bg-black/30 text-teal-500 focus:ring-teal-500/40" />
+                    Gravar automaticamente os de alta confiança
+                  </label>
+                  {backfillCommit && <p className="text-[11px] text-amber-300/90">Vai salvar as correspondências com confiança ≥ 85% direto no banco.</p>}
+                </div>
+                <div className="flex justify-end gap-2 mt-6">
+                  <button onClick={closeBackfill} disabled={backfillRunning} className="text-sm px-4 py-2 rounded-lg text-gray-300 hover:bg-white/5 disabled:opacity-50">Cancelar</button>
+                  <button onClick={runBackfill} disabled={backfillRunning} className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-slate-900 font-semibold">
+                    {backfillRunning ? <><Loader2 size={15} className="animate-spin" /> Processando...</> : <><Wand2 size={15} /> Iniciar</>}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Resumo */}
+                <div className="mb-3 text-sm text-emerald-200 bg-emerald-500/10 ring-1 ring-emerald-500/30 rounded-lg px-3 py-2">
+                  {backfillResults.length} verificados, {backfillResults.filter((r) => r.saved).length} gravados
+                </div>
+                <ul className="overflow-y-auto -mx-1 px-1 space-y-1.5">
+                  {backfillResults.map((r) => {
+                    const m = r.matched;
+                    const hasError = m && 'error' in m;
+                    const hasMatch = m && 'sofascoreId' in m;
+                    return (
+                      <li key={r.teamId} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 ring-1 ring-white/10">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm text-white truncate">{r.name}</div>
+                          <div className="text-[11px] text-gray-500 truncate">
+                            {hasMatch ? (
+                              <>→ {m.name}{m.country ? ` · ${m.country}` : ''} <span className="text-gray-600">({m.reason})</span></>
+                            ) : hasError ? (
+                              <span className="text-rose-300">{m.error}</span>
+                            ) : (
+                              <span className="text-amber-300">sem correspondência</span>
+                            )}
+                          </div>
+                        </div>
+                        {hasMatch && (
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${r.saved ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30' : 'bg-white/5 text-gray-300 ring-white/10'}`}>
+                            {m.confidence}%{r.saved ? ' · gravado' : ''}
+                          </span>
+                        )}
+                        {!hasMatch && (
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${hasError ? 'bg-rose-500/15 text-rose-300 ring-rose-500/30' : 'bg-amber-500/15 text-amber-300 ring-amber-500/30'}`}>
+                            {hasError ? 'erro' : 'sem match'}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="flex justify-end gap-2 mt-6">
+                  <button onClick={() => setBackfillResults(null)} className="text-sm px-4 py-2 rounded-lg text-gray-300 hover:bg-white/5">Rodar de novo</button>
+                  <button onClick={closeBackfill} className="text-sm px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-900 font-semibold">Fechar</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

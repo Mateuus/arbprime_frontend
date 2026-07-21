@@ -14,7 +14,7 @@ import { NoDelayInstance, NoDelayBookmaker } from '@/interfaces/nodelay.interfac
 import { NoDelayGate } from '@/components/nodelay/NoDelayGate';
 import { LiveScoreboard } from '@/components/nodelay/LiveScoreboard';
 import { MatchRadar } from '@/components/nodelay/MatchRadar';
-import { MarketBoard } from '@/components/nodelay/MarketBoard';
+import { EventBoard } from '@/components/nodelay/EventBoard';
 import { useAltenarLiveEvent } from '@/hooks/useAltenarLiveEvent';
 import { BetSettingsPopover } from '@/components/nodelay/BetSettingsPopover';
 import { QuickBetModal } from '@/components/nodelay/QuickBetModal';
@@ -153,7 +153,7 @@ export default function NoDelayEventPage() {
                 <MatchRadar house={primary} fsbEventId={detail.fsbEventId} sportId={detail.sportId} />
               )}
               <LiveScoreboard game={detail} />
-              <MarketBoard
+              <EventBoard
                 detail={detail}
                 changed={changed}
                 favorites={favorites}

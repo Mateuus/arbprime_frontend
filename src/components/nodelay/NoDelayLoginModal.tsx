@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { NoDelayBookmaker } from '@/interfaces/nodelay.interface';
-import { addAndConnectAccount, errorText } from '@/services/nodelay/connect';
+import { NoDelayBookmaker, NoDelayAccount } from '@/interfaces/nodelay.interface';
+import { addAndConnectAccount, errorText, SuperbetMfa } from '@/services/nodelay/connect';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
 import { X, Loader2, ShieldAlert, Lock, Rocket } from 'lucide-react';
 
@@ -16,13 +16,15 @@ interface Props {
   house: NoDelayBookmaker;
   onClose: () => void;
   onDone: () => void;
+  /** superbet: a conta foi criada mas a casa pediu 2º fator — abre o modal de MFA. */
+  onMfa?: (account: NoDelayAccount, mfa: SuperbetMfa) => void;
 }
 
 const inputCls =
   'w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 ' +
   'focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500/50 transition';
 
-export function NoDelayLoginModal({ house, onClose, onDone }: Props) {
+export function NoDelayLoginModal({ house, onClose, onDone, onMfa }: Props) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [label, setLabel] = useState('');
@@ -36,7 +38,9 @@ export function NoDelayLoginModal({ house, onClose, onDone }: Props) {
     setBusy(true);
     setError(null);
     try {
-      await addAndConnectAccount(house, { username: username.trim(), password, label: label.trim() || undefined });
+      const { account, mfa } = await addAndConnectAccount(house, { username: username.trim(), password, label: label.trim() || undefined });
+      // superbet pediu 2º fator: a conta já está no cofre — passa a bola pro modal de MFA.
+      if (mfa && onMfa) { onMfa(account, mfa); return; }
       onDone();
     } catch (e) {
       setError(errorText(e, 'Não foi possível conectar a conta.'));
@@ -113,8 +117,11 @@ export function NoDelayLoginModal({ house, onClose, onDone }: Props) {
           <div className="flex items-start gap-2 rounded-lg bg-white/[0.03] px-3 py-2 text-[11px] text-gray-400 ring-1 ring-white/10">
             <Lock size={13} className="mt-0.5 shrink-0 text-lime-300" />
             <span>
-              O login acontece <span className="text-gray-200">direto do seu navegador para a casa</span> — sem passar pelos nossos servidores.
-              A senha fica guardada criptografada para reconectar depois sem você redigitar.
+              {house.platform === 'biahosted' || house.platform === 'superbet' ? (
+                <>O login roda <span className="text-gray-200">nos nossos servidores</span> (a casa exige isso). A senha fica guardada criptografada no cofre para reconectar depois sem você redigitar.</>
+              ) : (
+                <>O login acontece <span className="text-gray-200">direto do seu navegador para a casa</span> — sem passar pelos nossos servidores. A senha fica guardada criptografada para reconectar depois sem você redigitar.</>
+              )}
             </span>
           </div>
 

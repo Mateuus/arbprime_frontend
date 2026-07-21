@@ -1,5 +1,6 @@
 import { LiveGameDetail } from '@/services/nodelay/rogueModel';
 import { scoreOf, clockOf } from '@/utils/nodelayLive';
+import { TeamLogo } from '@/components/nodelay/TeamLogo';
 import { Radio } from 'lucide-react';
 
 /**
@@ -28,12 +29,19 @@ export function LiveScoreboard({ game }: { game: LiveGameDetail }) {
       {/* Placar */}
       <div className="px-4 py-4">
         {clock && <div className="mb-2 text-center text-xs font-semibold tabular-nums text-lime-300">{clock}</div>}
-        <div className="flex items-center justify-center gap-4">
-          <div className="min-w-0 flex-1 text-right text-sm font-semibold text-white sm:text-base">{game.home}</div>
+        <div className="flex items-center justify-center gap-3 sm:gap-4">
+          {/* TeamLogo cai no fallback (iniciais): o live ainda não traz sofascoreId. */}
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+            <span className="min-w-0 truncate text-right text-sm font-semibold text-white sm:text-base">{game.home}</span>
+            <TeamLogo name={game.home} size={30} />
+          </div>
           <div className="shrink-0 rounded-lg bg-black/30 px-3 py-1.5 text-xl font-bold tabular-nums text-white ring-1 ring-white/10 sm:text-2xl">
             {score ? `${score.home} - ${score.away}` : '–'}
           </div>
-          <div className="min-w-0 flex-1 text-left text-sm font-semibold text-white sm:text-base">{game.away}</div>
+          <div className="flex min-w-0 flex-1 items-center justify-start gap-2">
+            <TeamLogo name={game.away} size={30} />
+            <span className="min-w-0 truncate text-left text-sm font-semibold text-white sm:text-base">{game.away}</span>
+          </div>
         </div>
       </div>
     </div>

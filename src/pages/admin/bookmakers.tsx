@@ -48,7 +48,8 @@ const emptyForm: BookmakerForm = {
 const NODELAY_PLATFORMS = [
   { value: '', label: 'Nenhuma' },
   { value: 'swarm', label: 'WebSocket (swarm) — 7games, betão, 7k, apostatudo' },
-  { value: 'biahosted', label: 'Altenar (biahosted) — estrelabet' }
+  { value: 'biahosted', label: 'Altenar (biahosted) — estrelabet' },
+  { value: 'superbet', label: 'Superbet (Betler) — cycletls, sem config' }
 ];
 
 const errorMessage = (e: unknown, fallback: string): string => {
@@ -673,6 +674,15 @@ const AdminBookmakersPage = () => {
                           </label>
                         </div>
                       </>
+                    )}
+
+                    {form.noDelayPlatform === 'superbet' && (
+                      <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-[11px] leading-relaxed text-gray-300">
+                        <b className="text-emerald-300">Sem configuração.</b> O login roda 100% no backend via cycletls
+                        (passa o AWS WAF sem navegador); <code>origin</code> e host do WAF são fixos no serviço. Basta deixar
+                        <b> NoDelay habilitado</b> e a casa já fica pronta. Conta ativa loga direto; conta com MFA volta
+                        <code> mfa_required</code> (2º fator manual por ora). Odds/aposta virão do <code>/events</code> depois.
+                      </div>
                     )}
                   </div>
                 )}

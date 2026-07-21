@@ -43,6 +43,25 @@ export function errorText(e: unknown, fallback = 'Falha ao conectar.'): string {
   return api || (e as Error)?.message || fallback;
 }
 
+/** Métodos de 2º fator que a superbet oferece na hora de conectar. */
+export interface SuperbetMfa {
+  methods: string[];
+  phone: string | null;
+  hasSms: boolean;
+  hasFaceid: boolean;
+  /** superbet: URL do Unico p/ abrir no CELULAR (QR/link) e fazer a selfie. */
+  faceidUrl?: string | null;
+}
+
+/**
+ * Resultado de um "conectar": `ok` quando a conta já ficou logada, `mfa` quando
+ * a casa (superbet) exige o 2º fator — nesse caso NÃO é erro, é um passo a mais:
+ * a UI abre o modal de MFA. Erros de verdade continuam sendo `throw`.
+ */
+export type ConnectOutcome =
+  | { status: 'ok' }
+  | { status: 'mfa'; account: NoDelayAccount; mfa: SuperbetMfa };
+
 /**
  * Núcleo do "logar de novo": lê a credencial do cofre, loga NA CASA pelo browser
  * e devolve a sessão ao backend. Reporta a falha no status (login_failed/mfa/…)
@@ -78,26 +97,38 @@ async function loginAndSave(house: NoDelayBookmaker, accountId: string): Promise
 }
 
 /**
- * biahosted: o login roda no BACKEND (o BFF exige Origin spoofado). O front só
- * pede pro servidor conectar; ele lê a credencial do cofre, loga e salva a sessão.
+ * Login SERVER-SIDE (biahosted e superbet): o back lê a credencial do cofre, loga
+ * (biahosted: BFF com Origin spoofado; superbet: cycletls + WAF) e salva a sessão.
+ * O front só pede pro servidor conectar.
  */
-async function connectBiahosted(accountId: string): Promise<void> {
+async function connectServerSide(accountId: string): Promise<ConnectOutcome> {
   const res = await apiGateway.connectNoDelayAccount(accountId);
-  if (res.data?.result !== 1) {
-    throw new Error(res.data?.message || 'Falha ao conectar a conta.');
+  if (res.data?.result === 1) return { status: 'ok' };
+
+  // MFA da superbet: o back devolve result:0 MAS com data.mfa (ou status
+  // 'mfa_required'). Não é falha — é o 2º fator pendente. Devolve pra UI abrir o
+  // modal em vez de estourar. Sem data.mfa, é erro de verdade → throw.
+  const acc = res.data?.data as (NoDelayAccount & { mfa?: SuperbetMfa; status?: string }) | undefined;
+  if (acc && (acc.mfa || acc.status === 'mfa_required')) {
+    const mfa: SuperbetMfa = acc.mfa ?? { methods: [], phone: null, hasSms: true, hasFaceid: false };
+    return { status: 'mfa', account: acc, mfa };
   }
+  throw new Error(res.data?.message || 'Falha ao conectar a conta.');
 }
+
+/** Casas cujo login roda no backend (não no browser). */
+const isServerSide = (platform?: string | null): boolean => platform === 'biahosted' || platform === 'superbet';
 
 /**
  * Loga uma conta JÁ cadastrada. Reporta o resultado ao backend nos dois
  * caminhos (sucesso e falha) — assim o painel mostra o porquê sem adivinhar.
  */
-export async function connectAccount(house: NoDelayBookmaker, account: NoDelayAccount): Promise<void> {
-  if (house.platform === 'biahosted') {
-    await connectBiahosted(account.id);
-    return;
+export async function connectAccount(house: NoDelayBookmaker, account: NoDelayAccount): Promise<ConnectOutcome> {
+  if (isServerSide(house.platform)) {
+    return connectServerSide(account.id);
   }
   await loginAndSave(house, account.id);
+  return { status: 'ok' };
 }
 
 /**
@@ -107,11 +138,11 @@ export async function connectAccount(house: NoDelayBookmaker, account: NoDelayAc
 export async function addAndConnectAccount(
   house: NoDelayBookmaker,
   input: { username: string; password: string; label?: string },
-): Promise<NoDelayAccount> {
+): Promise<{ account: NoDelayAccount; mfa: SuperbetMfa | null }> {
   // biahosted: o login é server-side e lê a credencial do cofre — então salva
   // PRIMEIRO e conecta depois. Se o login falhar, apaga (credencial ruim não
   // fica no cofre, igual ao swarm).
-  if (house.platform === 'biahosted') {
+  if (isServerSide(house.platform)) {
     const created = await apiGateway.createNoDelayAccount({
       bookmakerSlug: house.slug, username: input.username, password: input.password, label: input.label,
     });
@@ -120,12 +151,15 @@ export async function addAndConnectAccount(
     }
     const account = created.data.data as NoDelayAccount;
     try {
-      await connectBiahosted(account.id);
+      const out = await connectServerSide(account.id);
+      // MFA pendente: a conta FICA no cofre (é preciso dela p/ completar o 2º
+      // fator). Devolve o mfa p/ a UI abrir o modal em vez de dar como conectada.
+      if (out.status === 'mfa') return { account, mfa: out.mfa };
     } catch (e) {
       try { await apiGateway.deleteNoDelayAccount(account.id); } catch { /* ignora */ }
       throw e;
     }
-    return account;
+    return { account, mfa: null };
   }
 
   const config = houseToSwarmConfig(house);
@@ -151,7 +185,7 @@ export async function addAndConnectAccount(
     currency: res.balance?.currency,
   });
 
-  return account;
+  return { account, mfa: null };
 }
 
 /**
@@ -193,12 +227,17 @@ export async function refreshAllAccounts(
       return { ...base, state: 'error', message: 'Casa indisponível' };
     }
 
-    // biahosted: sem restore_login por WSS — revalida logando de novo no backend
-    // (token ~1h). (Otimizar p/ só relogar perto de vencer fica p/ o session keeper.)
-    if (house.platform === 'biahosted') {
+    // Server-side (biahosted/superbet): sem restore por WSS — revalida logando de
+    // novo no backend (biahosted ~1h; superbet reusa o device p/ não re-disparar MFA).
+    if (isServerSide(house.platform)) {
       try {
-        await connectBiahosted(s.id);
+        const out = await connectServerSide(s.id);
         tick();
+        // MFA pediu 2º fator de novo (token WAF venceu) — precisa de atenção:
+        // trata como "caiu" p/ o painel pedir reconexão (o modal abre no Conectar).
+        if (out.status === 'mfa') {
+          return { ...base, state: 'expired', message: 'Verificação (MFA) pendente — reconecte a conta.' };
+        }
         return { ...base, state: 'alive' };
       } catch (e) {
         tick();
