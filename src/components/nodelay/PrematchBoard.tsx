@@ -167,6 +167,17 @@ const buildLayout = (selections: EventGroupSelection[], ev: { home: string; away
 
 type DisplayMode = 'best' | 'byhouse';
 
+/** Seleção tocada no board de pré-jogo → o cupom (preview) é montado a partir disso. */
+export interface PrematchPick {
+  home: string;
+  away: string;
+  marketId: string;
+  marketName: string;
+  selectionLabel: string;
+  /** Odd de cada casa da instância (a melhor primeiro). */
+  prices: { bookmaker: string; price: number }[];
+}
+
 interface Props {
   bookmaker: string;
   eventId: string;
@@ -174,11 +185,13 @@ interface Props {
   houseSlugs: string[];
   /** Abrir OUTRO jogo (menu ≡ do mesmo campeonato). A página injeta a navegação. */
   onOpenEvent?: (bookmaker: string, eventId: string) => void;
+  /** Tocar numa odd abre o cupom (preview no pré-jogo). */
+  onPick?: (pick: PrematchPick) => void;
   /** Voltar (o ← do hero). */
   onBack?: () => void;
 }
 
-export function PrematchBoard({ bookmaker, eventId, houseSlugs, onOpenEvent, onBack }: Props) {
+export function PrematchBoard({ bookmaker, eventId, houseSlugs, onOpenEvent, onPick, onBack }: Props) {
   const { detail, loading, error } = usePrematchEventGroup(bookmaker, eventId, houseSlugs);
   const [mode, setMode] = useState<DisplayMode>('best');
   const [category, setCategory] = useState('all');
@@ -262,11 +275,13 @@ export function PrematchBoard({ bookmaker, eventId, houseSlugs, onOpenEvent, onB
               {markets.map((m) => (
                 <MarketView
                   key={m.marketId}
+                  marketId={m.marketId}
                   marketName={m.marketName || m.marketId}
                   selections={m.selections}
                   ev={detail.event}
                   mode={mode}
                   orderedSlugs={orderedSlugs}
+                  onPick={onPick}
                 />
               ))}
             </div>
@@ -445,16 +460,29 @@ function CompetitionFixturesModal({
 // -------------------------------- Mercado --------------------------------
 
 function MarketView({
-  marketName, selections, ev, mode, orderedSlugs,
+  marketId, marketName, selections, ev, mode, orderedSlugs, onPick,
 }: {
+  marketId: string;
   marketName: string;
   selections: EventGroupSelection[];
   ev: { home: string; away: string };
   mode: DisplayMode;
   orderedSlugs: string[];
+  onPick?: (pick: PrematchPick) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const layout = buildLayout(selections, ev);
+
+  const pickOf = onPick
+    ? (sel: EventGroupSelection) => () => onPick({
+        home: ev.home,
+        away: ev.away,
+        marketId,
+        marketName,
+        selectionLabel: selLabel(sel),
+        prices: sel.prices.map((p) => ({ bookmaker: p.bookmaker, price: p.price })),
+      })
+    : undefined;
 
   return (
     <div>
@@ -487,7 +515,7 @@ function MarketView({
                   >
                     {layout.lined && <span className="pt-2 text-center text-xs tabular-nums text-gray-400">{row.label}</span>}
                     {row.cells.map((cell, ci) => (
-                      <SelCell key={ci} sel={cell} mode={mode} orderedSlugs={orderedSlugs} />
+                      <SelCell key={ci} sel={cell} mode={mode} orderedSlugs={orderedSlugs} onPickSel={cell && pickOf ? pickOf(cell) : undefined} />
                     ))}
                   </div>
                 ))}
@@ -499,7 +527,7 @@ function MarketView({
               {selections.map((s, si) => (
                 <div key={si} className="rounded-lg bg-black/25 px-2.5 py-2 ring-1 ring-white/10">
                   <Tooltip label={selLabel(s)} className="block"><div className="mb-1 truncate text-[11px] text-gray-300">{selLabel(s)}</div></Tooltip>
-                  <SelCell sel={s} mode={mode} orderedSlugs={orderedSlugs} bare />
+                  <SelCell sel={s} mode={mode} orderedSlugs={orderedSlugs} bare onPickSel={pickOf ? pickOf(s) : undefined} />
                 </div>
               ))}
             </div>
@@ -519,14 +547,18 @@ function MarketView({
  * `bare` = sem fundo/anel próprios (usado no fallback de lista, que já tem card).
  */
 function SelCell({
-  sel, mode, orderedSlugs, bare,
+  sel, mode, orderedSlugs, bare, onPickSel,
 }: {
   sel: EventGroupSelection | null;
   mode: DisplayMode;
   orderedSlugs: string[];
   bare?: boolean;
+  onPickSel?: () => void;
 }) {
   const { getBookmaker } = useBookmakers();
+  // Clicável quando dá pra montar o cupom (preview no pré-jogo).
+  const click = onPickSel ? { onClick: onPickSel, role: 'button' as const, tabIndex: 0 } : {};
+  const clickCls = onPickSel ? 'cursor-pointer transition hover:ring-lime-500/40' : '';
 
   if (!sel || sel.prices.length === 0) {
     return <div className={`grid place-items-center px-2 py-2 text-center text-xs text-gray-600 ${bare ? '' : 'rounded-lg bg-black/20 ring-1 ring-white/5'}`}>—</div>;
@@ -537,7 +569,7 @@ function SelCell({
   if (mode === 'best') {
     const b = getBookmaker(best.bookmaker);
     return (
-      <div className={`relative flex items-center justify-between gap-1.5 px-2 py-1.5 ${bare ? '' : 'rounded-lg bg-black/25 ring-1 ring-white/10'}`}>
+      <div {...click} className={`relative flex items-center justify-between gap-1.5 px-2 py-1.5 ${bare ? '' : 'rounded-lg bg-black/25 ring-1 ring-white/10'} ${clickCls}`}>
         <Tooltip label={b?.name || best.bookmaker}>
           <span className="flex items-center gap-1">
             <BookmakerLogo name={b?.name || best.bookmaker} slug={best.bookmaker} logoUrl={b?.logoUrl} color={b?.color} size={16} />
@@ -554,7 +586,7 @@ function SelCell({
     .map((slug) => ({ slug, p: sel.prices.find((x) => x.bookmaker === slug) || null }))
     .filter((r) => r.p);
   return (
-    <div className={`space-y-1 ${bare ? '' : 'rounded-lg bg-black/25 p-1 ring-1 ring-white/10'}`}>
+    <div {...click} className={`space-y-1 ${bare ? '' : 'rounded-lg bg-black/25 p-1 ring-1 ring-white/10'} ${clickCls}`}>
       {rows.map(({ slug, p }) => {
         const isBest = p!.bookmaker === best.bookmaker && p!.price === best.price;
         const b = getBookmaker(slug);

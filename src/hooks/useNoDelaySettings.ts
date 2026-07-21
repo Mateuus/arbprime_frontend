@@ -13,7 +13,9 @@ export interface NoDelaySettings {
   minStake: number;           // piso ao fracionar (allowPartial)
   maxStakeMode: boolean;      // ignora o defaultStake e aposta SEMPRE o máx permitido da conta
   allowPartial: boolean;      // aceita valor menor se a casa não pegar o limite todo
-  acceptOddsChange: boolean;  // aceita a odd mudar (default sempre ligado)
+  acceptOddsChange: boolean;  // aceita a odd mudar (default global — ver oddsChangeByHouse)
+  /** Override de "aceitar mudança de odd" POR CASA (slug → bool). Ausente = usa o global. */
+  oddsChangeByHouse: Record<string, boolean>;
   selectedAccountIds: string[] | null;
   // ---- filtros de mercado (delay trade) ----
   delayTradeOnly: boolean;    // esconde as seleções "Menos de" (Under) — só entradas de Mais
@@ -31,6 +33,7 @@ export const DEFAULT_SETTINGS: NoDelaySettings = {
   maxStakeMode: false,
   allowPartial: true,
   acceptOddsChange: true,
+  oddsChangeByHouse: {},
   selectedAccountIds: null,
   delayTradeOnly: false,
   hidePriceless: true, // "por natureza": limpa os "—" por padrão
@@ -84,6 +87,12 @@ export function useNoDelaySettings() {
   const effective = isAdmin ? settings : (settings.realBets ? settings : { ...settings, realBets: true });
 
   return { settings: effective, update, toggleAccount, isAdmin };
+}
+
+/** "Aceitar mudança de odd" efetivo de uma casa (override por casa ou o global). */
+export function acceptOddsChangeFor(settings: NoDelaySettings, slug: string): boolean {
+  const o = settings.oddsChangeByHouse?.[slug];
+  return o == null ? settings.acceptOddsChange : o;
 }
 
 /** Contas que de fato vão apostar = as marcadas ∩ conectadas (ou todas se nunca marcou). */

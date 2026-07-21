@@ -133,7 +133,7 @@ export default function NoDelayEventPage() {
   // direto" NÃO existe aqui — é exclusivo do modal Aposta Rápida. O resultado do
   // disparo (feito pelo cupom) aparece no BetSlipDrawer.
   const [slipPick, setSlipPick] = useState<{ m: LiveMarket; s: LiveSelection } | null>(null);
-  const fire = useNoDelayFire({ detail, houseBySlug, getHousePrice, betting: bettingAccounts, settings, k: maxStakeK });
+  const fire = useNoDelayFire({ detail, houseBySlug, getHousePrice, betting: bettingAccounts, settings, k: maxStakeK, forceFixedStake: true });
   const onPickOdd = useCallback((m: LiveMarket, s: LiveSelection) => setSlipPick({ m, s }), []);
 
   return (

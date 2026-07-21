@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { LiveGameDetail, LiveMarket, LiveSelection } from '@/services/nodelay/rogueModel';
 import { NoDelayAccount, NoDelayBookmaker } from '@/interfaces/nodelay.interface';
 import { HousePrice } from '@/hooks/useInstanceLiveEvent';
-import { NoDelaySettings } from '@/hooks/useNoDelaySettings';
+import { NoDelaySettings, acceptOddsChangeFor } from '@/hooks/useNoDelaySettings';
 import { placeBet, BetTicket } from '@/services/nodelay/placeBet';
 import { placeBetReal, warmAccountTokens, tokensWarm } from '@/services/nodelay/placeBetReal';
 import { buildAltenarTicket, placeBetAltenar, AltenarTicket } from '@/services/nodelay/placeBetAltenar';
@@ -47,9 +47,12 @@ interface Params {
   betting: NoDelayAccount[];
   settings: NoDelaySettings;
   k?: number | null;
+  /** Stake = exatamente o valor digitado (ignora MÁX e o teto do fornecedor de odd).
+   * O limite REAL é o da casa. Usado pelo Betslip. */
+  forceFixedStake?: boolean;
 }
 
-export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, settings, k }: Params) {
+export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, settings, k, forceFixedStake }: Params) {
   const [slips, setSlips] = useState<SlipView[] | null>(null);
   const [tokensReady, setTokensReady] = useState(false);
   const fireSeq = useRef(0);
@@ -112,6 +115,9 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
   }, [detail?.id, eventName, score, clock, getHousePrice]);
 
   const stakeForAccount = useCallback((a: NoDelayAccount, m: LiveMarket, s: LiveSelection): number => {
+    // Betslip: stake = exatamente o digitado. Sem MÁX, sem cortar pelo teto do
+    // fornecedor de odd (que às vezes é MENOR que o limite real da casa).
+    if (forceFixedStake) return settings.defaultStake;
     const kAcc = cachedK(a.id) ?? k ?? null;
     const hardMax = kAcc ? maxStakeOf(s, m, kAcc, MAX_STAKE_DRIFT) : null;
     if (settings.maxStakeMode) {
@@ -119,7 +125,7 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
       return Math.max(0, Math.floor(Math.min(hardMax, a.balance ?? hardMax)));
     }
     return hardMax != null ? Math.min(settings.defaultStake, +(hardMax - 0.01).toFixed(2)) : settings.defaultStake;
-  }, [settings.maxStakeMode, settings.defaultStake, k]);
+  }, [forceFixedStake, settings.maxStakeMode, settings.defaultStake, k]);
 
   /** Linhas por conta (casa, odd, stake, retorno) — pro cupom mostrar antes de confirmar. */
   const preview = useCallback((m: LiveMarket, s: LiveSelection): FirePreviewRow[] => {
@@ -169,8 +175,9 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
     }
     setSlips(slipList);
 
-    const opts = { allowPartial: settings.allowPartial, acceptOddsChange: settings.acceptOddsChange };
     for (const it of toSubmit) {
+      // "Aceitar mudança de odd" é POR CASA (override) — cai no global se não setado.
+      const opts = { allowPartial: settings.allowPartial, acceptOddsChange: acceptOddsChangeFor(settings, it.a.bookmakerSlug) };
       const p = it.isBia && settings.realBets && it.altenarTicket && it.house
         ? placeBetAltenar(it.a, it.house, it.altenarTicket, it.stake)
         : (settings.realBets && !it.isBia ? placeBetReal : placeBet)(it.a, it.ticket, { stake: it.stake, ...opts, rogueUrl: it.rogueUrl });
