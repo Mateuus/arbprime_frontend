@@ -27,6 +27,10 @@ export interface HousePrice {
   points: number | null;
   line: string | null;
   disabled: boolean;
+  /** Prematch: eventId DAQUELA casa (o place server-side usa; ≠ do id da rota). */
+  eventId?: string;
+  /** Prematch: dados apostáveis DAQUELA casa (superbet oddUuid etc.) — ver EventGroupPrice.placeable. */
+  placeable?: { oddUuid?: string; selectionId?: string; [k: string]: unknown } | null;
 }
 
 type Rec = Record<string, unknown>;

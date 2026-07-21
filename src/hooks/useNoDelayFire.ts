@@ -141,9 +141,11 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
       let blocked = false; let reason: string | undefined;
       if (hp && (hp.disabled || hp.price <= 0)) { blocked = true; reason = 'Suspenso nesta casa'; }
       else if (stake < min) { blocked = true; reason = `Abaixo do mínimo (R$ ${min.toFixed(2).replace('.', ',')})`; }
+      // Pré-jogo: só casas com adapter + dado apostável (hoje só Superbet c/ oddUuid).
+      else if (betType === 'prematch' && !(house?.platform === 'superbet' && hp?.placeable?.oddUuid)) { blocked = true; reason = 'Pré-jogo em breve nesta casa'; }
       return { account: a, house, odd, stake, blocked, reason, potential: blocked ? 0 : +(stake * odd).toFixed(2) };
     });
-  }, [betting, houseBySlug, getHousePrice, stakeForAccount]);
+  }, [betting, houseBySlug, getHousePrice, stakeForAccount, betType]);
 
   const failSlip = (key: string, ticket: BetTicket, error: string) =>
     setSlips((prev) => prev && prev.map((sl) => (sl.key === key
@@ -155,7 +157,7 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
     if (!detail) return;
     const round = ++fireSeq.current;
     const slipList: SlipView[] = [];
-    const toSubmit: { key: string; a: NoDelayAccount; ticket: BetTicket; stake: number; rogueUrl?: string; isBia: boolean; isSuperbet: boolean; altenarTicket: AltenarTicket | null; house?: NoDelayBookmaker }[] = [];
+    const toSubmit: { key: string; a: NoDelayAccount; ticket: BetTicket; stake: number; rogueUrl?: string; isBia: boolean; isSuperbet: boolean; altenarTicket: AltenarTicket | null; house?: NoDelayBookmaker; betEventId?: string; betOddUuid?: string }[] = [];
 
     for (const a of betting) {
       const key = `${round}:${a.id}`;
@@ -175,9 +177,16 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
       }
       const isBia = house?.platform === 'biahosted';
       const isSuperbet = house?.platform === 'superbet';
+      // Pré-jogo: só casa com adapter + dado apostável. Hoje = Superbet c/ oddUuid.
+      // (as demais casas entram no passo 2 — instrumentar os workers delas.)
+      if (betType === 'prematch' && !(isSuperbet && hp?.placeable?.oddUuid)) {
+        slipList.push({ key, accountId: a.id, accountLabel: label, ticket, stakeRequested: stake, status: 'done', result: { ok: false, elapsedMs: 0, stake: 0, odds: 0, partial: false, oddsChanged: false, error: 'Pré-jogo em breve nesta casa' } });
+        continue;
+      }
       const altenarTicket = isBia ? buildAltenarTicket(detail, m, s, ticket.odds) : null;
       slipList.push({ key, accountId: a.id, accountLabel: label, ticket, stakeRequested: stake, status: 'placing' });
-      toSubmit.push({ key, a, ticket, stake, rogueUrl: house?.rogueUrl || undefined, isBia, isSuperbet, altenarTicket, house });
+      // Superbet prematch: usa o eventId + oddUuid DAQUELA casa (do placeable).
+      toSubmit.push({ key, a, ticket, stake, rogueUrl: house?.rogueUrl || undefined, isBia, isSuperbet, altenarTicket, house, betEventId: hp?.eventId, betOddUuid: hp?.placeable?.oddUuid });
     }
     setSlips(slipList);
 
@@ -188,8 +197,10 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
       if (!settings.realBets) {
         p = placeBet(it.a, it.ticket, { stake: it.stake, ...opts, rogueUrl: it.rogueUrl }); // mock
       } else if (it.isSuperbet) {
-        // Superbet = server-side (backend cycletls). selectionId do ticket = uuid da odd.
-        p = placeBetSuperbet(it.a, it.ticket, { stake: it.stake, betType: betType || 'live', acceptOddsChange: opts.acceptOddsChange });
+        // Superbet = server-side (backend cycletls). Ao vivo: selectionId do ticket já é
+        // o uuid + eventId=detail.id. Pré-jogo: sobrescreve com o oddUuid/eventId da casa.
+        const t = it.betOddUuid ? { ...it.ticket, eventId: it.betEventId || it.ticket.eventId, selectionId: it.betOddUuid } : it.ticket;
+        p = placeBetSuperbet(it.a, t, { stake: it.stake, betType: betType || 'live', acceptOddsChange: opts.acceptOddsChange });
       } else if (it.isBia && it.altenarTicket && it.house) {
         p = placeBetAltenar(it.a, it.house, it.altenarTicket, it.stake);
       } else {

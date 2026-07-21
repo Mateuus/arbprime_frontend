@@ -76,10 +76,12 @@ export default function NoDelayPrematchEventPage() {
   const getHousePrice = useCallback((slug: string): HousePrice | undefined => {
     if (!pick) return undefined;
     const p = pick.prices.find((x) => x.bookmaker === slug);
-    return p ? { price: p.price, points: null, line: null, disabled: false } : undefined;
+    // Carrega o eventId + placeable DAQUELA casa → o disparo server-side (Superbet)
+    // aposta com o oddUuid/eventId corretos da casa.
+    return p ? { price: p.price, points: null, line: null, disabled: false, eventId: p.eventId, placeable: p.placeable ?? null } : undefined;
   }, [pick]);
 
-  const fire = useNoDelayFire({ detail, houseBySlug, getHousePrice, betting: bettingAccounts, settings, k: null, forceFixedStake: true });
+  const fire = useNoDelayFire({ detail, houseBySlug, getHousePrice, betting: bettingAccounts, settings, k: null, forceFixedStake: true, betType: 'prematch' });
 
   const slipPick = useMemo(() => {
     if (!pick) return null;
@@ -120,7 +122,6 @@ export default function NoDelayPrematchEventPage() {
             settings={settings}
             onUpdateSettings={update}
             onClose={() => setPick(null)}
-            previewOnly
           />
         )}
       </div>
