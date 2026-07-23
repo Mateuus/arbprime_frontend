@@ -1915,7 +1915,7 @@ const saveNoDelaySession = async (id: string, body: { externalUserId?: string; a
   apiClient.post(`/nodelay/accounts/${id}/session`, body);
 const clearNoDelaySession = async (id: string) => apiClient.delete(`/nodelay/accounts/${id}/session`);
 // biahosted: login SERVER-SIDE (o backend loga no BFF e salva a sessão).
-const connectNoDelayAccount = async (id: string) => apiClient.post(`/nodelay/accounts/${id}/connect`, {});
+const connectNoDelayAccount = async (id: string, body: { ipv6?: string; geo?: { lat: number; lon: number; acc: number } } = {}) => apiClient.post(`/nodelay/accounts/${id}/connect`, body);
 // superbet: completa o MFA (código SMS + faceid quando exigido) → conecta.
 const completeSuperbetMfa = async (id: string, code: string) => apiClient.post(`/nodelay/accounts/${id}/superbet-mfa`, { code });
 // superbet: poll do faceid (selfie no celular) → { active }.

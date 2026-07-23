@@ -15,8 +15,11 @@ import { captureBet365UserContext } from '@/utils/bet365UserContext';
 
 /** bet365: pré-aquece ipv6 (WebRTC/STUN) + geo (geolocation) do usuário JÁ no connect — assim a captura
  * (que custa até ~1,5-5s a frio, com prompt de localização) NÃO cai no relógio do clique→aposta (fica cacheada). */
-function prewarmBet365(house: NoDelayBookmaker): void {
-  if (house.platform === 'bet365') void captureBet365UserContext().catch(() => { /* best-effort */ });
+/** bet365: captura ipv6/geo p/ MANDAR no connect (a warm session do backend prima com o geo real → 1ª aposta
+ *  já quente, sem "aposta de aquecimento"). Retorna undefined p/ outras casas ou se a captura falhar. */
+async function bet365ConnectCtx(house: NoDelayBookmaker): Promise<{ ipv6?: string; geo?: { lat: number; lon: number; acc: number } } | undefined> {
+  if (house.platform !== 'bet365') return undefined;
+  try { return await captureBet365UserContext(); } catch { return undefined; }
 }
 
 /** Traduz a casa (config do admin) para o que o cliente swarm precisa. */
@@ -108,8 +111,8 @@ async function loginAndSave(house: NoDelayBookmaker, accountId: string): Promise
  * (biahosted: BFF com Origin spoofado; superbet: cycletls + WAF) e salva a sessão.
  * O front só pede pro servidor conectar.
  */
-async function connectServerSide(accountId: string): Promise<ConnectOutcome> {
-  const res = await apiGateway.connectNoDelayAccount(accountId);
+async function connectServerSide(accountId: string, betCtx?: { ipv6?: string; geo?: { lat: number; lon: number; acc: number } }): Promise<ConnectOutcome> {
+  const res = await apiGateway.connectNoDelayAccount(accountId, betCtx);
   if (res.data?.result === 1) return { status: 'ok' };
 
   // MFA da superbet: o back devolve result:0 MAS com data.mfa (ou status
@@ -132,8 +135,8 @@ const isServerSide = (platform?: string | null): boolean => platform === 'biahos
  */
 export async function connectAccount(house: NoDelayBookmaker, account: NoDelayAccount): Promise<ConnectOutcome> {
   if (isServerSide(house.platform)) {
-    prewarmBet365(house); // pré-aquece ipv6/geo enquanto o backend conecta a sessão
-    return connectServerSide(account.id);
+    const betCtx = await bet365ConnectCtx(house); // ipv6/geo do usuário → warm prima com o geo real no connect
+    return connectServerSide(account.id, betCtx);
   }
   await loginAndSave(house, account.id);
   return { status: 'ok' };
@@ -151,7 +154,7 @@ export async function addAndConnectAccount(
   // PRIMEIRO e conecta depois. Se o login falhar, apaga (credencial ruim não
   // fica no cofre, igual ao swarm).
   if (isServerSide(house.platform)) {
-    prewarmBet365(house); // pré-aquece ipv6/geo enquanto cadastra+conecta
+    const betCtx = await bet365ConnectCtx(house); // ipv6/geo → warm prima com o geo real no connect
     const created = await apiGateway.createNoDelayAccount({
       bookmakerSlug: house.slug, username: input.username, password: input.password, label: input.label,
     });
@@ -160,7 +163,7 @@ export async function addAndConnectAccount(
     }
     const account = created.data.data as NoDelayAccount;
     try {
-      const out = await connectServerSide(account.id);
+      const out = await connectServerSide(account.id, betCtx);
       // MFA pendente: a conta FICA no cofre (é preciso dela p/ completar o 2º
       // fator). Devolve o mfa p/ a UI abrir o modal em vez de dar como conectada.
       if (out.status === 'mfa') return { account, mfa: out.mfa };
@@ -240,7 +243,7 @@ export async function refreshAllAccounts(
     // novo no backend (biahosted ~1h; superbet reusa o device p/ não re-disparar MFA).
     if (isServerSide(house.platform)) {
       try {
-        const out = await connectServerSide(s.id);
+        const out = await connectServerSide(s.id, await bet365ConnectCtx(house));
         tick();
         // MFA pediu 2º fator de novo (token WAF venceu) — precisa de atenção:
         // trata como "caiu" p/ o painel pedir reconexão (o modal abre no Conectar).
