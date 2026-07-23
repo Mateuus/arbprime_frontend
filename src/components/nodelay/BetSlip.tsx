@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { captureBet365UserContext } from '@/utils/bet365UserContext';
 import { LiveGameDetail, LiveMarket, LiveSelection } from '@/services/nodelay/rogueModel';
 import { NoDelayAccount, NoDelayBookmaker } from '@/interfaces/nodelay.interface';
 import { HousePrice } from '@/hooks/useInstanceLiveEvent';
@@ -46,6 +47,14 @@ export function BetSlip({
 }: Props) {
   const { m, s } = pick;
   const betting = useMemo(() => connected.filter((a) => selectedIds.has(a.id)), [connected, selectedIds]);
+
+  // bet365: pré-aquece ipv6/geo do usuário ao ABRIR a cédula (garante cache quente mesmo após reload da
+  // página) → a captura (até ~1,5-5s a frio) não entra no relógio do clique→aposta.
+  useEffect(() => {
+    if (connected.some((a) => houseBySlug.get(a.bookmakerSlug)?.platform === 'bet365')) {
+      void captureBet365UserContext().catch(() => { /* best-effort */ });
+    }
+  }, [connected, houseBySlug]);
 
   const score = scoreOf(detail);
   const clock = clockOf(detail);

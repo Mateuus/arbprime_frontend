@@ -11,6 +11,13 @@ import {
   NoDelayBookmaker, NoDelayAccount, NoDelayAccountStatus, NoDelaySession, NoDelayCheckResult,
 } from '@/interfaces/nodelay.interface';
 import { SwarmClient, SwarmConfig, SwarmError, SwarmLoginResult, SwarmBalance, swarmLoginOnce } from './swarmClient';
+import { captureBet365UserContext } from '@/utils/bet365UserContext';
+
+/** bet365: pré-aquece ipv6 (WebRTC/STUN) + geo (geolocation) do usuário JÁ no connect — assim a captura
+ * (que custa até ~1,5-5s a frio, com prompt de localização) NÃO cai no relógio do clique→aposta (fica cacheada). */
+function prewarmBet365(house: NoDelayBookmaker): void {
+  if (house.platform === 'bet365') void captureBet365UserContext().catch(() => { /* best-effort */ });
+}
 
 /** Traduz a casa (config do admin) para o que o cliente swarm precisa. */
 export function houseToSwarmConfig(house: NoDelayBookmaker): SwarmConfig {
@@ -125,6 +132,7 @@ const isServerSide = (platform?: string | null): boolean => platform === 'biahos
  */
 export async function connectAccount(house: NoDelayBookmaker, account: NoDelayAccount): Promise<ConnectOutcome> {
   if (isServerSide(house.platform)) {
+    prewarmBet365(house); // pré-aquece ipv6/geo enquanto o backend conecta a sessão
     return connectServerSide(account.id);
   }
   await loginAndSave(house, account.id);
@@ -143,6 +151,7 @@ export async function addAndConnectAccount(
   // PRIMEIRO e conecta depois. Se o login falhar, apaga (credencial ruim não
   // fica no cofre, igual ao swarm).
   if (isServerSide(house.platform)) {
+    prewarmBet365(house); // pré-aquece ipv6/geo enquanto cadastra+conecta
     const created = await apiGateway.createNoDelayAccount({
       bookmakerSlug: house.slug, username: input.username, password: input.password, label: input.label,
     });

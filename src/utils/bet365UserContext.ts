@@ -23,7 +23,9 @@ function captureIpv6(): Promise<string | undefined> {
       pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
       pc.createDataChannel('x');
       let fallback: string | undefined;
-      const to = setTimeout(() => finish(fallback), 3000);
+      // Resolve cedo no 1º srflx; o teto é só p/ quem NÃO tem ipv6 público (espera o timeout). 1500ms basta
+      // (o backend tem fallback de ipv6). Pré-aquecido no connect → nem entra no relógio do clique→aposta.
+      const to = setTimeout(() => finish(fallback), 1500);
       pc.onicecandidate = (e) => {
         if (!e.candidate) { clearTimeout(to); finish(fallback); return; }
         const cand = e.candidate.candidate || '';
