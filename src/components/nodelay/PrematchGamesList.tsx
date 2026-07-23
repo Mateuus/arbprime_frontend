@@ -304,11 +304,11 @@ function MatchRow({ game, onOpen }: { game: PrematchGame; onOpen: () => void }) 
       {/* Times empilhados com escudo */}
       <span className="min-w-0 flex-1 space-y-1">
         <span className="flex items-center gap-1.5">
-          <TeamLogo name={game.home} size={18} />
+          <TeamLogo name={game.home} sofascoreId={game.homeSofaId} size={18} />
           <span className="min-w-0 truncate text-xs font-medium text-white">{game.home}</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <TeamLogo name={game.away} size={18} />
+          <TeamLogo name={game.away} sofascoreId={game.awaySofaId} size={18} />
           <span className="min-w-0 truncate text-xs font-medium text-white">{game.away}</span>
         </span>
       </span>

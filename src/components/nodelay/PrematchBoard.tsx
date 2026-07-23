@@ -441,11 +441,11 @@ function CompetitionFixturesModal({
                 >
                   <div className="flex min-w-0 items-center justify-end gap-2 text-right">
                     <span className="truncate text-sm font-semibold text-white">{m.home}</span>
-                    <TeamLogo name={m.home} size={26} />
+                    <TeamLogo name={m.home} sofascoreId={m.homeSofaId} size={26} />
                   </div>
                   <span className="shrink-0 rounded bg-black/40 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-gray-300">{fmtTimeUTC(m.kickoff)}</span>
                   <div className="flex min-w-0 items-center gap-2">
-                    <TeamLogo name={m.away} size={26} />
+                    <TeamLogo name={m.away} sofascoreId={m.awaySofaId} size={26} />
                     <span className="truncate text-sm font-semibold text-white">{m.away}</span>
                   </div>
                 </button>

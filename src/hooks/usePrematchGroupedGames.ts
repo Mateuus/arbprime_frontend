@@ -33,6 +33,9 @@ export interface PrematchGame {
   kickoff: string | null;
   home: string;
   away: string;
+  /** Escudo (sofascore_id) do mandante/visitante; null = sem escudo (cai em iniciais). */
+  homeSofaId: string | null;
+  awaySofaId: string | null;
   /** Rota do evento: 1ª casa da INSTÂNCIA que tem o jogo (garante que ela existe no grupo). */
   bookmaker: string;
   eventId: string;
@@ -171,6 +174,8 @@ export function usePrematchGroupedGames(houseSlugs: string[], filters: PrematchF
         kickoff: ev.eventDate,
         home: ev.home,
         away: ev.away,
+        homeSofaId: ev.homeSofaId ?? null,
+        awaySofaId: ev.awaySofaId ?? null,
         bookmaker: primary.bookmaker,
         eventId: primary.eventId,
         houses: mine,

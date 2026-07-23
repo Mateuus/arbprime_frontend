@@ -117,7 +117,7 @@ export function NoDelayLoginModal({ house, onClose, onDone, onMfa }: Props) {
           <div className="flex items-start gap-2 rounded-lg bg-white/[0.03] px-3 py-2 text-[11px] text-gray-400 ring-1 ring-white/10">
             <Lock size={13} className="mt-0.5 shrink-0 text-lime-300" />
             <span>
-              {house.platform === 'biahosted' || house.platform === 'superbet' ? (
+              {house.platform === 'biahosted' || house.platform === 'superbet' || house.platform === 'bet365' ? (
                 <>O login roda <span className="text-gray-200">nos nossos servidores</span> (a casa exige isso). A senha fica guardada criptografada no cofre para reconectar depois sem você redigitar.</>
               ) : (
                 <>O login acontece <span className="text-gray-200">direto do seu navegador para a casa</span> — sem passar pelos nossos servidores. A senha fica guardada criptografada para reconectar depois sem você redigitar.</>

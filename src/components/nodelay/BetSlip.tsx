@@ -140,7 +140,7 @@ export function BetSlip({
           {fired ? (
             /* Bilhetes DENTRO do cupom: tempo/carregando/status por casa */
             <div className="mt-3 space-y-2">
-              {fire.slips!.map((sl) => <BetSlipCard key={sl.key} slip={sl} />)}
+              {fire.slips!.map((sl) => <BetSlipCard key={sl.key} slip={sl} onConfirmOdds={fire.confirmOddsAndRefire} />)}
             </div>
           ) : (
           <>

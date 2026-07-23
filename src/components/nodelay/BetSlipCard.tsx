@@ -19,15 +19,18 @@ export interface SlipView {
   result?: BetResult;
 }
 
-export function BetSlipCard({ slip }: { slip: SlipView }) {
+export function BetSlipCard({ slip, onConfirmOdds }: { slip: SlipView; onConfirmOdds?: (key: string) => void }) {
   const placing = slip.status === 'placing';
   const ok = slip.result?.ok;
+  const needsConfirm = !placing && !ok && !!slip.result?.needsOddsConfirm; // odd mudou → perguntar
 
   const headCls = placing
     ? 'bg-white/5 text-gray-300'
     : ok
       ? 'bg-emerald-500/20 text-emerald-200'
-      : 'bg-rose-500/20 text-rose-200';
+      : needsConfirm
+        ? 'bg-amber-500/20 text-amber-200'
+        : 'bg-rose-500/20 text-rose-200';
 
   return (
     <div className="overflow-hidden rounded-xl border border-white/10 bg-brand-dark shadow-lg">
@@ -37,11 +40,30 @@ export function BetSlipCard({ slip }: { slip: SlipView }) {
           <><Loader2 size={14} className="animate-spin" /> Enviando…</>
         ) : ok ? (
           <><CheckCircle2 size={14} /> Aposta realizada</>
+        ) : needsConfirm ? (
+          <><TrendingUp size={14} /> Odd mudou</>
         ) : (
           <><XCircle size={14} /> {slip.result?.error || 'Falhou'}</>
         )}
         <span className="ml-auto truncate text-[10px] font-medium opacity-70">{slip.accountLabel}</span>
       </div>
+
+      {/* Odd mudou → mostra de X → Y e pergunta se aposta na nova */}
+      {needsConfirm && (
+        <div className="border-b border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs">
+          <p className="text-amber-100">
+            A odd mudou de <b className="text-amber-300">{slip.result?.oldOdds}</b> para <b className="text-amber-300">{slip.result?.newOdds}</b>. Deseja apostar na nova odd?
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={() => onConfirmOdds?.(slip.key)}
+              className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-amber-400"
+            >
+              Apostar na nova odd
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-2.5 p-3">
         {/* Simples R$ x,xx + odd */}

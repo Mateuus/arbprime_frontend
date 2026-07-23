@@ -254,6 +254,10 @@ export interface GroupedEvent {
   leagueId?: string | null;
   // 'active' | 'review' = grupo canônico (jogo casado); 'solo' = evento de 1 casa não casado.
   status?: string;
+  // sofascore_id (escudo) do mandante/visitante — resolvido no backend por nome→alias.
+  // Ausente/null = sem escudo mapeado (o TeamLogo cai nas iniciais).
+  homeSofaId?: string | null;
+  awaySofaId?: string | null;
   houses: GroupedHouse[];
 }
 
@@ -275,6 +279,8 @@ export interface EventGroupPrice {
   placeable?: {
     selectionId?: string; oddUuid?: string; marketUuid?: string; outcomeId?: string | number;
     marketId?: string; selectionTypeId?: string | number; spov?: string; min?: number; max?: number;
+    // bet365: mt = tipo de mercado ("7"=1X2, "13"=Total de Gols); odd = fracionária nativa ("11/4").
+    mt?: string; odd?: string;
   } | null;
 }
 export interface EventGroupSelection {
@@ -753,6 +759,45 @@ export interface SofaBackfillResultDTO {
   saved: boolean;
 }
 
+// Reconciliação do catálogo a partir do event match (odds_events/event_groups).
+export interface ReconcileCountsDTO {
+  groupsConsidered: number;
+  aliasAddsExisting: number;
+  newTeams: number;
+  aliasAddsNew: number;
+  ambiguous: number;
+  skippedCatMismatch: number;
+}
+export interface ReconcileNewTeamDTO {
+  canonicalName: string;
+  category: string;
+  sport: string;
+  aliasCount: number;
+  aliases: string[];
+}
+export interface ReconcileAliasAddDTO {
+  alias: string;
+  teamId: string;
+  teamName: string;
+  category: string;
+}
+export interface ReconcileAmbiguousDTO {
+  sport: string;
+  side: 'home' | 'away';
+  names: string[];
+  teamIds: string[];
+}
+export interface ReconcileReportDTO {
+  committed: boolean;
+  createTeams: boolean;
+  minConfidence: number;
+  counts: ReconcileCountsDTO;
+  teamsWithoutCrest: number;
+  sampleNewTeams: ReconcileNewTeamDTO[];
+  sampleAliasAdds: ReconcileAliasAddDTO[];
+  ambiguous: ReconcileAmbiguousDTO[];
+}
+
 export interface UpsertAliasDTO {
   alias?: string;
   bookmaker?: string | null;
@@ -808,6 +853,12 @@ const searchSofascore = async (q: string) => {
 // Backfill em lote: procura times SEM sofascoreId e (com commit) grava os de alta confiança.
 const backfillSofascore = async (body: { limit?: number; commit?: boolean; minConfidence?: number; sport?: string }) => {
   return apiClient.post('/teams/sofascore/backfill', body);
+};
+
+// Reconcilia o catálogo a partir do event match: colhe grafias faltantes como
+// aliases e cria os times que faltam. commit=false = prévia (dry-run).
+const reconcileCatalog = async (body: { commit?: boolean; createTeams?: boolean; minConfidence?: number }) => {
+  return apiClient.post('/teams/reconcile', body);
 };
 
 const addAlias = async (teamId: string, data: UpsertAliasDTO) => {
@@ -1877,6 +1928,9 @@ const placeNoDelayBet = async (id: string, body: { stake: number; market: unknow
 // superbet: disparo SERVER-SIDE (host betler=WAF + sessão no cofre → backend cycletls).
 const placeSuperbetBet = async (id: string, body: { eventId: string | number; oddUuid: string; stake: number; betType?: 'prematch' | 'live'; autoAccept?: boolean }) =>
   apiClient.post(`/nodelay/accounts/${id}/superbet-bet`, body);
+// bet365: disparo SERVER-SIDE (addbet→placebet headless via nst no backend).
+const placeBet365Bet = async (id: string, body: { eventId: string; placeable: Record<string, unknown>; line?: string; stake: number; acceptOddsChange?: boolean; ipv6?: string; geo?: { lat: number; lon: number; acc: number } }) =>
+  apiClient.post(`/nodelay/accounts/${id}/bet365-bet`, body);
 const setNoDelayStatus = async (id: string, status: string, error?: string) =>
   apiClient.post(`/nodelay/accounts/${id}/status`, { status, error });
 const saveNoDelayBalance = async (id: string, balance: number, currency?: string) =>
@@ -2077,6 +2131,7 @@ export const apiGateway = {
     mergeTeams,
     searchSofascore,
     backfillSofascore,
+    reconcileCatalog,
     addAlias,
     updateAlias,
     deleteAlias,
@@ -2253,6 +2308,7 @@ export const apiGateway = {
     getNoDelayBetToken,
     placeNoDelayBet,
     placeSuperbetBet,
+    placeBet365Bet,
     setNoDelayStatus,
     saveNoDelayBalance
 };

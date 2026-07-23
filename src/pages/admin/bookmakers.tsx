@@ -50,7 +50,8 @@ const NODELAY_PLATFORMS = [
   { value: '', label: 'Nenhuma' },
   { value: 'swarm', label: 'WebSocket (swarm) — 7games, betão, 7k, apostatudo' },
   { value: 'biahosted', label: 'Altenar (biahosted) — estrelabet' },
-  { value: 'superbet', label: 'Superbet (Betler) — cycletls, sem config' }
+  { value: 'superbet', label: 'Superbet (Betler) — cycletls, sem config' },
+  { value: 'bet365', label: 'bet365 — headless (nst), device por máquina' }
 ];
 
 const errorMessage = (e: unknown, fallback: string): string => {

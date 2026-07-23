@@ -117,7 +117,7 @@ async function connectServerSide(accountId: string): Promise<ConnectOutcome> {
 }
 
 /** Casas cujo login roda no backend (não no browser). */
-const isServerSide = (platform?: string | null): boolean => platform === 'biahosted' || platform === 'superbet';
+const isServerSide = (platform?: string | null): boolean => platform === 'biahosted' || platform === 'superbet' || platform === 'bet365';
 
 /**
  * Loga uma conta JÁ cadastrada. Reporta o resultado ao backend nos dois

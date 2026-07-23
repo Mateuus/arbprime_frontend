@@ -40,6 +40,11 @@ export interface BetResult {
   odds: number;         // efetivo (pode ter mudado)
   partial: boolean;     // a casa pegou só uma parte
   oddsChanged: boolean; // a odd mudou entre o clique e o place
+  /** odd ANTIGA e NOVA quando oddsChanged — p/ perguntar "apostar na nova odd?". */
+  oldOdds?: number | string;
+  newOdds?: number | string;
+  /** true = a odd mudou e o usuário AINDA não decidiu (precisa confirmar p/ re-apostar). */
+  needsOddsConfirm?: boolean;
   receiptId?: string;
   error?: string;       // preenchido quando ok=false
 }

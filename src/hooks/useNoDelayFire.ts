@@ -7,6 +7,7 @@ import { placeBet, BetTicket, BetResult } from '@/services/nodelay/placeBet';
 import { placeBetReal, warmAccountTokens, tokensWarm } from '@/services/nodelay/placeBetReal';
 import { buildAltenarTicket, placeBetAltenar, AltenarTicket } from '@/services/nodelay/placeBetAltenar';
 import { placeBetSuperbet } from '@/services/nodelay/placeBetSuperbet';
+import { placeBetBet365 } from '@/services/nodelay/placeBetBet365';
 import { maxStakeOf, cachedK, getAccountK, pickCalibrationSample } from '@/services/nodelay/maxStake';
 import { SlipView } from '@/components/nodelay/BetSlipCard';
 import { selectionLabel, scoreOf, clockOf } from '@/utils/nodelayLive';
@@ -26,6 +27,16 @@ import { selectionLabel, scoreOf, clockOf } from '@/utils/nodelayLive';
 const MAX_STAKE_DRIFT = 0.02;
 // Aposta mínima da casa (BRL). Abaixo disso = rejeição certa.
 export const HOUSE_MIN = 1;
+
+// bet365 PRÉ-JOGO: LIGADO. O addbet bate byte-a-byte com 2 capturas reais pré-jogo (1X2 + O/U,
+// cs:1) — o bug era mt=7 (in-play); pré-jogo 1X2/O-U = mt=13, corrigido no coletor. Ver [[bet365-nodelay-betting]].
+const BET365_PREMATCH_ENABLED = true;
+// bet365: seleção apostável = placeable com fp(selectionId) + mt + odd (só 1X2/Total de Gols).
+const bet365Bettable = (hp?: HousePrice): boolean =>
+  BET365_PREMATCH_ENABLED && !!(hp?.placeable && hp.placeable.selectionId && hp.placeable.mt && hp.placeable.odd);
+// Pré-jogo: a casa tem adapter + dado apostável? (Superbet c/ oddUuid OU bet365 c/ placeable.)
+const prematchBettable = (platform: string | null | undefined, hp?: HousePrice): boolean =>
+  (platform === 'superbet' && !!hp?.placeable?.oddUuid) || (platform === 'bet365' && bet365Bettable(hp));
 
 export interface FirePreviewRow {
   account: NoDelayAccount;
@@ -59,6 +70,8 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
   const [slips, setSlips] = useState<SlipView[] | null>(null);
   const [tokensReady, setTokensReady] = useState(false);
   const fireSeq = useRef(0);
+  // guarda o que precisa p/ RE-APOSTAR uma seleção bet365 na odd nova (quando a odd muda e o usuário confirma)
+  const refireRef = useRef<Record<string, { a: NoDelayAccount; ticket: BetTicket; stake: number; betPlaceable?: Record<string, unknown> | null; betEventId?: string; betLine?: string }>>({});
 
   const eventName = detail ? `${detail.home} x ${detail.away}` : '';
   const score = detail ? scoreOf(detail) : null;
@@ -141,8 +154,8 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
       let blocked = false; let reason: string | undefined;
       if (hp && (hp.disabled || hp.price <= 0)) { blocked = true; reason = 'Suspenso nesta casa'; }
       else if (stake < min) { blocked = true; reason = `Abaixo do mínimo (R$ ${min.toFixed(2).replace('.', ',')})`; }
-      // Pré-jogo: só casas com adapter + dado apostável (hoje só Superbet c/ oddUuid).
-      else if (betType === 'prematch' && !(house?.platform === 'superbet' && hp?.placeable?.oddUuid)) { blocked = true; reason = 'Pré-jogo em breve nesta casa'; }
+      // Pré-jogo: só casas com adapter + dado apostável (Superbet c/ oddUuid OU bet365 c/ placeable).
+      else if (betType === 'prematch' && !prematchBettable(house?.platform, hp)) { blocked = true; reason = 'Pré-jogo em breve nesta casa'; }
       return { account: a, house, odd, stake, blocked, reason, potential: blocked ? 0 : +(stake * odd).toFixed(2) };
     });
   }, [betting, houseBySlug, getHousePrice, stakeForAccount, betType]);
@@ -157,7 +170,7 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
     if (!detail) return;
     const round = ++fireSeq.current;
     const slipList: SlipView[] = [];
-    const toSubmit: { key: string; a: NoDelayAccount; ticket: BetTicket; stake: number; rogueUrl?: string; isBia: boolean; isSuperbet: boolean; altenarTicket: AltenarTicket | null; house?: NoDelayBookmaker; betEventId?: string; betOddUuid?: string }[] = [];
+    const toSubmit: { key: string; a: NoDelayAccount; ticket: BetTicket; stake: number; rogueUrl?: string; isBia: boolean; isSuperbet: boolean; isBet365: boolean; altenarTicket: AltenarTicket | null; house?: NoDelayBookmaker; betEventId?: string; betOddUuid?: string; betPlaceable?: Record<string, unknown> | null; betLine?: string }[] = [];
 
     for (const a of betting) {
       const key = `${round}:${a.id}`;
@@ -177,18 +190,22 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
       }
       const isBia = house?.platform === 'biahosted';
       const isSuperbet = house?.platform === 'superbet';
-      // Pré-jogo: só casa com adapter + dado apostável. Hoje = Superbet c/ oddUuid.
+      const isBet365 = house?.platform === 'bet365';
+      // Pré-jogo: só casa com adapter + dado apostável (Superbet c/ oddUuid OU bet365 c/ placeable).
       // (as demais casas entram no passo 2 — instrumentar os workers delas.)
-      if (betType === 'prematch' && !(isSuperbet && hp?.placeable?.oddUuid)) {
+      if (betType === 'prematch' && !prematchBettable(house?.platform, hp)) {
         slipList.push({ key, accountId: a.id, accountLabel: label, ticket, stakeRequested: stake, status: 'done', result: { ok: false, elapsedMs: 0, stake: 0, odds: 0, partial: false, oddsChanged: false, error: 'Pré-jogo em breve nesta casa' } });
         continue;
       }
       const altenarTicket = isBia ? buildAltenarTicket(detail, m, s, ticket.odds) : null;
       slipList.push({ key, accountId: a.id, accountLabel: label, ticket, stakeRequested: stake, status: 'placing' });
-      // Superbet prematch: usa o eventId + oddUuid DAQUELA casa (do placeable).
-      toSubmit.push({ key, a, ticket, stake, rogueUrl: house?.rogueUrl || undefined, isBia, isSuperbet, altenarTicket, house, betEventId: hp?.eventId, betOddUuid: hp?.placeable?.oddUuid });
+      // Superbet/bet365 prematch: usa o eventId + dado apostável (placeable) DAQUELA casa.
+      toSubmit.push({ key, a, ticket, stake, rogueUrl: house?.rogueUrl || undefined, isBia, isSuperbet, isBet365, altenarTicket, house, betEventId: hp?.eventId, betOddUuid: hp?.placeable?.oddUuid, betPlaceable: hp?.placeable, betLine: hp?.line ?? ticket.line ?? undefined });
     }
     setSlips(slipList);
+    // guarda os dados das apostas bet365 p/ poder RE-APOSTAR na odd nova se ela mudar
+    refireRef.current = {};
+    for (const it of toSubmit) if (it.isBet365 && it.betPlaceable) refireRef.current[it.key] = { a: it.a, ticket: it.ticket, stake: it.stake, betPlaceable: it.betPlaceable, betEventId: it.betEventId, betLine: it.betLine };
 
     for (const it of toSubmit) {
       // "Aceitar mudança de odd" é POR CASA (override) — cai no global se não setado.
@@ -201,6 +218,9 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
         // o uuid + eventId=detail.id. Pré-jogo: sobrescreve com o oddUuid/eventId da casa.
         const t = it.betOddUuid ? { ...it.ticket, eventId: it.betEventId || it.ticket.eventId, selectionId: it.betOddUuid } : it.ticket;
         p = placeBetSuperbet(it.a, t, { stake: it.stake, betType: betType || 'live', acceptOddsChange: opts.acceptOddsChange });
+      } else if (it.isBet365 && it.betPlaceable) {
+        // bet365 = server-side (backend nst). Manda o placeable ({fp,mt,od}) + eventId + linha da casa.
+        p = placeBetBet365(it.a, it.ticket, { stake: it.stake, placeable: it.betPlaceable, eventId: it.betEventId || it.ticket.eventId, line: it.betLine, acceptOddsChange: opts.acceptOddsChange });
       } else if (it.isBia && it.altenarTicket && it.house) {
         p = placeBetAltenar(it.a, it.house, it.altenarTicket, it.stake);
       } else {
@@ -214,5 +234,15 @@ export function useNoDelayFire({ detail, houseBySlug, getHousePrice, betting, se
 
   const reset = useCallback(() => setSlips(null), []);
 
-  return { slips, tokensReady, preview, doFire, reset };
+  /** Confirma a odd NOVA e re-aposta a seleção bet365 daquela conta (aa=y). Chamado do botão "apostar na nova odd". */
+  const confirmOddsAndRefire = useCallback((key: string) => {
+    const it = refireRef.current[key];
+    if (!it || !it.betPlaceable) return;
+    setSlips((prev) => prev && prev.map((sl) => (sl.key === key ? { ...sl, status: 'placing', result: undefined } : sl)));
+    placeBetBet365(it.a, it.ticket, { stake: it.stake, placeable: it.betPlaceable, eventId: it.betEventId || it.ticket.eventId, line: it.betLine, acceptOddsChange: true })
+      .then((result) => setSlips((prev) => prev && prev.map((sl) => (sl.key === key ? { ...sl, status: 'done', result } : sl))))
+      .catch(() => failSlip(key, it.ticket, 'Falha ao reapostar na odd nova.'));
+  }, []);
+
+  return { slips, tokensReady, preview, doFire, reset, confirmOddsAndRefire };
 }
