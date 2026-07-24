@@ -126,15 +126,20 @@ export function fmtClock(sec: number): string {
 export class Bet365LiveTopic {
   private nodes: FeedNode[] = [];         // ordem do documento (a hierarquia EV→MA→PA é posicional)
   private byIt = new Map<string, FeedNode>();
+  private byFp = new Map<string, FeedNode>();   // seleção por fp (PA.ID) — casa updates de OUTRO tópico
 
   applyFull(nodes: FeedNode[]): void {
     this.nodes = nodes;
     this.byIt.clear();
-    for (const n of nodes) if (n.IT) this.byIt.set(n.IT, n);
+    this.byFp.clear();
+    for (const n of nodes) { if (n.IT) this.byIt.set(n.IT, n); if (n.ID) this.byFp.set(n.ID, n); }
   }
 
   applyUpdate(topic: string, fields: Record<string, string>): boolean {
-    const n = this.byIt.get(topic);
+    // casa pelo IT; senão pelo fp (número após o "-"): assim os deltas FRESCOS do OVInPlay
+    // (OV<fi>-<fp>) atualizam a MESMA seleção na ficha 6V (6VP<fi>-<fp>), que atualiza mais devagar.
+    let n = this.byIt.get(topic);
+    if (!n) { const fp = (topic.match(/-(\d+)_33/) || [])[1]; if (fp) n = this.byFp.get(fp); }
     if (!n) return false;
     Object.assign(n, fields);
     return true;
