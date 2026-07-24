@@ -49,6 +49,12 @@ export interface LiveSelection {
   tplIndex: number | null; // TemplateGroupSettingsIndex → aponta pro limite do mercado
   /** biahosted/Altenar: typeId cru da odd (= selectionTypeId no placeWidget). fssb: undefined. */
   selectionTypeId?: number;
+  /** bet365 ao vivo: odd FRACIONÁRIA nativa do feed (ex.: "8/11"). O addbet manda `o`/`pv` fracionário —
+   *  mandar o decimal faz a bet365 devolver 0/0. Preservada aqui p/ montar o placeable do disparo. */
+  rawOdd?: string;
+  /** bet365 ao vivo: FI de APOSTA da seleção (= PA.FI, ex.: 198399924). ≠ do id de exibição do OVInPlay
+   *  (198291077). O addbet manda `f=<este>`; mandar o id de exibição faz a bet365 devolver 0/0. */
+  fi?: string;
 }
 
 /** Limite de aposta do mercado (TemplateGroupSettings). MaxBet = teto de LUCRO/K. */

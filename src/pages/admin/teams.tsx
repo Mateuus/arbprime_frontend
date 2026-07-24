@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   apiGateway, TeamDTO, TeamDetailDTO, TeamAliasDTO, UpsertTeamDTO, TeamsPaginationDTO,
-  SofaCandidateDTO, SofaBackfillResultDTO
+  SofaCandidateDTO, SofaBackfillResultDTO, ReconcileReportDTO
 } from '@/gateways/api.gateway';
 import {
   Users2, Plus, RefreshCcw, Pencil, Trash2, X, Search, ChevronDown, ChevronRight, ChevronLeft,
-  GitMerge, Check, Tag, ShieldCheck, Clock, Shield, Wand2, Loader2, Globe
+  GitMerge, Check, Tag, ShieldCheck, Clock, Shield, Wand2, Loader2, Globe, Boxes, AlertTriangle
 } from 'lucide-react';
 import { Select } from '@/components/ui/Select';
 import { teamLogoUrl } from '@/utils/teamLogo';
@@ -109,6 +109,12 @@ const AdminTeamsPage = () => {
   const [backfillCommit, setBackfillCommit] = useState(true);
   const [backfillRunning, setBackfillRunning] = useState(false);
   const [backfillResults, setBackfillResults] = useState<SofaBackfillResultDTO[] | null>(null);
+
+  // Reconciliar catálogo (colher aliases + criar times a partir do event match).
+  const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [reconcileCreateTeams, setReconcileCreateTeams] = useState(true);
+  const [reconcileRunning, setReconcileRunning] = useState(false);
+  const [reconcileReport, setReconcileReport] = useState<ReconcileReportDTO | null>(null);
 
   // Modal de merge.
   const [mergeSource, setMergeSource] = useState<TeamDTO | null>(null);
@@ -388,6 +394,37 @@ const AdminTeamsPage = () => {
     setBackfillResults(null);
   };
 
+  // ---- Reconciliar catálogo ----
+  // commit=false → prévia (dry-run); commit=true → grava. O relatório volta com
+  // report.committed indicando o modo, o que dirige a UI (prévia vs aplicado).
+  const runReconcile = async (commit: boolean) => {
+    setReconcileRunning(true);
+    try {
+      const res = await apiGateway.reconcileCatalog({ commit, createTeams: reconcileCreateTeams });
+      if (res.data?.result === 1) {
+        const report: ReconcileReportDTO = res.data.data;
+        setReconcileReport(report);
+        if (commit) {
+          const c = report.counts;
+          setMsg({ type: 'ok', text: `Catálogo reconciliado: ${c.newTeams} times criados, ${c.aliasAddsExisting + c.aliasAddsNew} aliases adicionados.` });
+          await load();
+        }
+      } else {
+        setMsg({ type: 'err', text: res.data?.message || 'Erro na reconciliação.' });
+      }
+    } catch (e: unknown) {
+      setMsg({ type: 'err', text: errorMessage(e, 'Erro ao reconciliar o catálogo.') });
+    } finally {
+      setReconcileRunning(false);
+    }
+  };
+
+  const closeReconcile = () => {
+    if (reconcileRunning) return; // não fecha no meio da corrida
+    setReconcileOpen(false);
+    setReconcileReport(null);
+  };
+
   return (
     <div className="w-full px-3 sm:px-6 py-6">
       {/* Cabeçalho */}
@@ -404,6 +441,9 @@ const AdminTeamsPage = () => {
         <div className="flex items-center gap-2">
           <button onClick={() => load()} className="grid place-items-center h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 transition" title="Atualizar">
             <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button onClick={() => { setReconcileReport(null); setReconcileOpen(true); }} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition" title="Colher grafias faltantes como aliases e criar os times que faltam, a partir do event match (odds_events)">
+            <Boxes size={15} className="text-teal-300" /> Reconciliar catálogo
           </button>
           <button onClick={() => { setBackfillResults(null); setBackfillOpen(true); }} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition" title="Buscar ids do SoFaScore para times sem escudo">
             <Wand2 size={15} className="text-teal-300" /> Buscar IDs faltantes
@@ -810,6 +850,123 @@ const AdminTeamsPage = () => {
                 <div className="flex justify-end gap-2 mt-6">
                   <button onClick={() => setBackfillResults(null)} className="text-sm px-4 py-2 rounded-lg text-gray-300 hover:bg-white/5">Rodar de novo</button>
                   <button onClick={closeBackfill} className="text-sm px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-900 font-semibold">Fechar</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Reconciliar catálogo: colher aliases + criar times a partir do event match */}
+      {reconcileOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-brand-dark border border-white/10 w-full max-w-2xl rounded-2xl p-6 relative shadow-2xl flex flex-col max-h-[88vh]">
+            <button onClick={closeReconcile} className="absolute top-4 right-4 text-gray-400 hover:text-rose-400"><X size={20} /></button>
+            <h2 className="text-lg font-bold text-white mb-1 flex items-center gap-2"><Boxes size={18} className="text-teal-300" /> Reconciliar catálogo</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Lê os jogos casados (event match) e colhe as <b className="text-white">grafias de cada casa</b> como aliases dos times — criando os times que ainda não existem. Tudo entra como <b className="text-white">a revisar</b> (nada vira &ldquo;confirmado&rdquo;).
+            </p>
+
+            {!reconcileReport ? (
+              /* CONFIG */
+              <>
+                <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none mb-2">
+                  <input type="checkbox" checked={reconcileCreateTeams} onChange={(e) => setReconcileCreateTeams(e.target.checked)} disabled={reconcileRunning} className="h-4 w-4 rounded border-white/20 bg-black/30 text-teal-500 focus:ring-teal-500/40" />
+                  Criar times faltantes (não apenas colher aliases)
+                </label>
+                <p className="text-[11px] text-gray-500 mb-5">A prévia <b className="text-gray-400">não grava nada</b> — você confere os números antes de aplicar.</p>
+                <div className="flex justify-end gap-2">
+                  <button onClick={closeReconcile} disabled={reconcileRunning} className="text-sm px-4 py-2 rounded-lg text-gray-300 hover:bg-white/5 disabled:opacity-50">Cancelar</button>
+                  <button onClick={() => runReconcile(false)} disabled={reconcileRunning} className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-slate-900 font-semibold">
+                    {reconcileRunning ? <><Loader2 size={15} className="animate-spin" /> Analisando...</> : <><Search size={15} /> Pré-visualizar</>}
+                  </button>
+                </div>
+              </>
+            ) : (
+              /* RELATÓRIO (prévia ou aplicado) */
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                  <div className="rounded-xl bg-teal-500/10 ring-1 ring-teal-500/30 px-3 py-2">
+                    <div className="text-lg font-bold text-teal-200">{reconcileReport.counts.newTeams}</div>
+                    <div className="text-[11px] text-gray-400">{reconcileReport.committed ? 'times criados' : 'times a criar'}</div>
+                  </div>
+                  <div className="rounded-xl bg-white/5 ring-1 ring-white/10 px-3 py-2">
+                    <div className="text-lg font-bold text-white">{reconcileReport.counts.aliasAddsExisting}</div>
+                    <div className="text-[11px] text-gray-400">aliases em times existentes</div>
+                  </div>
+                  <div className="rounded-xl bg-white/5 ring-1 ring-white/10 px-3 py-2">
+                    <div className="text-lg font-bold text-white">{reconcileReport.counts.aliasAddsNew}</div>
+                    <div className="text-[11px] text-gray-400">aliases dos times novos</div>
+                  </div>
+                  <div className={`rounded-xl px-3 py-2 ring-1 ${reconcileReport.counts.ambiguous ? 'bg-amber-500/10 ring-amber-500/30' : 'bg-white/5 ring-white/10'}`}>
+                    <div className={`text-lg font-bold ${reconcileReport.counts.ambiguous ? 'text-amber-200' : 'text-white'}`}>{reconcileReport.counts.ambiguous}</div>
+                    <div className="text-[11px] text-gray-400">ambíguos (revisar)</div>
+                  </div>
+                </div>
+
+                <div className={`mb-3 text-sm px-3 py-2 rounded-lg ring-1 ${reconcileReport.committed ? 'bg-emerald-500/10 ring-emerald-500/30 text-emerald-200' : 'bg-white/5 ring-white/10 text-gray-300'}`}>
+                  {reconcileReport.committed ? 'Aplicado — as mudanças já valem.' : 'Prévia — nada foi gravado ainda.'}{' '}
+                  <b className="text-white">{reconcileReport.teamsWithoutCrest}</b> times sem escudo — depois rode <b className="text-white">&ldquo;Buscar IDs faltantes&rdquo;</b>.
+                </div>
+
+                <div className="overflow-y-auto -mx-1 px-1 space-y-4">
+                  {reconcileReport.sampleNewTeams.length > 0 && (
+                    <section>
+                      <h3 className="text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-1.5"><Plus size={13} className="text-teal-300" /> Times {reconcileReport.committed ? 'criados' : 'a criar'} <span className="text-gray-600">(amostra de {reconcileReport.sampleNewTeams.length})</span></h3>
+                      <ul className="space-y-1">
+                        {reconcileReport.sampleNewTeams.map((nt, i) => (
+                          <li key={i} className="flex items-baseline gap-2 px-3 py-1.5 rounded-lg bg-white/5 ring-1 ring-white/10 text-sm">
+                            <span className="font-medium text-white truncate">{nt.canonicalName}</span>
+                            <span className="text-[10px] text-gray-500 shrink-0">{nt.category}</span>
+                            <span className="text-[11px] text-gray-500 truncate">· {nt.aliases.join(', ')}{nt.aliasCount > nt.aliases.length ? ` +${nt.aliasCount - nt.aliases.length}` : ''}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+
+                  {reconcileReport.sampleAliasAdds.length > 0 && (
+                    <section>
+                      <h3 className="text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-1.5"><Tag size={13} className="text-teal-300" /> Aliases em times existentes <span className="text-gray-600">(amostra de {reconcileReport.sampleAliasAdds.length})</span></h3>
+                      <ul className="space-y-1">
+                        {reconcileReport.sampleAliasAdds.map((a, i) => (
+                          <li key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 ring-1 ring-white/10 text-sm">
+                            <span className="text-gray-200 truncate">{a.alias}</span>
+                            <ChevronRight size={12} className="text-gray-600 shrink-0" />
+                            <span className="text-gray-400 truncate">{a.teamName}</span>
+                            <span className="text-[10px] text-gray-600 shrink-0">{a.category}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+
+                  {reconcileReport.ambiguous.length > 0 && (
+                    <section>
+                      <h3 className="text-xs font-semibold text-amber-300 mb-1.5 flex items-center gap-1.5"><AlertTriangle size={13} /> Possíveis duplicatas — não gravadas, revise/funda</h3>
+                      <ul className="space-y-1">
+                        {reconcileReport.ambiguous.map((a, i) => (
+                          <li key={i} className="px-3 py-1.5 rounded-lg bg-amber-500/5 ring-1 ring-amber-500/20 text-sm">
+                            <span className="text-gray-200">{a.names.join(' | ')}</span>
+                            <span className="text-[11px] text-amber-300/80"> → times {a.teamIds.join(', ')}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2 mt-4 pt-1">
+                  {!reconcileReport.committed ? (
+                    <>
+                      <button onClick={() => setReconcileReport(null)} disabled={reconcileRunning} className="text-sm px-4 py-2 rounded-lg text-gray-300 hover:bg-white/5 disabled:opacity-50">Voltar</button>
+                      <button onClick={() => runReconcile(true)} disabled={reconcileRunning} className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-slate-900 font-semibold">
+                        {reconcileRunning ? <><Loader2 size={15} className="animate-spin" /> Aplicando...</> : <><Check size={15} /> Aplicar</>}
+                      </button>
+                    </>
+                  ) : (
+                    <button onClick={closeReconcile} className="text-sm px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-900 font-semibold">Fechar</button>
+                  )}
                 </div>
               </>
             )}

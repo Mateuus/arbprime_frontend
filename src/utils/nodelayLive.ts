@@ -156,7 +156,14 @@ export function groupBySport(games: LiveGame[]): SportBucket[] {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export const fmtOdd = (p: number): string => (p <= 0 ? '—' : p >= 100 ? String(Math.round(p)) : p.toFixed(2));
+// DISPLAY em 2 casas, TRUNCADO (1.909 → 1.90, nunca 1.91) — nunca mostra odd MAIOR que a real. A aposta
+// usa a odd exata (fração nativa da bet365), não este valor. O +1e-6 evita o erro de ponto flutuante
+// do floor (ex.: 1.15*100 = 114.9999… que truncaria pra 1.14).
+export const fmtOdd = (p: number): string => {
+  if (p <= 0) return '—';
+  if (p >= 100) return String(Math.round(p));
+  return (Math.floor(p * 100 + 1e-6) / 100).toFixed(2);
+};
 
 /** Max stake compacto p/ a célula da odd: 340 · 4.442 · 12,9k · 1,2M. Sempre floor
  * (nunca arredonda pra cima — superestimaria o teto). */

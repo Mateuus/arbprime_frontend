@@ -5,6 +5,8 @@ import { useNoDelay } from '@/hooks/useNoDelay';
 import { useInstanceLiveGames } from '@/hooks/useInstanceLiveGames';
 import { useAltenarInstanceGames } from '@/hooks/useAltenarInstanceGames';
 import { useSuperbetInstanceGames } from '@/hooks/useSuperbetInstanceGames';
+import { useBet365InstanceGames } from '@/hooks/useBet365InstanceGames';
+import { prewarmBet365Live } from '@/services/nodelay/bet365LiveClient';
 import { useNoDelaySessionKeeper } from '@/hooks/useNoDelaySessionKeeper';
 import { apiGateway } from '@/gateways/api.gateway';
 import { NoDelayInstance, NoDelayBookmaker, NoDelayAccount } from '@/interfaces/nodelay.interface';
@@ -75,6 +77,12 @@ export default function NoDelayWorkspacePage() {
 
   // Mantém as sessões vivas + reconecta as que caírem, sozinho.
   useNoDelaySessionKeeper(readyHouses, reloadNd, isAuthenticated && !!instance);
+
+  // bet365 ao vivo (B2): pré-aquece a sessão do token JÁ na ENTRADA da instância — coleta o perfil deste
+  // navegador + warm do backend (collectState+geo, ~1.5s), pra a aba live só abrir o WS. O device do
+  // token passa a casar com ESTE navegador; sem isso o premws aceita o handshake e derruba (close 1000).
+  const hasBet365 = useMemo(() => instanceHouses.some((h) => h.platform === 'bet365' && h.ready), [instanceHouses]);
+  useEffect(() => { if (hasBet365) void prewarmBet365Live(); }, [hasBet365]);
 
   // Contas das casas da instância, agrupadas por bookmaker.
   const accountsByHouse = useMemo(() => {
@@ -527,14 +535,16 @@ function InstanceFeed({ instanceId, houses, houseSlugs }: { instanceId: string; 
  */
 function InstanceLiveFeed({ instanceId, houses }: { instanceId: string; houses: NoDelayBookmaker[] }) {
   const router = useRouter();
-  // Feed UNIFICADO: fssb (SSE) + biahosted/Altenar (polling) + Superbet (polling),
-  // todos no mesmo formato.
+  // Feed UNIFICADO: fssb (SSE) + biahosted/Altenar (polling) + Superbet (polling) + bet365 (WS).
+  // Todos no mesmo formato InstanceLiveGame. bet365 é a EXCEÇÃO: seu ao vivo vem pelo WS `live_odds`
+  // (coletor zap do arbbetting_master), não por um transporte próprio como as outras.
   const swarm = useInstanceLiveGames(houses);
   const bia = useAltenarInstanceGames(houses);
   const sb = useSuperbetInstanceGames(houses);
-  const games = useMemo(() => [...swarm.games, ...bia.games, ...sb.games], [swarm.games, bia.games, sb.games]);
-  const loading = swarm.loading || bia.loading || sb.loading;
-  const liveCount = swarm.liveCount + bia.liveCount + sb.liveCount;
+  const b365 = useBet365InstanceGames(houses);
+  const games = useMemo(() => [...swarm.games, ...bia.games, ...sb.games, ...b365.games], [swarm.games, bia.games, sb.games, b365.games]);
+  const loading = swarm.loading || bia.loading || sb.loading || b365.loading;
+  const liveCount = swarm.liveCount + bia.liveCount + sb.liveCount + b365.liveCount;
   const [q, setQ] = useState('');
   const [sport, setSport] = useState('all');
 

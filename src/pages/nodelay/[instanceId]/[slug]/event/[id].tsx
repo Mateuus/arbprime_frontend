@@ -20,6 +20,7 @@ import { useNoDelayFire } from '@/hooks/useNoDelayFire';
 import { LiveMarket, LiveSelection } from '@/services/nodelay/rogueModel';
 import { useAltenarLiveEvent } from '@/hooks/useAltenarLiveEvent';
 import { useSuperbetLiveEvent } from '@/hooks/useSuperbetLiveEvent';
+import { useBet365LiveEvent } from '@/hooks/useBet365LiveEvent';
 import { BetSettingsPopover } from '@/components/nodelay/BetSettingsPopover';
 import { QuickBetModal } from '@/components/nodelay/QuickBetModal';
 import { BookmakerLogo } from '@/components/bookmaker/BookmakerTag';
@@ -79,12 +80,16 @@ export default function NoDelayEventPage() {
   // Fonte do evento POR PLATAFORMA, mesmo layout embaixo: fssb (SSE) ou biahosted
   // (Altenar/polling). As duas rodam (a inativa recebe input vazio e no-opa) e a
   // gente escolhe o resultado — assim a página do evento é IGUAL nas duas.
-  const serverSidePrimary = isBiaPrimary || isSuperbetPrimary;
+  // bet365 é a EXCEÇÃO: o ao vivo vem pelo WS `live_event` (coletor zap), não por rogue/prematch.
+  // Sem isto, abrir o evento bet365 caía no caminho fssb e dava "Jogo indisponível".
+  const isBet365Primary = primary?.platform === 'bet365';
+  const serverSidePrimary = isBiaPrimary || isSuperbetPrimary || isBet365Primary;
   const fssbEvent = useInstanceLiveEvent(serverSidePrimary ? [] : subHouses, gameId, antiProtect);
   const biaEvent = useAltenarLiveEvent(isBiaPrimary ? primary : undefined, gameId);
   const sbEvent = useSuperbetLiveEvent(isSuperbetPrimary ? primary : undefined, gameId);
+  const b365Event = useBet365LiveEvent(isBet365Primary ? primary : undefined, gameId);
   const { detail, loading, error, changed, live, getHousePrice } =
-    isSuperbetPrimary ? sbEvent : isBiaPrimary ? biaEvent : fssbEvent;
+    isBet365Primary ? b365Event : isSuperbetPrimary ? sbEvent : isBiaPrimary ? biaEvent : fssbEvent;
 
   // Mantém as sessões vivas + reconecta as que caírem, sozinho.
   useNoDelaySessionKeeper(subHouses, reloadNd, isAuthenticated);

@@ -1903,6 +1903,9 @@ const getNoDelayCredentials = async (id: string) => apiClient.get(`/nodelay/acco
 const getNoDelaySessions = async () => apiClient.get('/nodelay/sessions');
 // Token anônimo da rogue p/ o browser ler odds ao vivo direto da casa (por casa).
 const getRogueToken = async (slug: string) => apiClient.get(`/nodelay/rogue/token?slug=${encodeURIComponent(slug)}`);
+// Token nst da bet365 (zap) p/ o browser abrir o premws direto (B2). O conId vem do 101<connId>.
+const getBet365LiveToken = async (uid: string, conId?: string, browser?: unknown) =>
+  apiClient.post('/nodelay/bet365/live-token', { uid, conId, browser });
 // Instâncias (workspace do NoDelay).
 const getNoDelayInstances = async () => apiClient.get('/nodelay/instances');
 const getNoDelayInstance = async (id: string) => apiClient.get(`/nodelay/instances/${id}`);
@@ -2299,6 +2302,7 @@ export const apiGateway = {
     getNoDelayCredentials,
     getNoDelaySessions,
     getRogueToken,
+    getBet365LiveToken,
     getAccountRogueToken,
     saveNoDelaySession,
     clearNoDelaySession,
