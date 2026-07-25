@@ -23,7 +23,44 @@ export default {
           border: '#01322c',
           hover: '#02201b',
           active: '#024c3b',
+          // Dashboard admin (tokens teal/dark — ver .dashboard em globals.css).
+          // Canal-triplo => o modifier /opacity (ex.: bg-brand-solid/20) funciona.
+          solid: 'rgb(var(--ds-brand-400) / <alpha-value>)',
+          500: 'rgb(var(--ds-brand-500) / <alpha-value>)',
         },
+        // ── Tokens do Dashboard admin (só têm efeito dentro de .dashboard) ──
+        surface: 'rgb(var(--ds-surface) / <alpha-value>)',
+        surface2: 'rgb(var(--ds-surface-2) / <alpha-value>)',
+        line: 'rgb(var(--ds-line) / <alpha-value>)',
+        'line-strong': 'rgb(var(--ds-line-strong) / <alpha-value>)',
+        fg: {
+          DEFAULT: 'rgb(var(--ds-fg) / <alpha-value>)',
+          muted: 'rgb(var(--ds-fg-muted) / <alpha-value>)',
+          faint: 'rgb(var(--ds-fg-faint) / <alpha-value>)',
+        },
+        danger: {
+          solid: 'rgb(var(--ds-danger-500) / <alpha-value>)',
+          400: 'rgb(var(--ds-danger-400) / <alpha-value>)',
+          500: 'rgb(var(--ds-danger-500) / <alpha-value>)',
+        },
+        success: {
+          solid: 'rgb(var(--ds-success-500) / <alpha-value>)',
+          400: 'rgb(var(--ds-success-400) / <alpha-value>)',
+          500: 'rgb(var(--ds-success-500) / <alpha-value>)',
+        },
+        warning: {
+          solid: 'rgb(var(--ds-warning-500) / <alpha-value>)',
+          400: 'rgb(var(--ds-warning-400) / <alpha-value>)',
+          500: 'rgb(var(--ds-warning-500) / <alpha-value>)',
+        },
+        info: {
+          solid: 'rgb(var(--ds-info-500) / <alpha-value>)',
+          400: 'rgb(var(--ds-info-400) / <alpha-value>)',
+          500: 'rgb(var(--ds-info-500) / <alpha-value>)',
+        },
+      },
+      maxWidth: {
+        content: 'var(--ds-content-max)',
       },
       keyframes: {
         'slide-in': {

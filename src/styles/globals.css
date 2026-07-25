@@ -270,3 +270,84 @@ input:-webkit-autofill {
 @media (prefers-reduced-motion: reduce) {
   .animate-card-in { animation: none; }
 }
+
+/* =========================================================================
+   DASHBOARD ADMIN — sistema de tokens (teal/dark)
+   Escopado sob .dashboard (o DashboardLayout põe class="dashboard" na raiz do
+   shell) para NÃO vazar no site e isolar dos acentos por feature.
+   Formato CANAL-TRIPLO ("R G B") para o modifier /opacity do Tailwind v3
+   funcionar: registramos no tailwind.config como rgb(var(--ds-x)/<alpha-value>).
+   NUNCA usar hex cheio numa var registrada em colors (mata o /opacity).
+   NUNCA usar color-mix() (invisível ao JIT).
+   ========================================================================= */
+.dashboard {
+  /* ── geometria do shell ── */
+  --ds-sidebar-expanded: 17rem;
+  --ds-sidebar-collapsed: 5.5rem;
+  --ds-header-h: 4rem;
+  --ds-content-max: 96rem;
+  --ds-radius: 0.5rem;
+
+  /* ── superfícies (dark, ancoradas na paleta existente) ── */
+  --ds-bg: 9 9 11;            /* #09090B  body                     */
+  --ds-surface: 0 25 29;      /* #00191D  brand.dark (cards)       */
+  --ds-surface-2: 11 31 34;   /*          card elevado / row hover  */
+  --ds-sidebar: 0 24 28;      /* #00181C  brand.sidebar            */
+  --ds-line: 1 50 44;         /* #01322C  brand.border             */
+  --ds-line-strong: 2 76 59;  /* #024C3B  brand.active             */
+  --ds-fg: 231 246 244;
+  --ds-fg-muted: 127 167 160;
+  --ds-fg-faint: 79 107 103;
+
+  /* ── BRAND = teal (400 ≈ #48FFF3 = brand.button) ── */
+  --ds-brand-300: 102 247 234;
+  --ds-brand-400: 72 255 243;
+  --ds-brand-500: 36 224 210;
+  --ds-brand-600: 18 179 167;
+  --ds-brand-700: 2 76 59;
+  --ds-brand-900: 0 25 29;
+
+  /* ── papéis (matiz distinto do brand E dos acentos de feature) ── */
+  --ds-danger-400: 251 113 133;  --ds-danger-500: 244 63 94;   --ds-danger-600: 225 29 72;   /* rose  */
+  --ds-success-400: 52 211 153;  --ds-success-500: 16 185 129;                               /* emerald */
+  --ds-warning-400: 251 191 36;  --ds-warning-500: 245 158 11;                               /* amber  */
+  --ds-info-400: 56 189 248;     --ds-info-500: 14 165 233;                                  /* sky (≠ cyan-multipla) */
+
+  /* ── camada SEMÂNTICA terminal (alpha bakeada onde translúcido) ── */
+  --ds-brand-solid: rgb(var(--ds-brand-400));
+  --ds-brand-solid-hover: rgb(var(--ds-brand-300));
+  --ds-brand-text: rgb(var(--ds-brand-300));
+  --ds-brand-border: rgb(var(--ds-brand-700));
+  --ds-brand-bg: rgb(var(--ds-brand-400) / 0.12);
+  --ds-brand-bg-hover: rgb(var(--ds-brand-400) / 0.20);
+  --ds-brand-on-solid: #00191d;   /* TINTA ESCURA — branco sobre #48FFF3 reprova AA */
+
+  --ds-danger-text: rgb(var(--ds-danger-400));
+  --ds-danger-bg: rgb(var(--ds-danger-500) / 0.12);
+  --ds-danger-border: rgb(var(--ds-danger-500) / 0.30);
+
+  --ds-success-text: rgb(var(--ds-success-400));
+  --ds-success-bg: rgb(var(--ds-success-500) / 0.12);
+  --ds-success-border: rgb(var(--ds-success-500) / 0.30);
+
+  --ds-warning-text: rgb(var(--ds-warning-400));
+  --ds-warning-bg: rgb(var(--ds-warning-500) / 0.12);
+  --ds-warning-border: rgb(var(--ds-warning-500) / 0.30);
+
+  --ds-info-text: rgb(var(--ds-info-400));
+  --ds-info-bg: rgb(var(--ds-info-500) / 0.12);
+  --ds-info-border: rgb(var(--ds-info-500) / 0.30);
+
+  /* superfície base do console */
+  background-color: rgb(var(--ds-bg));
+  color: rgb(var(--ds-fg));
+  /* scrollbar (sobrescreve a azul legada #3b82f6 dentro do console) */
+  scrollbar-color: rgb(var(--ds-brand-600)) rgb(var(--ds-surface-2));
+}
+.dashboard ::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--ds-brand-600));
+  border: 2px solid rgb(var(--ds-surface-2));
+}
+.dashboard ::-webkit-scrollbar-track {
+  background: rgb(var(--ds-surface-2));
+}
