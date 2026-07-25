@@ -4,10 +4,12 @@ import { NoDelayAccount, NoDelayBookmaker } from '@/interfaces/nodelay.interface
 import { HousePrice } from '@/hooks/useInstanceLiveEvent';
 import { useNowTick } from '@/hooks/useNowTick';
 import { useUserContext } from '@/context/UserContext';
-import { NoDelaySettings } from '@/hooks/useNoDelaySettings';
-import { placeBet, BetTicket } from '@/services/nodelay/placeBet';
+import { NoDelaySettings, acceptOddsChangeFor } from '@/hooks/useNoDelaySettings';
+import { placeBet, BetTicket, BetResult } from '@/services/nodelay/placeBet';
 import { placeBetReal, warmAccountTokens, tokensWarm } from '@/services/nodelay/placeBetReal';
 import { buildAltenarTicket, placeBetAltenar, AltenarTicket } from '@/services/nodelay/placeBetAltenar';
+import { placeBetSuperbet } from '@/services/nodelay/placeBetSuperbet';
+import { placeBetBet365 } from '@/services/nodelay/placeBetBet365';
 import { maxStakeOf, cachedK, getAccountK, pickCalibrationSample } from '@/services/nodelay/maxStake';
 import { SlipView } from '@/components/nodelay/BetSlipCard';
 import { BetSlipDrawer } from '@/components/nodelay/BetSlipDrawer';
@@ -57,7 +59,8 @@ type Panel = 'none' | 'accounts' | 'settings';
 
 // Margem contra alta de odd entre o cálculo do máx e o placeBets (odd pessimista).
 const MAX_STAKE_DRIFT = 0.02;
-// Aposta mínima da casa (BRL, fixo — ver BRIEF-maxstake). Abaixo disso = rejeição.
+// Fallback quando a casa não tem mínimo configurado (noDelayConfig.minStake nulo). O mínimo REAL é
+// por-casa (house.minStake) — ver minStakeOf/sharedMin abaixo. Antes era fixo em R$1 p/ todas.
 const HOUSE_MIN = 1;
 
 export function QuickBetModal({
@@ -73,6 +76,15 @@ export function QuickBetModal({
   const isAdmin = user?.role === 'admin';
 
   const betting = useMemo(() => connected.filter((a) => selectedIds.has(a.id)), [connected, selectedIds]);
+
+  // Mínimo POR CASA (BRL) — vem do noDelayConfig.minStake de cada casa (nulo → HOUSE_MIN). Este modal é
+  // multi-casa com UM stake compartilhado: o piso do input = o MENOR mínimo entre as casas marcadas (a mais
+  // barata sempre alcançável); a rejeição é por-conta contra o mínimo da PRÓPRIA casa dela (ver doFire).
+  const minStakeOf = useCallback((slug: string) => houseBySlug.get(slug)?.minStake ?? HOUSE_MIN, [houseBySlug]);
+  const sharedMin = useMemo(
+    () => (betting.length ? Math.min(...betting.map((a) => minStakeOf(a.bookmakerSlug))) : HOUSE_MIN),
+    [betting, minStakeOf],
+  );
 
   // TUDO PRONTO NA ABERTURA: minta o token de cada conta marcada JÁ ao abrir o
   // modal e mantém quente (re-verifica a cada 15s, re-mint em background quem
@@ -137,7 +149,14 @@ export function QuickBetModal({
     [detail.markets, favorites, settings.delayTradeOnly, settings.hidePriceless, antiProtect, tick],
   );
 
-  const setStake = (v: number) => onUpdateSettings({ defaultStake: Math.max(HOUSE_MIN, +v.toFixed(2)) });
+  const setStake = (v: number) => onUpdateSettings({ defaultStake: Math.max(sharedMin, +v.toFixed(2)) });
+
+  // Na abertura / ao trocar as casas marcadas: sobe o stake até o piso da casa mais barata (nunca ABAIXA um
+  // valor que o usuário digitou maior). Assim a casa mais barata selecionada sempre dispara por padrão.
+  useEffect(() => {
+    if (settings.defaultStake < sharedMin) onUpdateSettings({ defaultStake: sharedMin });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedMin]);
   const togglePanel = (p: Panel) => setPanel((cur) => (cur === p ? 'none' : p));
 
   // Monta o bilhete de UMA conta usando a odd ESPECÍFICA da casa dela (mesma
@@ -183,7 +202,7 @@ export function QuickBetModal({
   const doFire = useCallback((m: LiveMarket, s: LiveSelection) => {
     const round = ++fireSeq.current;
     const slips: SlipView[] = [];
-    const toSubmit: { key: string; a: NoDelayAccount; ticket: BetTicket; stake: number; rogueUrl?: string; isBia: boolean; altenarTicket: AltenarTicket | null; house?: NoDelayBookmaker }[] = [];
+    const toSubmit: { key: string; a: NoDelayAccount; ticket: BetTicket; stake: number; rogueUrl?: string; isBia: boolean; isSuperbet: boolean; isBet365: boolean; altenarTicket: AltenarTicket | null; house?: NoDelayBookmaker; betEventId?: string; betOddUuid?: string; betPlaceable?: Record<string, unknown> | null; betLine?: string }[] = [];
 
     for (const a of betting) {
       const key = `${round}:${a.id}`;
@@ -198,33 +217,50 @@ export function QuickBetModal({
         continue;
       }
       const stake = stakeForAccount(a, m, s);
-      // Abaixo do mínimo da casa (R$1) = rejeição certa (saldo/teto baixo). Não dispara.
-      if (stake < HOUSE_MIN) {
-        slips.push({ key, accountId: a.id, accountLabel: label, ticket, stakeRequested: stake, status: 'done', result: { ok: false, elapsedMs: 0, stake: 0, odds: 0, partial: false, oddsChanged: false, error: 'Abaixo do mínimo da casa (R$ 1)' } });
+      // Abaixo do mínimo da PRÓPRIA casa = rejeição certa. O mínimo é por-casa (noDelayConfig.minStake),
+      // não um R$1 fixo — assim casas com mínimo menor (ex.: bet365/Superbet R$0,50) não são bloqueadas.
+      const accMin = minStakeOf(a.bookmakerSlug);
+      if (stake < accMin) {
+        slips.push({ key, accountId: a.id, accountLabel: label, ticket, stakeRequested: stake, status: 'done', result: { ok: false, elapsedMs: 0, stake: 0, odds: 0, partial: false, oddsChanged: false, error: `Abaixo do mínimo da casa (${formatMoney(accMin)})` } });
         continue;
       }
-      // biahosted (Altenar) → disparo server-side com ticket próprio; swarm → rogue.
+      // Roteamento por plataforma (mesmo do useNoDelayFire): biahosted→Altenar, superbet/bet365→server-side
+      // com o placeable DAQUELA casa, swarm→rogue. Antes tudo que não era bia caía no placeBetReal (bet365 e
+      // superbet quebravam "sem host rogue"); agora cada casa vai pro seu adapter.
       const isBia = house?.platform === 'biahosted';
+      const isSuperbet = house?.platform === 'superbet';
+      const isBet365 = house?.platform === 'bet365';
       const altenarTicket = isBia ? buildAltenarTicket(detail, m, s, ticket.odds) : null;
       slips.push({ key, accountId: a.id, accountLabel: label, ticket, stakeRequested: stake, status: 'placing' });
-      toSubmit.push({ key, a, ticket, stake, rogueUrl: house?.rogueUrl || undefined, isBia, altenarTicket, house });
+      toSubmit.push({ key, a, ticket, stake, rogueUrl: house?.rogueUrl || undefined, isBia, isSuperbet, isBet365, altenarTicket, house, betEventId: hp?.eventId, betOddUuid: hp?.placeable?.oddUuid as string | undefined, betPlaceable: hp?.placeable, betLine: hp?.line ?? ticket.line ?? undefined });
     }
     setSlips(slips);
 
-    const opts = { allowPartial: settings.allowPartial, acceptOddsChange: settings.acceptOddsChange };
     for (const it of toSubmit) {
-      // biahosted + REAL → placeBetAltenar (CLIENT-SIDE: browser faz a cadeia SB2 +
-      // posta o placeWidget direto); senão mock/placeBetReal (fssb).
-      const p = it.isBia && settings.realBets && it.altenarTicket && it.house
-        ? placeBetAltenar(it.a, it.house, it.altenarTicket, it.stake)
-        : (settings.realBets && !it.isBia ? placeBetReal : placeBet)(it.a, it.ticket, { stake: it.stake, ...opts, rogueUrl: it.rogueUrl });
+      // "Aceitar mudança de odd" é POR CASA (override) — cai no global se não setado.
+      const opts = { allowPartial: settings.allowPartial, acceptOddsChange: acceptOddsChangeFor(settings, it.a.bookmakerSlug) };
+      let p: Promise<BetResult>;
+      if (!settings.realBets) {
+        p = placeBet(it.a, it.ticket, { stake: it.stake, ...opts, rogueUrl: it.rogueUrl }); // mock
+      } else if (it.isSuperbet) {
+        // Superbet = server-side (backend cycletls). Ao vivo: selectionId do ticket já é o uuid + eventId=detail.id.
+        const t = it.betOddUuid ? { ...it.ticket, eventId: it.betEventId || it.ticket.eventId, selectionId: it.betOddUuid } : it.ticket;
+        p = placeBetSuperbet(it.a, t, { stake: it.stake, betType: 'live', acceptOddsChange: opts.acceptOddsChange });
+      } else if (it.isBet365 && it.betPlaceable) {
+        // bet365 = server-side (backend nst). Manda o placeable ({fp,mt,od}) + eventId + linha da casa.
+        p = placeBetBet365(it.a, it.ticket, { stake: it.stake, placeable: it.betPlaceable, eventId: it.betEventId || it.ticket.eventId, line: it.betLine, acceptOddsChange: opts.acceptOddsChange });
+      } else if (it.isBia && it.altenarTicket && it.house) {
+        p = placeBetAltenar(it.a, it.house, it.altenarTicket, it.stake);
+      } else {
+        p = placeBetReal(it.a, it.ticket, { stake: it.stake, ...opts, rogueUrl: it.rogueUrl });
+      }
       p
         .then((result) => {
           setSlips((prev) => prev && prev.map((sl) => (sl.key === it.key ? { ...sl, status: 'done', result } : sl)));
         })
         .catch(() => failSlip(it.key, it.ticket, 'Falha de rede — confira o histórico da casa.'));
     }
-  }, [betting, houseBySlug, ticketFor, getHousePrice, stakeForAccount, settings, detail]);
+  }, [betting, houseBySlug, ticketFor, getHousePrice, stakeForAccount, minStakeOf, settings, detail]);
 
   // Porteiro: valida contas e decide se confirma (modal) ou dispara direto.
   const fire = useCallback((m: LiveMarket, s: LiveSelection) => {
