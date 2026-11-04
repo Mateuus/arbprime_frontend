@@ -4,6 +4,7 @@ import { Layers, RefreshCcw, Search, Zap, Filter, ChevronDown, Settings } from '
 import { useMultiplas } from '@/hooks/useMultiplas';
 import { useMultiplaAlerts } from '@/hooks/useMultiplaAlerts';
 import { useNotifications, AlertItem } from '@/hooks/useNotifications';
+import { useSavedFilterSelection } from '@/hooks/useSavedFilterSelection';
 import { NotificationBell } from '@/components/arbbets/NotificationBell';
 import { useWatchSet } from '@/hooks/useWatchSet';
 import { useUserContext } from '@/context/UserContext';
@@ -44,8 +45,7 @@ export default function MultiplaPage() {
   // Filtro salvo do usuário (ABFilter) — o MESMO preset das surebets/arbbets/middles.
   // Usamos as CASAS do preset: a múltipla só aparece se TODOS os bilhetes usarem
   // casas do preset (uma casa fora → o usuário não consegue montar a arbitragem).
-  const [savedFilters, setSavedFilters] = useState<{ id: string; name: string }[]>([]);
-  const [activeFilterId, setActiveFilterId] = useState('');
+  const { activeFilterId, selectFilter, filterOptions, version: filterVersion } = useSavedFilterSelection('multipla', 'multipla:filter');
   const [activeFilter, setActiveFilter] = useState<FilterDTO | null>(null);
 
   const [calc, setCalc] = useState<MultiArbData | null>(null);
@@ -67,24 +67,6 @@ export default function MultiplaPage() {
   }, [data]);
   const notif = useNotifications(openAlertFromNotification);
 
-  // Carrega a lista de filtros salvos e auto-seleciona (lembra a escolha; senão o 1º).
-  useEffect(() => {
-    apiGateway.getUserFilters()
-      .then((r) => {
-        if (r.data?.result !== 1 || !Array.isArray(r.data.data)) return;
-        const list: { id: string; name: string }[] = r.data.data.map((f: { id: string | number; name: string }) => ({ id: String(f.id), name: f.name }));
-        setSavedFilters(list);
-        const stored = typeof window !== 'undefined' ? localStorage.getItem('multipla:filter') : null;
-        if (stored === null) { if (list.length) setActiveFilterId(list[0].id); } // 1ª vez → primeiro filtro
-        else if (stored && list.some((f) => f.id === stored)) setActiveFilterId(stored); // lembra a escolha
-        // stored === '' → usuário escolheu "Sem filtro", respeita
-      })
-      .catch(() => {});
-  }, []);
-  const selectFilter = (idv: string) => {
-    setActiveFilterId(idv);
-    if (typeof window !== 'undefined') localStorage.setItem('multipla:filter', idv);
-  };
   // Carrega a config do filtro ativo — usamos as CASAS dele p/ filtrar as múltiplas.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -94,7 +76,7 @@ export default function MultiplaPage() {
       .then((r) => { if (active && r.data?.result === 1) setActiveFilter(r.data.data as FilterDTO); })
       .catch(() => {});
     return () => { active = false; };
-  }, [activeFilterId]);
+  }, [activeFilterId, filterVersion]);
 
   // Campeonatos presentes (nos dois jogos de cada par).
   const leagues = useMemo(() => {
@@ -215,7 +197,7 @@ export default function MultiplaPage() {
             className="w-40"
             value={activeFilterId}
             onChange={selectFilter}
-            options={[{ value: '', label: 'Sem filtro salvo' }, ...savedFilters.map((f) => ({ value: f.id, label: f.name }))]}
+            options={filterOptions}
           />
           <button
             onClick={() => router.push({ pathname: router.pathname, query: { ...router.query, modal: 'user', page: 'abfilter' } }, undefined, { shallow: true })}

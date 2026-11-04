@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Zap, RefreshCcw, Search, HelpCircle, X, Sigma, ShieldAlert, TrendingUp, Settings, AlertTriangle, Layers } from 'lucide-react';
 import { useSurebets } from '@/hooks/useSurebets';
+import { useSavedFilterSelection } from '@/hooks/useSavedFilterSelection';
 import { useUserContext } from '@/context/UserContext';
 import { Select } from '@/components/ui/Select';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -31,8 +32,7 @@ export default function DuasVidasPage() {
   const [country, setCountry] = useState('');
   const [league, setLeague] = useState('');
   // Filtro salvo do usuário (ABFilter) — mesmas CASAS dos surebets/DG (exclui casas indesejadas).
-  const [savedFilters, setSavedFilters] = useState<{ id: string; name: string }[]>([]);
-  const [activeFilterId, setActiveFilterId] = useState('');
+  const { activeFilterId, selectFilter, filterOptions, version: filterVersion } = useSavedFilterSelection('duasvidas', 'duasvidas:filter');
   const [activeFilter, setActiveFilter] = useState<FilterDTO | null>(null);
 
   const [toast, setToast] = useState<string | null>(null);
@@ -43,25 +43,12 @@ export default function DuasVidasPage() {
     toastTimer.current = setTimeout(() => setToast(null), 2600);
   }, []);
 
-  // Carrega filtros salvos e auto-seleciona (lembra a escolha; senão o 1º).
-  useEffect(() => {
-    apiGateway.getUserFilters().then((r) => {
-      if (r.data?.result !== 1 || !Array.isArray(r.data.data)) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const list: { id: string; name: string }[] = r.data.data.map((f: any) => ({ id: String(f.id), name: f.name }));
-      setSavedFilters(list);
-      const stored = typeof window !== 'undefined' ? localStorage.getItem('duasvidas:filter') : null;
-      if (stored === null) { if (list.length) setActiveFilterId(list[0].id); }
-      else if (stored && list.some((f) => f.id === stored)) setActiveFilterId(stored);
-    }).catch(() => {});
-  }, []);
-  const selectFilter = (idv: string) => { setActiveFilterId(idv); if (typeof window !== 'undefined') localStorage.setItem('duasvidas:filter', idv); };
   useEffect(() => {
     if (!activeFilterId) { setActiveFilter(null); return; }
     let active = true;
     apiGateway.getFilterById(activeFilterId).then((r) => { if (active && r.data?.result === 1) setActiveFilter(r.data.data as FilterDTO); }).catch(() => {});
     return () => { active = false; };
-  }, [activeFilterId]);
+  }, [activeFilterId, filterVersion]);
 
   const leagueTree = useMemo(() => buildLeagueTree(data), [data]);
 
@@ -145,7 +132,7 @@ export default function DuasVidasPage() {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar evento, liga..." className="w-full bg-black/30 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 focus:border-fuchsia-500/50 transition" />
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <Select className="w-40" value={activeFilterId} onChange={selectFilter} options={[{ value: '', label: 'Sem filtro salvo' }, ...savedFilters.map((f) => ({ value: f.id, label: f.name }))]} />
+          <Select className="w-40" value={activeFilterId} onChange={selectFilter} options={filterOptions} />
           <Tooltip label="Gerenciar filtros salvos (casas)">
             <button onClick={() => router.push({ pathname: router.pathname, query: { ...router.query, modal: 'user', page: 'abfilter' } }, undefined, { shallow: true })} className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/5 text-gray-400 transition hover:bg-white/10 hover:text-fuchsia-300"><Settings size={15} /></button>
           </Tooltip>

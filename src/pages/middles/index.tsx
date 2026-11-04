@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Split, RefreshCcw, Search, Zap, Filter, ChevronDown, ChevronRight, HelpCircle, LayoutGrid, List, Trophy, Clock, EyeOff, Settings } from 'lucide-react';
 import { useMiddles } from '@/hooks/useMiddles';
+import { useSavedFilterSelection } from '@/hooks/useSavedFilterSelection';
 import { useUserContext } from '@/context/UserContext';
 import { useHiddenSet } from '@/hooks/useHiddenSet';
 import { apiGateway } from '@/gateways/api.gateway';
@@ -40,8 +41,7 @@ export default function MiddlesPage() {
   const [search, setSearch] = useState('');
   // Filtro salvo do usuário (ABFilter) — o MESMO preset das surebets/arbbets. O
   // usuário escolhe; aplicamos as CASAS do preset aos middles (não reinventa a roda).
-  const [savedFilters, setSavedFilters] = useState<{ id: string; name: string }[]>([]);
-  const [activeFilterId, setActiveFilterId] = useState('');
+  const { activeFilterId, selectFilter, filterOptions, version: filterVersion } = useSavedFilterSelection('middles', 'middles:filter');
   const [activeFilter, setActiveFilter] = useState<FilterDTO | null>(null);
   const [league, setLeague] = useState('');
   const [marketId, setMarketId] = useState('');
@@ -70,25 +70,6 @@ export default function MiddlesPage() {
     toastTimer.current = setTimeout(() => setToast(null), 2600);
   }, []);
 
-  // Carrega a lista de filtros salvos e auto-seleciona (lembra a escolha; senão o 1º).
-  useEffect(() => {
-    apiGateway.getUserFilters()
-      .then((r) => {
-        if (r.data?.result !== 1 || !Array.isArray(r.data.data)) return;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const list: { id: string; name: string }[] = r.data.data.map((f: any) => ({ id: String(f.id), name: f.name }));
-        setSavedFilters(list);
-        const stored = typeof window !== 'undefined' ? localStorage.getItem('middles:filter') : null;
-        if (stored === null) { if (list.length) setActiveFilterId(list[0].id); } // 1ª vez → primeiro filtro
-        else if (stored && list.some((f) => f.id === stored)) setActiveFilterId(stored); // lembra a escolha
-        // stored === '' → usuário escolheu "Sem filtro", respeita
-      })
-      .catch(() => {});
-  }, []);
-  const selectFilter = (idv: string) => {
-    setActiveFilterId(idv);
-    if (typeof window !== 'undefined') localStorage.setItem('middles:filter', idv);
-  };
   // Carrega a config do filtro ativo — usamos as CASAS dele p/ filtrar os middles.
   useEffect(() => {
     if (!activeFilterId) { setActiveFilter(null); return; }
@@ -97,7 +78,7 @@ export default function MiddlesPage() {
       .then((r) => { if (active && r.data?.result === 1) setActiveFilter(r.data.data as FilterDTO); })
       .catch(() => {});
     return () => { active = false; };
-  }, [activeFilterId]);
+  }, [activeFilterId, filterVersion]);
 
   // Mercados e campeonatos presentes nos dados (para os selects de filtro).
   const markets = useMemo(() => {
@@ -255,7 +236,7 @@ export default function MiddlesPage() {
             className="w-40"
             value={activeFilterId}
             onChange={selectFilter}
-            options={[{ value: '', label: 'Sem filtro salvo' }, ...savedFilters.map((f) => ({ value: f.id, label: f.name }))]}
+            options={filterOptions}
           />
           <button
             onClick={() => router.push({ pathname: router.pathname, query: { ...router.query, modal: 'user', page: 'abfilter' } }, undefined, { shallow: true })}

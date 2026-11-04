@@ -7,6 +7,7 @@ import { useSurebets } from '@/hooks/useSurebets';
 import { useUserContext } from '@/context/UserContext';
 import { useBookmakers } from '@/hooks/useBookmakers';
 import { useNotifications, AlertItem } from '@/hooks/useNotifications';
+import { useSavedFilterSelection } from '@/hooks/useSavedFilterSelection';
 import { useWatchSet } from '@/hooks/useWatchSet';
 import { useSurebetAlerts } from '@/hooks/useSurebetAlerts';
 import { apiGateway } from '@/gateways/api.gateway';
@@ -635,8 +636,9 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
   // não estourar fora da tela quando o botão embrulha perto da borda no mobile.
   const { pos: filtersPos, place: placeFilters, menuRef: filtersMenuRef } = usePopover(filtersOpen, () => setFiltersOpen(false), { align: 'right' });
   // Filtros salvos do usuário (ABFilter).
-  const [savedFilters, setSavedFilters] = useState<{ id: string; name: string }[]>([]);
-  const [activeFilterId, setActiveFilterId] = useState('');
+  // Escolha salva no servidor por página; DG tem a sua (preset "Padrão DG" ≠ surebets).
+  const { activeFilterId, selectFilter, filterOptions, version: filterVersion } =
+    useSavedFilterSelection(isDG ? 'arbbets:duplogreen' : 'arbbets', isDG ? undefined : 'arbbets:filter');
   const [activeFilter, setActiveFilter] = useState<FilterDTO | null>(null);
   const [calc, setCalc] = useState<{ event: SurebetData; sb: Surebet } | null>(null);
   // Modal com todas as surebets de um evento (aberto pelo +N).
@@ -713,28 +715,6 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
       }));
   }, [data]);
 
-  // Carrega a lista de filtros salvos e auto-seleciona (lembra a escolha; senão, o 1º).
-  useEffect(() => {
-    apiGateway.getUserFilters()
-      .then((r) => {
-        if (r.data?.result !== 1 || !Array.isArray(r.data.data)) return;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const list: { id: string; name: string }[] = r.data.data.map((f: any) => ({ id: String(f.id), name: f.name }));
-        setSavedFilters(list);
-        const stored = typeof window !== 'undefined' ? localStorage.getItem('arbbets:filter') : null;
-        if (stored === null) { if (list.length) setActiveFilterId(list[0].id); }   // 1ª vez → primeiro filtro
-        else if (stored && list.some((f) => f.id === stored)) setActiveFilterId(stored); // lembra a escolha
-        // stored === '' → usuário escolheu "Sem filtro", respeita
-      })
-      .catch(() => {});
-  }, []);
-
-  // Seleciona um filtro e persiste a escolha.
-  const selectFilter = (idv: string) => {
-    setActiveFilterId(idv);
-    if (typeof window !== 'undefined') localStorage.setItem('arbbets:filter', idv);
-  };
-
   // Carrega a config do filtro ativo e REFLETE nos filtros rápidos (lucro/esporte/casa).
   useEffect(() => {
     if (!activeFilterId) { setActiveFilter(null); return; }
@@ -753,7 +733,7 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
       .catch(() => {});
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilterId]);
+  }, [activeFilterId, filterVersion]);
 
   // Aplica filtros rápidos (esporte/busca/lucro/mercado/casa) + o filtro salvo ativo.
   const filtered = useMemo(() => {
@@ -979,7 +959,7 @@ export default function ArbBetsPage({ feed = 'standard' }: { feed?: 'standard' |
             className="w-44"
             value={activeFilterId}
             onChange={selectFilter}
-            options={[{ value: '', label: 'Sem filtro salvo' }, ...savedFilters.map((f) => ({ value: f.id, label: f.name }))]}
+            options={filterOptions}
           />
           <button
             onClick={() => router.push({ pathname: router.pathname, query: { ...router.query, modal: 'user', page: 'abfilter' } }, undefined, { shallow: true })}

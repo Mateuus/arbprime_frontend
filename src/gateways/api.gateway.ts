@@ -126,8 +126,21 @@ const changePassowrd = async (currentPassword: string, newPassword: string) => {
 };
 
 
+// Avisa as páginas abertas (useSavedFilterSelection) que a lista/config mudou.
+const notifyFiltersChanged = () => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('abfilters:changed'));
+};
+
 const getUserFilters = async () => {
   return apiClient.get('/user/abfilters');
+};
+
+const getFilterSelections = async () => {
+  return apiClient.get('/user/abfilters/selection');
+};
+
+const setFilterSelection = async (page: string, filterId: string) => {
+  return apiClient.put('/user/abfilters/selection', { page, filterId });
 };
 
 const getFilterById = async (id: string) => {
@@ -135,15 +148,21 @@ const getFilterById = async (id: string) => {
 };
 
 const createFilter = async (filterData: CreateOrUpdateFilterDTO) => {
-  return apiClient.post('/user/abfilters', filterData);
+  const r = await apiClient.post('/user/abfilters', filterData);
+  notifyFiltersChanged();
+  return r;
 };
 
 const updateFilter = async (id: string, filterData: CreateOrUpdateFilterDTO) => {
-  return apiClient.put(`/user/abfilters/${id}`, filterData);
+  const r = await apiClient.put(`/user/abfilters/${id}`, filterData);
+  notifyFiltersChanged();
+  return r;
 };
 
 const deleteFilter = async (id: string) => {
-  return apiClient.delete(`/user/abfilters/${id}`);
+  const r = await apiClient.delete(`/user/abfilters/${id}`);
+  notifyFiltersChanged();
+  return r;
 };
 
 // ==================== EVENTOS ====================
@@ -2064,6 +2083,8 @@ export const apiGateway = {
     changePassowrd,
     getUserFilters,
     getFilterById,
+    getFilterSelections,
+    setFilterSelection,
     createFilter,
     updateFilter,
     deleteFilter,
